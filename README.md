@@ -5,10 +5,43 @@
 This is an add-on for Alibre Design to provide basic CAM and GCode generation.  It was
 **ALL** generated using Claude Code, with requirements and testing provided by humans.
 
+I have no plans on releasing this as a product or supporting it.  Feel free to fork it and build on it, or use it for inspiration.  I've included the full log of my chat with AI to create this in Discussion.md.
+
 This has had very little real life testing - my CNC router is broken at the moment. 
 Once I got started I started pushing the Claude Code abilities to see what it could do.
 
 This was built against Alibre Design v27.
+
+## Examples
+
+### 2 1/2 axis: adaptive clearing and rest machining
+
+![Pocketing with adaptive clearing](docs/adaptive.png)
+
+Pocketing with adaptive clearing. The orange outline is the picked area, magenta the arcs fitted to the toolpath, blue the straight feeds and red the rapids.
+
+![Pocketing with rest machining](docs/rest.png)
+
+A second Pocketing operation with rest machining, cutting only what the first one left in the corners.
+
+### 3 axis: a spline surface from model to simulation
+
+![The part](docs/3d.png)
+
+The part: a spline surface in Alibre.
+
+![3 axis toolpaths](docs/3dtoolpath.png)
+
+Waterline Roughing, Waterline Finishing and Parallel Finishing toolpaths on it.
+
+![Simulation](docs/3dsimulation.png)
+
+The simulation of all three, cut from the stock box.
+
+![Compare](docs/3dcompare.png)
+
+Compare: what wasn't removed (amber) and what was cut too deep (red) against the part, with their volumes.
+
 
 CAM for Alibre Design assemblies. The add-on gets its own **CAMForAlibre** tab on the
 ribbon. Its **CAM Tab** button opens a CAM tab in the Design Explorer, which holds

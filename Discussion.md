@@ -10720,6 +10720,55 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 > - **Memory:** about 150 MB at the finest spacing.
 > - **Speed:** a test will compare tri-dexel's speed with the voxels' 1.5 s on the same facing job.
 
+## 2026-11-15
+
+### 🧑 Frank · 08:02
+
+> Add the images in the docs directory to readme.md, showing examples of what your application does - adaptive.png, rest.png; 3d.png, 3dtoolpath.png, 3dsimulation.png, 3dcompare.png
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Add example screenshots to README.md
+>
+> ## Context
+>
+> Frank added six screenshots to `docs\` and wants them in `README.md` to show what the add-on does. The tri-dexel plan that was here is saved in `docs\TriDexelSimulation.md`.
+>
+> ## Change
+>
+> In `README.md`, add a new `## Examples` section after the line "This was built against Alibre Design v27." (line 13), so the pictures come before the technical sections. Keep CRLF line endings if the file has them, and use relative paths with forward slashes, like the existing `docs/made-by-ai.png`.
+>
+> The section, in the order Frank gave:
+>
+> ### 2 1/2 axis: adaptive clearing and rest machining
+>
+> - `docs/adaptive.png`: "Pocketing with adaptive clearing. The orange outline is the picked area, magenta the arcs fitted to the toolpath, blue the straight feeds and red the rapids."
+> - `docs/rest.png`: "A second Pocketing operation with rest machining, cutting only what the first one left in the corners."
+>
+> ### 3 axis: a spline surface from model to simulation
+>
+> - `docs/3d.png`: "The part: a spline surface in Alibre."
+> - `docs/3dtoolpath.png`: "Waterline Roughing, Waterline Finishing and Parallel Finishing toolpaths on it."
+> - `docs/3dsimulation.png`: "The simulation of all three, cut from the stock box."
+> - `docs/3dcompare.png`: "Compare: what wasn't removed (amber) and what was cut too deep (red) against the part, with their volumes."
+>
+> Each image as `![alt](docs/name.png)` with its caption as a line of text under it.
+>
+> ## Not touched
+>
+> - No code, help, spec or `CLAUDE.md` changes (README only). The images are already in `docs\` (untracked); Frank commits.
+>
+> ## Verification
+>
+> 1. Run `python tools\BuildDiscussion.py`.
+> 2. Check the README renders: open it in the built-in preview or on GitHub after Frank pushes, and confirm all six images show.
+
+*(Frank approved the plan.)*
+
 ---
 
 # Side conversation
@@ -17587,3 +17636,23 @@ A forked copy of the session, kept apart from the main one.
 > Add the "Made by AI image to the readme.md"
 
 > <local-command-stdout>Compacted </local-command-stdout>
+
+### 🤖 Claude
+
+> I've added the "Made by AI / LLM, human reviewed" badge to the top of [README.md](../SimWiseForAlibre/README.md), above the title, the same way it appears in your other add-ons. I copied the image from this project to `SimWiseForAlibre\docs\made-by-ai.png`, which is a new file you'll need to add when you commit.
+
+### 🧑 Frank · 07:38
+
+> Add to readme.md, the images in the docs folder, scan.png, loft.png, compare.png to show a simple workflow
+
+### 🤖 Claude
+
+> Let me look at the images so the captions match what they show.
+
+> I added a "A simple workflow" section to the README, just after the opening paragraph. It shows your three pictures in order, each with a one-line caption:
+>
+> 1. **Load and orient the scan** (`scan.png`): the scan in a part, lined up with the part's planes and axes.
+> 2. **Loft through a series of sections** (`loft.png`): Section Series slices the scan at a row of planes and lofts through the sketches.
+> 3. **Compare the part with the scan** (`compare.png`): the scan coloured by its distance from the part, with what each colour means.
+>
+> I also changed the README's "Then **About**." line to mention the new Help button and the dialogs' ? buttons. Nothing is committed.
