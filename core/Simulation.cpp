@@ -16,6 +16,7 @@ namespace camcore
     namespace
     {
         constexpr double kPi = 3.14159265358979323846;
+        constexpr double kDexelTouch = 1e-3;     // a rapid that removes more ray than this, in mm, cut stock
 
         // Cell sizes, fine to coarse.
         const double kCellSizes[] = { 0.05, 0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 2.5, 5.0, 10.0, 20.0, 25.0, 50.0, 100.0 };
@@ -1358,29 +1359,104 @@ namespace camcore
     /////////////////////////////////////////////////////////////////////////
     // Stepping
 
+    double Simulation::Spacing() const
+    {
+        return (m_model == StockModel::TriDexel) ? m_dexels.Spacing() : m_stock.Cell();
+    }
+
+    int Simulation::ChunkCount() const
+    {
+        return (m_model == StockModel::TriDexel) ? m_dexels.ChunkCount() : m_stock.ChunkCount();
+    }
+
+    std::vector<int> Simulation::DirtyChunks() const
+    {
+        return (m_model == StockModel::TriDexel) ? DirtyDexelChunks(m_dexels) : camcore::DirtyChunks(m_stock);
+    }
+
+    void Simulation::MeshChunks(const std::vector<int>& chunks, std::vector<StockMesh>& meshes) const
+    {
+        if (m_model == StockModel::TriDexel)
+            MeshDexelChunks(m_dexels, chunks, meshes);
+        else
+            camcore::MeshChunks(m_stock, chunks, meshes);
+    }
+
+    void Simulation::SetChunkClean(int chunk)
+    {
+        if (m_model == StockModel::TriDexel)
+            m_dexels.SetChunkClean(chunk);
+        else
+            m_stock.SetChunkClean(chunk);
+    }
+
+    StockMesh Simulation::MeshWhole(bool forFile) const
+    {
+        return (m_model == StockModel::TriDexel) ? MeshDexelStock(m_dexels, !forFile) : MeshStock(m_stock);
+    }
+
+    void Simulation::ResetPartGrid(VoxelStock& part) const
+    {
+        if (m_model == StockModel::TriDexel)
+            part.Reset(m_dexels.Box(), m_dexels.Spacing(), true);
+        else
+            part.ResetLike(m_stock);
+    }
+
+    StockDifference Simulation::CompareTo(const VoxelStock& part) const
+    {
+        if (m_model != StockModel::TriDexel)
+            return CompareStock(m_stock, part);
+        VoxelStock voxels;
+        m_dexels.ToVoxels(voxels);
+        return CompareStock(voxels, part);
+    }
+
     void Simulation::Start(const StockBox& box, const std::vector<Vec3>& stockTriangles,
                            const std::vector<SimOperation>& operations, const SimResolution& resolution,
                            double rapidRate)
     {
+        m_model = resolution.model;
         double cell = resolution.cell;
-        if (cell <= 0.0)
+        m_stock = VoxelStock();
+        m_start = VoxelStock();
+        m_dexels = TriDexelStock();
+        m_startDexels = TriDexelStock();
+        if (m_model == StockModel::TriDexel)
         {
-            if (resolution.autoDivide)
+            if (cell <= 0.0)
             {
-                cell = AutoDivideCell(box);
-            }
-            else
-            {
-                const std::vector<double> stops = ResolutionStops(box);
+                const std::vector<double> stops = DexelResolutionStops(box);
                 cell = stops[stops.size() / 2];
             }
+            m_dexels.Reset(box, cell);
+            if (stockTriangles.empty())
+                m_dexels.FillAll();
+            else
+                m_dexels.FillMesh(stockTriangles);
+            m_startDexels = m_dexels;
         }
-        m_stock.Reset(box, cell, resolution.autoDivide);
-        if (stockTriangles.empty())
-            m_stock.FillAll();
         else
-            m_stock.FillMesh(stockTriangles);
-        m_start = m_stock;
+        {
+            if (cell <= 0.0)
+            {
+                if (resolution.autoDivide)
+                {
+                    cell = AutoDivideCell(box);
+                }
+                else
+                {
+                    const std::vector<double> stops = ResolutionStops(box);
+                    cell = stops[stops.size() / 2];
+                }
+            }
+            m_stock.Reset(box, cell, resolution.autoDivide);
+            if (stockTriangles.empty())
+                m_stock.FillAll();
+            else
+                m_stock.FillMesh(stockTriangles);
+            m_start = m_stock;
+        }
         m_operations = operations;
         m_moves.clear();
         m_position = 0;
@@ -1389,7 +1465,7 @@ namespace camcore
         const double rapid = (rapidRate > 0.0) ? rapidRate : 5000.0;
         // Each operation's moves in assembly mm. Arcs become chords within half a
         // cell, and dwells go nowhere.
-        const double tolerance = m_stock.Cell() / 2.0;
+        const double tolerance = Spacing() / 2.0;
         for (size_t o = 0; o < m_operations.size(); ++o)
         {
             const SimOperation& operation = m_operations[o];
@@ -1491,7 +1567,7 @@ namespace camcore
         // is before the piece (the flutes cut below them).
         SimWarning warning = SimWarning::None;
         const auto touches = [&](const SimCylinder& cylinder) {
-            if (!cylinder.Present())
+            if (m_ignoreCollisions || !cylinder.Present())
                 return false;
             Vec3 w;
             if (!Normalise(operation.frame.zAxis, w))
@@ -1500,6 +1576,8 @@ namespace camcore
             plain.type = ToolType::FlatEndMill;
             plain.radius = cylinder.radius;
             plain.length = cylinder.length;
+            if (m_model == StockModel::TriDexel)
+                return DexelsTouch(m_dexels, plain, a + w * cylinder.start, b + w * cylinder.start, w);
             return CountMove(m_stock, plain, a + w * cylinder.start, b + w * cylinder.start, w) > 0;
         };
         if (touches(operation.holder))
@@ -1509,8 +1587,12 @@ namespace camcore
         else if (touches(operation.neck))
             warning = SimWarning::NeckHitsStock;
 
-        const long long removed = CutMove(m_stock, operation.profile, a, b, operation.frame.zAxis);
-        if (warning == SimWarning::None && move.rapid && removed > 0)
+        bool cut = false;
+        if (m_model == StockModel::TriDexel)
+            cut = CutDexels(m_dexels, operation.profile, a, b, operation.frame.zAxis) > kDexelTouch;
+        else
+            cut = CutMove(m_stock, operation.profile, a, b, operation.frame.zAxis) > 0;
+        if (warning == SimWarning::None && move.rapid && cut && !m_ignoreCollisions)
             warning = SimWarning::RapidIntoStock;
         return warning;
     }
@@ -1590,8 +1672,16 @@ namespace camcore
 
     void Simulation::Rewind()
     {
-        m_stock = m_start;
-        m_stock.MarkAllDirty();
+        if (m_model == StockModel::TriDexel)
+        {
+            m_dexels = m_startDexels;
+            m_dexels.MarkAllDirty();
+        }
+        else
+        {
+            m_stock = m_start;
+            m_stock.MarkAllDirty();
+        }
         m_position = 0;
         m_into = 0.0;
         m_warning = SimWarning::None;

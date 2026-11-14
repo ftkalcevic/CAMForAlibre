@@ -1760,14 +1760,12 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
         m_simulationBox = box;
         m_simulationTriangles = triangles;
         m_simulation.Start(box, triangles, operations,
-                           CSimulationDlg::ChosenResolution(camcore::ResolutionStops(box)), m_machine.rapidRate);
-        Log(L"[simulate] %zu operations, %zu moves, %d x %d x %d cells of %g mm (%s), %d mixed bricks, ready in %llu ms",
-            operations.size(), m_simulation.Moves().size(), m_simulation.Stock().SizeX(),
-            m_simulation.Stock().SizeY(), m_simulation.Stock().SizeZ(), m_simulation.Stock().Cell(),
-            m_simulation.Stock().Divided() ? L"divided" : L"undivided", m_simulation.Stock().MixedBricks(),
-            GetTickCount64() - start);
+                           CSimulationDlg::ChosenResolution(SimulationStops(CSimulationDlg::ChosenModel())),
+                           m_machine.rapidRate);
+        Log(L"[simulate] %zu operations, %zu moves, %s, ready in %llu ms", operations.size(),
+            m_simulation.Moves().size(), SimulationGridText().c_str(), GetTickCount64() - start);
     }
-    m_simulationChunks.assign(static_cast<size_t>(m_simulation.Stock().ChunkCount()), camcore::StockMesh());
+    m_simulationChunks.assign(static_cast<size_t>(m_simulation.ChunkCount()), camcore::StockMesh());
     m_simulationMesh = camcore::StockMesh();
     m_simulationPartTriangles.clear();
     m_simulationPartsRead = false;
@@ -1797,16 +1795,33 @@ void CCamTabCommand::RestartSimulation(const camcore::SimResolution& resolution)
     const std::vector<camcore::SimOperation> operations = m_simulation.Operations();
     m_simulation.Start(m_simulationBox, m_simulationTriangles, operations, resolution, m_machine.rapidRate);
     m_simulation.SeekTo(position);
-    m_simulationChunks.assign(static_cast<size_t>(m_simulation.Stock().ChunkCount()), camcore::StockMesh());
+    m_simulationChunks.assign(static_cast<size_t>(m_simulation.ChunkCount()), camcore::StockMesh());
     m_simulationMesh = camcore::StockMesh();
     ClearSimulationCompare();
     if (m_simulationShow.part || m_simulationShow.notEnough || m_simulationShow.tooMuch)
         PrepareSimulationPart();
-    Log(L"[simulate] restarted: %d x %d x %d cells of %g mm (%s), cut to move %zu, %d mixed bricks, in %llu ms",
-        m_simulation.Stock().SizeX(), m_simulation.Stock().SizeY(), m_simulation.Stock().SizeZ(),
-        m_simulation.Stock().Cell(), m_simulation.Stock().Divided() ? L"divided" : L"undivided", position,
-        m_simulation.Stock().MixedBricks(), GetTickCount64() - start);
+    Log(L"[simulate] restarted: %s, cut to move %zu, in %llu ms", SimulationGridText().c_str(), position,
+        GetTickCount64() - start);
     OnSimulationChanged();
+}
+
+std::wstring CCamTabCommand::SimulationGridText() const
+{
+    wchar_t text[200];
+    if (m_simulation.Model() == camcore::StockModel::TriDexel)
+    {
+        const camcore::TriDexelStock& dexels = m_simulation.Dexels();
+        swprintf_s(text, L"tri-dexels %d x %d x %d at %g mm, %zu stretches, %.1f MB", dexels.Size(0), dexels.Size(1),
+                   dexels.Size(2), dexels.Spacing(), dexels.IntervalCount(),
+                   static_cast<double>(dexels.MemoryBytes()) / (1024.0 * 1024.0));
+    }
+    else
+    {
+        const camcore::VoxelStock& stock = m_simulation.Stock();
+        swprintf_s(text, L"%d x %d x %d cells of %g mm (%s), %d mixed bricks", stock.SizeX(), stock.SizeY(),
+                   stock.SizeZ(), stock.Cell(), stock.Divided() ? L"divided" : L"undivided", stock.MixedBricks());
+    }
+    return text;
 }
 
 std::filesystem::path CCamTabCommand::SimulationStlPath() const
@@ -1820,7 +1835,7 @@ bool CCamTabCommand::SaveSimulationStl(const std::filesystem::path& path, std::w
 {
     CWaitCursor wait;
     const ULONGLONG start = GetTickCount64();
-    const camcore::StockMesh mesh = camcore::MeshStock(m_simulation.Stock());
+    const camcore::StockMesh mesh = m_simulation.MeshWhole(true);
     std::string problem;
     if (!camcore::WriteFileAtomically(path, camcore::StockMeshToStl(mesh, "CAMForAlibre simulated stock, mm"), problem))
     {
@@ -1868,7 +1883,7 @@ bool CCamTabCommand::PrepareSimulationPart()
 
     CWaitCursor wait;
     const ULONGLONG start = GetTickCount64();
-    m_simulationPart.ResetLike(m_simulation.Stock());
+    m_simulation.ResetPartGrid(m_simulationPart);
     m_simulationPart.FillMesh(m_simulationPartTriangles);
     m_simulationPartMesh = camcore::MeshStock(m_simulationPart);
     m_simulationPartReady = true;
@@ -1904,12 +1919,11 @@ void CCamTabCommand::UpdateSimulationScene()
 {
     // Each chunk that changed is meshed again, and the chunks joined into one mesh.
     // The changed chunks are meshed on all cores.
-    camcore::VoxelStock& stock = m_simulation.Stock();
     const ULONGLONG start = GetTickCount64();
-    const std::vector<int> dirty = camcore::DirtyChunks(stock);
-    camcore::MeshChunks(stock, dirty, m_simulationChunks);
+    const std::vector<int> dirty = m_simulation.DirtyChunks();
+    m_simulation.MeshChunks(dirty, m_simulationChunks);
     for (int c : dirty)
-        stock.SetChunkClean(c);
+        m_simulation.SetChunkClean(c);
     if (!dirty.empty())
         m_simulationCompareStale = true;
     if (!dirty.empty())
@@ -1917,8 +1931,8 @@ void CCamTabCommand::UpdateSimulationScene()
         m_simulationMesh = camcore::JoinMeshes(m_simulationChunks);
         const ULONGLONG took = GetTickCount64() - start;
         if (took > 200)
-            Log(L"[simulate] meshed %zu chunks, %zu triangles in all, in %llu ms, %d mixed bricks", dirty.size(),
-                m_simulationMesh.TriangleCount(), took, stock.MixedBricks());
+            Log(L"[simulate] meshed %zu chunks, %zu triangles in all, in %llu ms, %s", dirty.size(),
+                m_simulationMesh.TriangleCount(), took, SimulationGridText().c_str());
     }
 
     m_scene.simMesh = &m_simulationMesh;
@@ -1929,7 +1943,7 @@ void CCamTabCommand::UpdateSimulationScene()
     if (comparing && m_simulationCompareStale)
     {
         const ULONGLONG compareStart = GetTickCount64();
-        const camcore::StockDifference difference = camcore::CompareStock(stock, m_simulationPart);
+        const camcore::StockDifference difference = m_simulation.CompareTo(m_simulationPart);
         m_simulationNotEnough = difference.notEnoughVolume;
         m_simulationTooMuch = difference.tooMuchVolume;
         m_simulationNotEnoughMesh = camcore::MeshStock(difference.notEnough);

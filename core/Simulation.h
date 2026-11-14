@@ -13,6 +13,7 @@
 #include "Stock.h"
 #include "ToolLibrary.h"
 #include "Toolpath.h"
+#include "TriDexel.h"
 
 namespace camcore
 {
@@ -24,11 +25,20 @@ namespace camcore
     // top has at most maxColumns columns of cells.
     double AutoDivideCell(const StockBox& box, double maxColumns = 1.6e7);
 
+    // How the simulation keeps the stock: as voxels, or as three grids of rays
+    // (tri-dexels, smooth and exact along each ray).
+    enum class StockModel
+    {
+        Voxels,
+        TriDexel,
+    };
+
     // How the simulation's stock is divided into cells.
     struct SimResolution
     {
-        bool autoDivide = true;     // solid stock kept whole, divided into cells only where it's cut
-        double cell = 0.0;          // the cell size in mm; 0 chooses one (AutoDivideCell, or the middle stop)
+        bool autoDivide = true;     // solid stock kept whole, divided into cells only where it's cut (voxels only)
+        double cell = 0.0;          // the cell size or dexel spacing in mm; 0 chooses one (AutoDivideCell, or the middle stop)
+        StockModel model = StockModel::Voxels;
     };
 
     // The stock as cells in a grid over its box. Cells are kept 64 at a time up
@@ -305,8 +315,29 @@ namespace camcore
                    const std::vector<SimOperation>& operations, const SimResolution& resolution = SimResolution(),
                    double rapidRate = 5000.0);
 
+        // The stock as voxels (empty in tri-dexel mode), and as tri-dexels (empty with voxels).
         VoxelStock& Stock() { return m_stock; }
         const VoxelStock& Stock() const { return m_stock; }
+        const TriDexelStock& Dexels() const { return m_dexels; }
+        StockModel Model() const { return m_model; }
+
+        // The cell size, or the dexel spacing.
+        double Spacing() const;
+
+        // The stock's surface in chunks, from whichever model it's kept in.
+        int ChunkCount() const;
+        std::vector<int> DirtyChunks() const;
+        void MeshChunks(const std::vector<int>& chunks, std::vector<StockMesh>& meshes) const;
+        void SetChunkClean(int chunk);
+        // The whole surface. For a file, tri-dexels are meshed closed (flat areas not merged).
+        StockMesh MeshWhole(bool forFile = false) const;
+
+        // An empty voxel grid the parts are filled into for Compare: the stock's own,
+        // or one at the dexel spacing.
+        void ResetPartGrid(VoxelStock& part) const;
+
+        // The stock against the parts, in that grid (the dexels turned into voxels).
+        StockDifference CompareTo(const VoxelStock& part) const;
         const std::vector<SimMove>& Moves() const { return m_moves; }
         const std::vector<SimOperation>& Operations() const { return m_operations; }
 
@@ -353,14 +384,22 @@ namespace camcore
         size_t WarningMove() const { return m_warningMove; }
         void ClearWarning() { m_warning = SimWarning::None; }
 
+        // With collisions ignored, nothing is checked: a rapid cutting stock, and the
+        // shank, neck or holder touching it, don't stop it. Kept when started again.
+        void SetIgnoreCollisions(bool ignore) { m_ignoreCollisions = ignore; }
+        bool IgnoreCollisions() const { return m_ignoreCollisions; }
+
     private:
         // Cuts one move's piece from a to b with the holder, shank and rapid checks,
         // returning the warning (None for none).
         SimWarning CutPiece(const SimMove& move, const Vec3& a, const Vec3& b);
         Vec3 PointAlong(const SimMove& move, double seconds) const;
 
+        StockModel m_model = StockModel::Voxels;
         VoxelStock m_stock;
         VoxelStock m_start;                     // the whole stock, to rewind to
+        TriDexelStock m_dexels;
+        TriDexelStock m_startDexels;
         std::vector<SimOperation> m_operations;
         std::vector<SimMove> m_moves;
         size_t m_position = 0;
@@ -368,5 +407,6 @@ namespace camcore
         std::vector<double> m_moveStarts;       // each move's start in machining time, then the total
         SimWarning m_warning = SimWarning::None;
         size_t m_warningMove = 0;
+        bool m_ignoreCollisions = false;
     };
 }

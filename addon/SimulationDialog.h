@@ -24,6 +24,9 @@ public:
     // whose Resolution slider has these stops.
     static camcore::SimResolution ChosenResolution(const std::vector<double>& stops);
 
+    // The stock model last chosen: voxels or tri-dexels.
+    static camcore::StockModel ChosenModel();
+
     enum { IDD = IDD_SIMULATION };
 
 protected:
@@ -43,6 +46,8 @@ protected:
     afx_msg void OnClose();
     afx_msg void OnHelpButton();
     afx_msg void OnAutoDivide();
+    afx_msg void OnModelChanged();
+    afx_msg void OnIgnoreCollisions();
     afx_msg void OnSaveStl();
     afx_msg void OnShowChanged();
     afx_msg void OnRealTimeChanged();
@@ -58,7 +63,8 @@ private:
     size_t MovesPerTick() const;
     double RealTimeFactor() const;      // the real time slider: 0.1 to 10 times
     void Finish();
-    void ShowResolution();      // greys the slider while Auto divide is on
+    void ShowResolution();      // greys the slider while Auto divide is on, and Auto divide for tri-dexels
+    void SetStops();            // the slider's stops for the stock model
     void Restart();             // the stock again at the chosen resolution, cut to the same move
 
     CCamTabCommand* m_pTab;

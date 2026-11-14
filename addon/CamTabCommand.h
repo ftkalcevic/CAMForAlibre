@@ -122,8 +122,14 @@ public:
     void Simulate(const StepRef& scope);
     void SimulateOperations(std::vector<StepRef> refs);
     camcore::Simulation& GetSimulation() { return m_simulation; }
-    std::vector<double> SimulationStops() const { return camcore::ResolutionStops(m_simulationBox); }
+    // The Resolution slider's stops: cell sizes, or dexel spacings.
+    std::vector<double> SimulationStops(camcore::StockModel model) const
+    {
+        return (model == camcore::StockModel::TriDexel) ? camcore::DexelResolutionStops(m_simulationBox)
+                                                        : camcore::ResolutionStops(m_simulationBox);
+    }
     void RestartSimulation(const camcore::SimResolution& resolution);   // and cut back to the same move
+    std::wstring SimulationGridText() const;                            // the stock's grid, for the log
     std::filesystem::path SimulationStlPath() const;                    // the suggested name, beside the .cam file
 
     // What the simulation shows: the cut stock, the parts' cells, and the

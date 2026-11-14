@@ -2,7 +2,7 @@
 
 ## Context
 
-Nothing is built yet. This plan was saved for later, when Frank asks for it.
+Built (see CLAUDE.md for what was done and the timings). Changes from this plan: rays along and square to the tool axis are cut by the whole move exactly, not in steps; flat areas of the drawn mesh are merged into rectangles, and Save STL writes the unmerged, closed mesh.
 
 
 The simulation now keeps the stock as voxels: each cell is cut when its centre falls inside the tool. Slopes, round walls and tilted 3+2 cuts come out stair-stepped at the cell size.

@@ -88,6 +88,7 @@
     <ClCompile Include="NurbsTests.cpp" />
     <ClCompile Include="ReplayTests.cpp" />
     <ClCompile Include="SimulationTests.cpp" />
+    <ClCompile Include="TriDexelTests.cpp" />
     <ClCompile Include="SourceTests.cpp" />
     <ClCompile Include="FeatureTests.cpp" />
     <ClCompile Include="OriginTests.cpp" />

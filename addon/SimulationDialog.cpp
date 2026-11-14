@@ -27,6 +27,8 @@ namespace
     int g_realTimeSpeed = 50;       // the real time slider, 0 to kSpeedSteps: 50 is 1 times
     const ULONGLONG kLongestTick = 250;     // real time: a slow tick counts as no more than this
     bool g_autoDivide = true;
+    camcore::StockModel g_stockModel = camcore::StockModel::Voxels;
+    bool g_ignoreCollisions = false;    // off at first, remembered until Alibre closes
     std::wstring g_stlFolder;       // where the last STL was saved this session
     CCamTabCommand::SimulationShow g_show;      // what's shown, remembered until Alibre closes
     int g_resolutionStop = -1;      // the slider's stop, fine to coarse; -1 is the middle
@@ -69,6 +71,8 @@ BEGIN_MESSAGE_MAP(CSimulationDlg, CDialog)
     ON_BN_CLICKED(IDC_SIM_OPERATION_END, &CSimulationDlg::OnOperationEnd)
     ON_BN_CLICKED(IDC_SIM_END, &CSimulationDlg::OnEnd)
     ON_BN_CLICKED(IDC_SIM_AUTO_DIVIDE, &CSimulationDlg::OnAutoDivide)
+    ON_CBN_SELCHANGE(IDC_SIM_MODEL, &CSimulationDlg::OnModelChanged)
+    ON_BN_CLICKED(IDC_SIM_IGNORE_COLLISIONS, &CSimulationDlg::OnIgnoreCollisions)
     ON_BN_CLICKED(IDC_SIM_SAVE_STL, &CSimulationDlg::OnSaveStl)
     ON_BN_CLICKED(IDC_SIM_SHOW_STOCK, &CSimulationDlg::OnShowChanged)
     ON_BN_CLICKED(IDC_SIM_SHOW_PART, &CSimulationDlg::OnShowChanged)
@@ -89,10 +93,17 @@ void CSimulationDlg::OnHelpButton()
 camcore::SimResolution CSimulationDlg::ChosenResolution(const std::vector<double>& stops)
 {
     camcore::SimResolution resolution;
-    resolution.autoDivide = g_autoDivide;
-    if (!g_autoDivide && !stops.empty())
+    resolution.model = g_stockModel;
+    // Tri-dexels are never auto divided: the slider always sets their spacing.
+    resolution.autoDivide = g_autoDivide && g_stockModel == camcore::StockModel::Voxels;
+    if (!resolution.autoDivide && !stops.empty())
         resolution.cell = stops[static_cast<size_t>(StopIndex(stops))];
     return resolution;
+}
+
+camcore::StockModel CSimulationDlg::ChosenModel()
+{
+    return g_stockModel;
 }
 
 CSimulationDlg::CSimulationDlg(CCamTabCommand* pTab)
@@ -120,16 +131,18 @@ BOOL CSimulationDlg::OnInitDialog()
     m_realTimeSpeed.SetPos(g_realTimeSpeed);
     CheckDlgButton(IDC_SIM_REALTIME, g_realTime ? BST_CHECKED : BST_UNCHECKED);
 
-    // Resolution: Auto divide, or a stop from fine to coarse.
+    // The stock model, then the resolution: Auto divide, or a stop from fine to coarse.
+    CComboBox* pModel = static_cast<CComboBox*>(GetDlgItem(IDC_SIM_MODEL));
+    pModel->AddString(L"Voxels");
+    pModel->AddString(L"Tri-dexel");
+    pModel->SetCurSel(g_stockModel == camcore::StockModel::TriDexel ? 1 : 0);
     m_resolution.SubclassDlgItem(IDC_SIM_RESOLUTION, this);
-    if (m_pTab != nullptr)
-        m_stops = m_pTab->SimulationStops();
-    m_resolution.SetRange(0, (std::max)(1, static_cast<int>(m_stops.size()) - 1));
-    m_resolution.SetTicFreq(1);
-    m_appliedStop = StopIndex(m_stops);
-    m_resolution.SetPos(m_appliedStop);
+    SetStops();
     CheckDlgButton(IDC_SIM_AUTO_DIVIDE, g_autoDivide ? BST_CHECKED : BST_UNCHECKED);
     ShowResolution();
+    CheckDlgButton(IDC_SIM_IGNORE_COLLISIONS, g_ignoreCollisions ? BST_CHECKED : BST_UNCHECKED);
+    if (m_pTab != nullptr)
+        m_pTab->GetSimulation().SetIgnoreCollisions(g_ignoreCollisions);
 
     // What's shown.
     CheckDlgButton(IDC_SIM_SHOW_STOCK, g_show.stock ? BST_CHECKED : BST_UNCHECKED);
@@ -302,9 +315,52 @@ void CSimulationDlg::OnAutoDivide()
     Restart();
 }
 
+void CSimulationDlg::OnIgnoreCollisions()
+{
+    g_ignoreCollisions = IsDlgButtonChecked(IDC_SIM_IGNORE_COLLISIONS) == BST_CHECKED;
+    if (m_pTab == nullptr)
+        return;
+    // From the next move on; a warning showing now is cleared when they're ignored.
+    camcore::Simulation& simulation = m_pTab->GetSimulation();
+    simulation.SetIgnoreCollisions(g_ignoreCollisions);
+    if (g_ignoreCollisions && simulation.HasWarning())
+    {
+        simulation.ClearWarning();
+        Changed();
+        return;
+    }
+    ShowState();
+}
+
+void CSimulationDlg::OnModelChanged()
+{
+    const int chosen = static_cast<CComboBox*>(GetDlgItem(IDC_SIM_MODEL))->GetCurSel();
+    const camcore::StockModel model = (chosen == 1) ? camcore::StockModel::TriDexel : camcore::StockModel::Voxels;
+    if (model == g_stockModel)
+        return;
+    g_stockModel = model;
+    SetStops();
+    ShowResolution();
+    Restart();
+}
+
+void CSimulationDlg::SetStops()
+{
+    m_stops.clear();
+    if (m_pTab != nullptr)
+        m_stops = m_pTab->SimulationStops(g_stockModel);
+    m_resolution.SetRange(0, (std::max)(1, static_cast<int>(m_stops.size()) - 1), TRUE);
+    m_resolution.ClearTics(TRUE);
+    m_resolution.SetTicFreq(1);
+    m_appliedStop = StopIndex(m_stops);
+    m_resolution.SetPos(m_appliedStop);
+}
+
 void CSimulationDlg::ShowResolution()
 {
-    const BOOL slider = (!g_autoDivide && m_stops.size() > 1) ? TRUE : FALSE;
+    const bool dexels = g_stockModel == camcore::StockModel::TriDexel;
+    GetDlgItem(IDC_SIM_AUTO_DIVIDE)->EnableWindow(dexels ? FALSE : TRUE);
+    const BOOL slider = ((dexels || !g_autoDivide) && m_stops.size() > 1) ? TRUE : FALSE;
     for (int id : { IDC_SIM_RESOLUTION, IDC_SIM_RESOLUTION_LABEL, IDC_SIM_FINE, IDC_SIM_MEDIUM, IDC_SIM_COARSE })
         GetDlgItem(id)->EnableWindow(slider);
 }

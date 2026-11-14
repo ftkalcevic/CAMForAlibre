@@ -258,6 +258,37 @@ TEST_CASE("a rapid through stock stops with a warning")
     CHECK(simulation.WarningMove() == 1);
 }
 
+TEST_CASE("with collisions ignored, rapids into stock and holder hits don't stop it")
+{
+    const std::vector<ToolpathMove> moves = {
+        Move(MoveKind::Rapid, { 5, 10, 15 }), Move(MoveKind::Rapid, { 5, 10, 5 }),
+        Move(MoveKind::Feed, { 5, 10, -2 }), Move(MoveKind::Feed, { 15, 10, -2 }),
+    };
+    Tool tool;
+    tool.diameter = 4.0;
+    tool.fluteLength = 4.0;
+    tool.overallLength = 8.0;
+    SimOperation operation = Operation(Flat(4), moves);
+    operation.profile = ProfileOf(tool);
+    operation.shank = ShankOf(tool);
+    operation.holder = HolderOf(tool, 20.0, 30.0);
+    for (StockModel model : { StockModel::Voxels, StockModel::TriDexel })
+    {
+        Simulation simulation;
+        const SimResolution resolution{ false, 0.5, model };
+        simulation.Start({ { 0, 0, 0 }, { 20, 20, 10 } }, {}, { operation }, resolution);
+        simulation.RunToEnd();
+        CHECK(simulation.HasWarning());
+
+        simulation.SetIgnoreCollisions(true);
+        simulation.Start({ { 0, 0, 0 }, { 20, 20, 10 } }, {}, { operation }, resolution);
+        CHECK(simulation.IgnoreCollisions());
+        CHECK(simulation.RunToEnd() == 4);
+        CHECK(simulation.Finished());
+        CHECK_FALSE(simulation.HasWarning());
+    }
+}
+
 TEST_CASE("the shank and holder touching stock stop with a warning")
 {
     // Feeding 12 deep into stock 10 tall: the 4 mm flutes are under the top, the
