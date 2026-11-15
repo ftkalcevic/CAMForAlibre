@@ -6,9 +6,12 @@
 #pragma once
 
 #include <memory>
+#include <set>
+#include <string>
 
 #include "Boundary.h"
 #include "Features.h"
+#include "Fixtures.h"
 #include "Origin.h"
 #include "Stock.h"
 #include "SurfaceGeometry.h"
@@ -73,11 +76,20 @@ void ClearSelection(IADSession* pAssembly);
 // selection order, each once. Returns false only if the selection can't be read.
 bool ReadSelectedParts(IADSession* pAssembly, std::vector<camcore::StockPart>& parts);
 
+// Occurrence keys (their hex) of parts to leave out: the job's fixtures.
+using OccurrenceKeys = std::set<std::string>;
+
 // The box around some parts, found again by their keys, or around the whole
-// assembly when the list is empty. Returns false and sets problem if a part
-// can't be found or nothing can be measured.
+// assembly when the list is empty (less the parts in leaveOut, fixtures). Returns
+// false and sets problem if a part can't be found or nothing can be measured.
 bool ReadPartsBounds(IADSession* pAssembly, const std::vector<camcore::StockPart>& parts, camcore::Vec3& lower,
-                     camcore::Vec3& upper, std::wstring& problem);
+                     camcore::Vec3& upper, std::wstring& problem, const OccurrenceKeys& leaveOut = {});
+
+// Fixture parts' facets, found again by their keys, in the assembly's coordinates
+// in mm, hidden or not (a hidden clamp is still on the machine). Returns false and
+// sets problem if a part can't be found or read.
+bool ReadFixtureMeshes(IADSession* pAssembly, const std::vector<camcore::FixturePart>& parts,
+                       std::vector<camcore::FixtureMesh>& meshes, std::wstring& problem);
 
 // Opens an Alibre part without showing it, reads its facets (three points to a
 // triangle, in the part's own coordinates in mm), and closes it. Returns false
@@ -92,11 +104,12 @@ bool ReadFaceFacets(IADSession* pAssembly, const camcore::PickedGeometry& featur
 
 // The facets of every visible, unsuppressed part in the assembly (three points to a
 // triangle, in the assembly's coordinates in mm), leaving out the part whose file is
-// leaveOutPath (an imported stock's). Each part is read from its occurrence's own
-// session, or from its file if that fails. Returns false and sets problem if no
-// part could be read.
+// leaveOutPath (an imported stock's) and the occurrences in leaveOutKeys (fixtures).
+// Each part is read from its occurrence's own session, or from its file if that
+// fails. Returns false and sets problem if no part could be read.
 bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutPath,
-                            std::vector<camcore::Vec3>& triangles, std::wstring& problem);
+                            std::vector<camcore::Vec3>& triangles, std::wstring& problem,
+                            const OccurrenceKeys& leaveOutKeys = {});
 
 // Every visible part's faces, each read with its own facets and kept with its
 // true surface, so a tool's contacts can be moved onto the surface.
@@ -106,12 +119,13 @@ public:
     PartSurfaces();
     ~PartSurfaces();
 
-    // Reads every visible, unsuppressed part (less leaveOutPath's) face by face:
+    // Reads every visible, unsuppressed part (less leaveOutPath's, and the
+    // occurrences in leaveOutKeys) face by face:
     // triangles in the assembly's coordinates in mm, and the face each is on (-1
     // for a plane, whose triangles are already exact, or where a part could only
     // be read whole). Returns false and sets problem if no part could be read.
     bool Read(IADSession* pAssembly, const std::wstring& leaveOutPath, std::vector<camcore::Vec3>& triangles,
-              std::vector<int>& faces, std::wstring& problem);
+              std::vector<int>& faces, std::wstring& problem, const OccurrenceKeys& leaveOutKeys = {});
 
     // The closest point on a face's true surface to p, both in the assembly's
     // coordinates in mm, and whether it's on the face itself. False if Alibre

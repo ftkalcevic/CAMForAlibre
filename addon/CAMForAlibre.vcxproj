@@ -126,6 +126,7 @@
     <ClCompile Include="SimulationDialog.cpp" />
     <ClCompile Include="ToolDialogs.cpp" />
     <ClCompile Include="FeedsCalculatorDialog.cpp" />
+    <ClCompile Include="FixturesDialog.cpp" />
     <ClCompile Include="ToolDrawing.cpp" />
     <ClCompile Include="CAMForAlibre.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -154,6 +155,7 @@
     <ClInclude Include="SimulationDialog.h" />
     <ClInclude Include="ToolDialogs.h" />
     <ClInclude Include="FeedsCalculatorDialog.h" />
+    <ClInclude Include="FixturesDialog.h" />
     <ClInclude Include="ToolDrawing.h" />
     <ClInclude Include="CAMForAlibre.h" />
     <ClInclude Include="resource.h" />

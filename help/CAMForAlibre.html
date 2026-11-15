@@ -76,6 +76,7 @@
   <a class="sub" href="#feeds-calculator">Feeds and Speeds Calculator</a>
   <a class="sub" href="#choose-material">Choose Material</a>
   <a href="#set-origin">Set Origin</a>
+  <a href="#fixtures">Fixtures</a>
   <a href="#post">Post</a>
   <a href="#operation">Operation dialog</a>
   <a href="#simulation">Simulation</a>
@@ -145,7 +146,7 @@
 </dl>
 
 <h3 id="cam-tree">Tree</h3>
-<p>The tree has a fixed <strong>Setup</strong> at the top and the <strong>Operations</strong> sequence below it. Operations run from top to bottom. Drag a step to reorder it. Each node has an image: a gear for Setup, a machine, tools, a block of material and a wireframe stock; axes for a Set Origin and a folder for a folder; each tool shows its type (flat end mill, ball mill, corner radius mill, V-mill, chamfer mill, taper mill, thread mill or drill); and each kind of operation has its own. The images grow with the CAM View Size setting. A red exclamation mark over a node's image means it has a problem: an operation with no toolpath (never generated, cleared, changed since, or Generate failed), a Set Origin that isn't complete, the machine when its file can't be found or read, the material when it's no longer in the list, or the stock when it can't be read. Folders are never marked, and suppressed operations aren't, as they aren't generated on purpose.</p>
+<p>The tree has a fixed <strong>Setup</strong> at the top and the <strong>Operations</strong> sequence below it. Operations run from top to bottom. Drag a step to reorder it. Each node has an image: a gear for Setup, a machine, tools, a block of material and a wireframe stock; axes for a Set Origin, a vice for a Fixtures step and a folder for a folder; each tool shows its type (flat end mill, ball mill, corner radius mill, V-mill, chamfer mill, taper mill, thread mill or drill); and each kind of operation has its own. The images grow with the CAM View Size setting. A red exclamation mark over a node's image means it has a problem: an operation with no toolpath (never generated, cleared, changed since, or Generate failed), a Set Origin that isn't complete, a Fixtures step whose parts can't be found or read, an operation whose last Generate came too close to a fixture, the machine when its file can't be found or read, the material when it's no longer in the list, or the stock when it can't be read. Folders are never marked, and suppressed operations aren't, as they aren't generated on purpose.</p>
 <dl>
   <dt>Setup ▸ Machine</dt>
   <dd>The machine the job is cut on, shown as <em>Machine - name</em>. Double-click it, or right-click and Edit Machine, to open the <a href="#machine">Machine</a> dialog.</dd>
@@ -156,9 +157,11 @@
   <dt>Setup ▸ Stock</dt>
   <dd>The material the parts are cut from. A job has at most one stock, and the node shows its kind, such as <em>Stock - Box Stock</em>. Right-click it to make one: <a href="#stock-box">Box Stock</a>, <a href="#stock-part-box">Part Box Stock</a> or <a href="#stock-import">Import Stock</a>. Once there's a stock, those are greyed, and Edit (or double-clicking Stock) changes it and Delete removes it. The stock is drawn as its edges in teal, and it's measured along the assembly's axes.</dd>
   <dt>Operations</dt>
-  <dd>The ordered sequence of Set Origin steps, folders and operations. Right-click it to add steps, generate all toolpaths, or post.</dd>
+  <dd>The ordered sequence of Set Origin steps, Fixtures steps, folders and operations. Right-click it to add steps, generate all toolpaths, or post.</dd>
   <dt>Set Origin</dt>
   <dd>Defines the origin (work coordinate frame) for the steps below it, up to the next Set Origin. The first one that isn't suppressed is the work zero for posting. Selecting one draws it in the view.</dd>
+  <dt>Fixtures</dt>
+  <dd>The work holding (vices, clamps, screws) the operations below it, up to the next Fixtures step, keep clear of, shown as <em>name (n parts)</em>, with <em>trim</em> when Trim toolpaths round fixtures is ticked. Selecting one outlines its parts in purple. Double-click it, or use Edit, to open the <a href="#fixtures">Fixtures</a> dialog. Drag a later Fixtures step to where the clamps move to (after a flip, say): the operations below it then use its parts instead.</dd>
   <dt>Folder</dt>
   <dd>A group of operations, which can be generated or posted together. Folders don't nest. Use Rename to change a folder's name.</dd>
   <dt>Operation</dt>
@@ -166,13 +169,15 @@
   <dt>Choosing several operations</dt>
   <dd>Ctrl+click operations to choose several, even in different folders; Ctrl+click a chosen one again to take it off. Shift+click chooses every operation between the last one clicked and this one. A plain click goes back to one. Right-click a chosen operation for <strong>Edit N Operations</strong>, which edits them together (see the <a href="#operation">Operation dialog</a>), <strong>Generate</strong>, which generates them all, <strong>Clear Toolpaths</strong>, or <strong>Simulate</strong>. Double-clicking a chosen one edits them together too.</dd>
   <dt>Suppressed items</dt>
-  <dd>Shown grey, with their toolpaths hidden (they're kept, and show again when unsuppressed). A suppressed Set Origin is skipped, and suppressed operations are left out of Generate and Post.</dd>
+  <dd>Shown grey, with their toolpaths hidden (they're kept, and show again when unsuppressed). A suppressed Set Origin or Fixtures step is skipped (the one above it applies instead), and suppressed operations are left out of Generate and Post.</dd>
 </dl>
 
 <h3 id="cam-menus">Right-click menus</h3>
 <dl>
   <dt>Add Set Origin</dt>
   <dd>Adds a Set Origin step and opens the <a href="#set-origin">Set Origin</a> dialog.</dd>
+  <dt>Add Fixtures</dt>
+  <dd>Adds a Fixtures step at the end of the sequence and opens the <a href="#fixtures">Fixtures</a> dialog. Greyed until there's a Set Origin.</dd>
   <dt>Add Folder</dt>
   <dd>Adds a folder to the Operations sequence.</dd>
   <dt>Add Holes ▸ Drill</dt>
@@ -231,7 +236,7 @@
 
 <section id="simulation">
 <h2>Simulation</h2>
-<p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's direction, so tilted origins cut along their tool axis. The shank (the tool above its flutes, up to its overall length; with a Reduced neck, the neck at the cutting diameter up to the neck length and the shank at the shank diameter above it) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. Nothing is checked against the parts yet. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
+<p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's direction, so tilted origins cut along their tool axis. The shank (the tool above its flutes, up to its overall length; with a Reduced neck, the neck at the cutting diameter up to the neck length and the shank at the shank diameter above it) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. The tool (its own shape), neck, shank and holder are also checked against the parts of each operation's <a href="#fixtures">Fixtures</a> step, at their true size (without the clearance), wherever they are, even outside the stock. Nothing is checked against the parts themselves. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
 <dl>
   <dt>Position</dt>
   <dd>The operation being cut, the move of all the moves (arcs are split into short straight moves), and the machining time so far of the whole: from the feeds, the machine's Rapid rate and dwells, with no allowance for acceleration.</dd>
@@ -262,7 +267,7 @@
   <dt>Resolution</dt>
   <dd>For voxels, only while Auto divide voxels is off: from Fine (small cells: sharper, slower, more memory) to Coarse (large cells: blockier, faster). For Tri-dexel, always: the spacing of the lines, from Fine (closer: finer detail, slower) to Coarse; the finest has at most 4 million lines in each direction. The choices depend on the stock's size, with Medium in the middle as the start; each model has its own stops. Letting go at a new stop starts the stock again and cuts back to the same move. Remembered until Alibre closes.</dd>
   <dt>Ignore collisions</dt>
-  <dd>Off at first. Ticked, none of the warnings below is checked: rapids that cut stock, and the shank, neck or holder touching it, don't stop the simulation, which also runs a little faster. Ticking it clears a warning that's showing. It works from the next move cut; moves already cut aren't checked again. Remembered until Alibre closes.</dd>
+  <dd>Off at first. Ticked, none of the warnings below is checked: rapids that cut stock, the shank, neck or holder touching it, and fixtures, don't stop the simulation, which also runs a little faster. Ticking it clears a warning that's showing. It works from the next move cut; moves already cut aren't checked again. Remembered until Alibre closes.</dd>
   <dt>Warning</dt>
   <dd>Unless Ignore collisions is ticked, the simulation stops after a move that does one of these, which is drawn in thick red, and the warning names the operation and its toolpath move:
     <ul>
@@ -270,13 +275,15 @@
       <li><strong>The tool's shank hits the stock</strong>: the tool above its flute length (or, with a Reduced neck, the wide shank above the neck length) touched stock. A tool with no flute length, or flutes as long as the tool, isn't checked.</li>
       <li><strong>The tool's neck hits the stock</strong>: a Reduced neck tool's neck, between its flute length and its neck length, touched stock.</li>
       <li><strong>The tool holder hits the stock</strong>: the holder touched stock.</li>
+      <li><strong>The tool hits fixture <em>name</em></strong>: the tool, its neck or its shank touched a fixture part.</li>
+      <li><strong>The tool holder hits fixture <em>name</em></strong>: the holder touched a fixture part.</li>
     </ul>
     Play, Step or the other buttons carry on from there.</dd>
   <dt>Show</dt>
   <dd>What's drawn in the view. Each is remembered until Alibre closes.
     <ul>
       <li><strong>Stock</strong>: the cut stock, shaded (on at first).</li>
-      <li><strong>Part</strong>: the parts as the simulation sees them, in green: every visible, unsuppressed part in the assembly, in the same cells as the stock, so you can check they line up with the model. An imported stock's own part is left out. The parts are read the first time any of the last three boxes is ticked, which can take a moment.</li>
+      <li><strong>Part</strong>: the parts as the simulation sees them, in green: every visible, unsuppressed part in the assembly, in the same cells as the stock, so you can check they line up with the model. An imported stock's own part, and every part in a Fixtures step, are left out. The parts are read the first time any of the last three boxes is ticked, which can take a moment.</li>
       <li><strong>Not enough removed</strong>: stock still left outside the parts, in amber. Stock to Leave shows here too.</li>
       <li><strong>Too much removed</strong>: part material the simulation has cut away, in red, drawn over the model so it shows inside the part.</li>
     </ul>
@@ -591,6 +598,41 @@
 </dl>
 </section>
 
+<section id="fixtures">
+<h2>Fixtures</h2>
+<p>A Fixtures step lists the parts of the assembly that hold the stock: a vice, clamps, screws or bolts. Each is a part you model in Alibre: a precise model, or just a box or cylinder for the space it takes up. The operations below the step, up to the next Fixtures step that isn't suppressed, keep clear of them, each by its own clearance:</p>
+<ul>
+  <li><strong>Every operation is checked</strong> after Generate: the tool's cutting diameter (with its ball or corner radius end) from the tip to its overall length, its shank and the machine's tool holder, grown by each part's clearance, along every move, rapids too. A move that comes too close is a warning, given at the end of Generate and in the status (<em>Profiling 1 comes within 2 mm of Clamp&lt;2&gt; at move 143.</em>), and the operation gets a red mark in the tree. The toolpath is kept as it was, so you can see where. The check is good to about the clearance's half (the parts are read into small cells, from 0.05 to 0.25 mm).</li>
+  <li><strong>With Trim toolpaths round fixtures</strong> ticked, each operation goes round them instead. Plunge Roughing, Waterline Roughing and Parallel Finishing treat the parts as parts to keep clear of as they work out their moves (they never make a flat level at a clamp's top). Then, for every operation, any stretch still too close is lifted straight up to the clearance plane, crosses at rapid, comes down at rapid to 2 mm above where the cut starts again and feeds in at the plunge feed. The check above runs after that too. If the clearance plane is too low to lift over a part, Generate stops and says so.</li>
+  <li><strong>The clearance plane:</strong> an operation's Automatic clearance goes 5 mm above the highest of the parts, the stock and the fixtures (each fixture's top plus its clearance). Set any other way and below a fixture's top plus its clearance, Generate warns.</li>
+  <li><strong>The parts:</strong> every part in any Fixtures step is left out of what the operations cut round, the simulation's Part, Not enough removed and Too much removed, and Part Box Stock's All Parts.</li>
+  <li><strong>Moving the clamps:</strong> add a second Fixtures step where the clamps move to, listing their parts in the new positions (model them there in Alibre), and use Rest Machining in later operations to clean up where the first clamps were.</li>
+</ul>
+<p>A part is checked even when it's hidden in Alibre, as a hidden clamp is still on the machine. A part that can't be found (deleted from the assembly) marks the step in the tree, and Generate and Simulate of the operations under it stop until it's removed from the list.</p>
+<dl>
+  <dt>Name</dt>
+  <dd>The step's name in the tree.</dd>
+  <dt>Parts that hold the stock</dt>
+  <dd>The fixture parts, each with its clearance in mm. Choose rows (Ctrl or Shift+click for several) to remove them or set their clearance. They're outlined in purple in the view while the dialog is open.</dd>
+  <dt>Select Parts</dt>
+  <dd>Click it, then click parts in the view: each is added, or taken off the list if it's on it already. Several copies of one part (screws, say) are each their own. Click Done when finished.</dd>
+  <dt>Remove</dt>
+  <dd>Takes the chosen parts off the list.</dd>
+  <dt>Clearance for the chosen parts</dt>
+  <dd>How close, in mm, the tool, shank and holder may come to the chosen parts. Type it and click Set.</dd>
+  <dt>Clearance for new parts</dt>
+  <dd>The clearance parts get as they're added. 2 mm at first.</dd>
+  <dt>Trim toolpaths round fixtures</dt>
+  <dd>Off at first: toolpaths too close to a part are warned about. Ticked: they're made to go round the parts, as described above, for every operation under this step.</dd>
+  <dt>Prompt and result</dt>
+  <dd>What to do next, and why the parts can't be read, if they can't.</dd>
+  <dt>OK</dt>
+  <dd>Saves the step.</dd>
+  <dt>Cancel</dt>
+  <dd>Closes the dialog without changing the step.</dd>
+</dl>
+</section>
+
 <section id="post">
 <h2>Post</h2>
 <p>Writes the generated toolpaths as a program for a machine. Every point is measured from the work zero, the first Set Origin that isn't suppressed. Posts are plain text <code>.post</code> files in the add-on's <code>posts</code> folder, and your own in <code>%APPDATA%\CAMForAlibre\posts\</code> add to them or replace one with the same file name.</p>
@@ -717,7 +759,7 @@
 <p>The clearance plane: the height, along the origin's Z, that the tool moves across at between cuts. It must be above where cuts start.</p>
 <dl>
   <dt>Automatic</dt>
-  <dd>5 mm above the highest point of the parts, or of the stock where that's higher.</dd>
+  <dd>5 mm above the highest point of the parts, or of the stock or the operation's <a href="#fixtures">fixtures</a> (each fixture's top plus its clearance) where that's higher.</dd>
   <dt>Part max Z + distance</dt>
   <dd>The distance above the highest point of the parts.</dd>
   <dt>Stock max Z + distance</dt>

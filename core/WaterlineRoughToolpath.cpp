@@ -438,7 +438,7 @@ namespace camcore
                 return false;
             }
             if (!ClearanceHeight(pOperation->clearance, input.havePartMaxZ, input.partMaxZ, w.clearance, problem,
-                                 input.haveStockMaxZ, input.stockMaxZ))
+                                 input.haveStockMaxZ, input.stockMaxZ, input.haveFixtureMaxZ, input.fixtureMaxZ))
                 return false;
 
             // The tool's sizes.
@@ -546,6 +546,18 @@ namespace camcore
             PartHeightField heights;
             heights.BuildGrid(input.partTriangles, w.xLow, w.yLow, w.nx, w.ny, w.cell);
             w.tips = heights.TipHeights(ProfileOf(tool), w.s);
+            if (roughing)
+            {
+                // Fixtures block the tool as parts do, each by its own clearance.
+                for (const FixtureMesh& fixture : input.fixtures)
+                {
+                    PartHeightField fixtureHeights;
+                    fixtureHeights.BuildGrid(fixture.triangles, w.xLow, w.yLow, w.nx, w.ny, w.cell);
+                    const std::vector<float> above = fixtureHeights.TipHeights(ProfileOf(tool), fixture.clearance);
+                    for (size_t q = 0; q < w.cells && q < above.size(); ++q)
+                        w.tips[q] = (std::max)(w.tips[q], above[q]);
+                }
+            }
             if (roughing && settings.restMachining)
             {
                 w.partTops.assign(w.cells, std::numeric_limits<float>::lowest());
@@ -3127,6 +3139,18 @@ namespace camcore
         {
             ParallelSlices(samples.size(), "Dropping the tool on the parts",
                            [&](size_t k) { samples[k]->z = surfaceAt(samples[k]->x, samples[k]->y); });
+        }
+
+        // Fixtures, each kept clear of by its own clearance: rows rise over them
+        // (and are trimmed where that's above the top).
+        for (const FixtureMesh& fixture : input.fixtures)
+        {
+            const DropCutter fixtureCutter(fixture.triangles, ProfileOf(*input.tool), fixture.clearance);
+            ParallelSlices(samples.size(), "Keeping clear of fixtures", [&](size_t k) {
+                double tip = 0.0;
+                if (fixtureCutter.TipAt(samples[k]->x, samples[k]->y, tip))
+                    samples[k]->z = (std::max)(samples[k]->z, tip);
+            });
         }
 
         // Only where the slope is in range.

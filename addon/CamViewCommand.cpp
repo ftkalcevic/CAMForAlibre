@@ -337,6 +337,20 @@ void CCamViewCommand::DrawScene(IADAddOnCanvasDisplay* pCanvas, const CamScene& 
         }
     }
 
+    // The chosen Fixtures step's parts. Hidden while picking, as graphics take part in it.
+    if (!scene.simulating && scene.showStock && !scene.fixtureEdges.empty())
+    {
+        const __int64 segment = AddSegment(pCanvas, L"Fixtures", kFixtureColour, kStockLineWeight, scene.foreground);
+        for (const camcore::LineSegment& edge : scene.fixtureEdges)
+        {
+            std::vector<float> points;
+            points.reserve(6);
+            AddPoint(points, edge.from, unit);
+            AddPoint(points, edge.to, unit);
+            DrawPolyline(pCanvas, segment, points);
+        }
+    }
+
     // The stock's edges. Hidden while picking, as graphics take part in it.
     if (!scene.simulating && scene.showStock && scene.stockShown && !scene.stockEdges.empty())
     {

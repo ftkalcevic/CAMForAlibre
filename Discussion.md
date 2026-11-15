@@ -11180,6 +11180,609 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Tests pass
 
+### 🤖 Claude
+
+> Thanks. `CLAUDE.md` now says the feeds and speeds calculator is tested by you in Alibre. Nothing is committed.
+
+### 🧑 Frank · 10:16
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> Add support for work holding devices - vice, clamps, screws, etc
+
+### 🤖 Claude
+
+> There's already a saved design. Let me read it for the open decisions.
+
+> Questions:
+> - What kinds of work holding should a fixture be? (Screws through the stock into the spoilboard are inside the stock, so a box is a poor fit for them.)
+>   - Picked assembly parts: A modelled vice or clamp, picked like Part Box Stock's parts and stored by occurrence key, so it follows the model.
+>   - Typed keep-out box: A corner and a size in assembly axes, like Box Stock, for clamps you haven't modelled.
+>   - Typed cylinder (screw): A position, diameter and height (head or full length), for screws and hold-down bolts, including ones through the stock.
+> - What should 2 1/2 axis operations (Facing, Profiling, Pocketing, Drill...) do when their toolpath hits a fixture?
+>   - Warn only (Recommended): Check after Generate; show a tree warning and status naming the fixture. The toolpath is left as generated, so nothing is silently left uncut.
+>   - Trim round fixtures: Cut the toolpath where it would come within the clearance, lifting over the fixture. Safer, but leaves stock uncut without saying so in the cut itself.
+>   - Warn, trim as an option: Warn by default, with a per-operation check box to trim instead. More work.
+> - How should the clearance from fixtures be set?
+>   - One job-wide, 2 mm (Recommended): A single Fixture Clearance on the Fixtures node.
+>   - One per fixture: Each fixture has its own margin, defaulting to 2 mm.
+> - Which operations do fixtures apply to?
+>   - All, Suppress to skip (Recommended): Every fixture applies to every operation; suppress one when it's not there (e.g. after a flip). Carried in templates.
+>   - Per Set Origin: Each Set Origin lists the fixtures used under it, so a flip with different clamps works without suppressing.
+
+### 🧑 Frank · 15:03
+
+> Answers:
+> - What kinds of work holding should a fixture be? (Screws through the stock into the spoilboard are inside the stock, so a box is a poor fit for them.)
+>   **It should always be an alibre part.  This way it can be a precision model, or just a box, or cylinder keepout area.,Picked assembly parts**
+> - What should 2 1/2 axis operations (Facing, Profiling, Pocketing, Drill...) do when their toolpath hits a fixture?
+>   **Warn by default, trim as an option.  There should be a global checkbox in the ribbon toolbar.  Or, if there is a better place.  We don't really have project options yet.  The setup node on the tree could have global options.  Or a node under setup - options.  Discuss the pros and cons.**
+> - How should the clearance from fixtures be set?
+>   **One per fixture**
+> - Which operations do fixtures apply to?
+>   **All, Suppress to skip (Recommended)**
+
+### 🤖 Claude
+
+> Fixtures will always be picked Alibre parts. Here is where the job-wide "trim instead of warn" setting could go:
+
+> Questions:
+> - Where should the job-wide "Trim 2 1/2 axis toolpaths round fixtures" check box live? It's saved in the .cam file. (Options below compare the trade-offs.)
+>   - Edit on Fixtures node (Recommended): A Fixtures dialog (from Setup ▸ Fixtures, Edit or double-click) holding the trim check box. Pro: sits beside the thing it affects, no new concept, no extra node. Con: other job-wide settings later would need their own home.
+>   - Setup node's Edit: A Job Options dialog from the Setup node. Pro: one obvious home for every future job setting (units, defaults). Con: Setup is a heading today; the trim setting is a step away from the fixtures it affects.
+>   - New Options node: Setup ▸ Options, double-click to edit. Pro: visible in the tree, a home for future job settings. Con: one more node, and like Setup's Edit it's apart from the fixtures.
+>   - CAM tab toolbar toggle: A check button beside Show stock. Pro: one click, always visible. Con: the toolbar holds view toggles that aren't saved with the job; a job setting there is easy to flip by accident and hard to notice.
+
+### 🧑 Frank · 15:04
+
+> Answers:
+> - check box live? It's saved in the .cam file. (Options below compare the trade-offs.)
+>   **Edit on Fixtures node (Recommended)**
+
+### 🤖 Claude
+
+> I'm mapping the code the fixtures touch: stock part picking, part facets, simulation collisions, clearance, the 3D obstacles and Generate. I'll write the plan once that finishes.
+
+### 🧑 Frank · 15:08
+
+> <task-notification>
+> <task-id>a06d6ac5686d89cab</task-id>
+> <tool-use-id>toolu_01LkttgtHXgZkTNiz8WVeP9h</tool-use-id>
+> <output-file>C:\Users\FRANKT~1\AppData\Local\Temp\claude\af67b47206b29857\3929cb7f-8be9-474a-b824-50f2445f44e3\tasks\a06d6ac5686d89cab.output</output-file>
+> <status>completed</status>
+> <summary>Agent "Map code for fixtures feature" finished</summary>
+> <note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+> <result>I've traced all ten areas. In brief: parts are keyed by occurrence, but the readers can only leave out a part by its file path. The simulation grid only covers the stock box. Generate can only fail, so it has no way to report a warning on success. Details follow.
+>
+> ## 1. Part Box stock picking and saving
+>
+> - **Stock part struct** (`core\Stock.h:28-32`): `struct StockPart { PersistentKey occurrenceKey; std::string name; };`
+>   - `Stock::parts` is a `std::vector&lt;StockPart&gt;` (`Stock.h:44`). Empty means all parts.
+>   - `PersistentKey` (`core\Origin.h:43`) has `int elementType` and `std::string hex`.
+> - **`ReadSelectedParts`** (`addon\GeometryReader.h:74`, `.cpp:1098`): `bool ReadSelectedParts(IADSession* pAssembly, std::vector&lt;camcore::StockPart&gt;&amp; parts);`
+>   - Fills `occurrenceKey` with `TakeKey(occurrence-&gt;GetKey())` (`.cpp:41`) and `name` with `occurrence-&gt;GetName()`.
+>   - Drops duplicates by `occurrenceKey.hex`.
+> - **`ReadPartsBounds`** (`.h:79`, `.cpp:1133`): `bool ReadPartsBounds(IADSession*, const std::vector&lt;StockPart&gt;&amp;, Vec3&amp; lower, Vec3&amp; upper, std::wstring&amp; problem);`
+>   - Finds each part again with `BindKey(pAssembly, key, ADObjectType_AD_OCCURRENCE)` (`.cpp:716`) and unions `occurrence-&gt;GetExtents`.
+>   - An empty list falls back to `ReadAssemblyBounds`, so "All parts" would include fixtures.
+> - **`CPartBoxStockDlg`** (`addon\StockDialog.h:67-111`, `.cpp:231-435`):
+>   - Created modelessly in `OpenStockDialog` (`CamTabCommand.cpp:973-987`).
+>   - `OnSelectParts` (`.cpp:308`) flips `m_selecting`, relabels the button "Done", and calls `m_pTab-&gt;BeginPartSelect()` / `EndPartSelect()`.
+>   - `BeginPartSelect` (`CamTabCommand.cpp:1027`) sets `wanted.solid = ADSelectionFilterOption_AD_PARTS` and calls `PrepareSelection`.
+>   - `HandleSelection` (`CamTabCommand.cpp:3708-3729`): if `m_pPartBoxDlg-&gt;IsSelectingParts()`, it reads the parts, calls `ToggleParts(parts)` (`StockDialog.cpp:333`, add or remove by key hex), then `m_pWnd-&gt;PostClearSelection()`.
+>   - `OnStockPreviewChanged` leads to `RebuildScene`, which draws the dialog's stock (`CamTabCommand.cpp:3405-3423`).
+>   - `Finish` calls `OnPartBoxDialogDone(this, apply)` (`:1048`), which calls `ApplyStock`. `ClosePartBoxDialog` is at `:1061`.
+> - **Saving** (`core\CamJob.cpp`):
+>   - `WriteStock` (`:163`) writes partBox parts as `{"occurrence": WriteKey(...), "name": ...}` (`:176-185`).
+>   - `ReadStock` (`:200`, parts at `:217-243`) is strict: any missing field returns false.
+>   - `WriteKey` / `ReadKey` are at `:139-149`.
+>   - `SaveJob` (`:2044`) writes `"setup": {"stock", "machine", "material"}` (`:2065-2070`).
+>   - `LoadJob` reads `setup.stock` at `:1993-1995`. Extra keys in `setup` are ignored, so a new `setup.fixtures` key is safe.
+> - **Format version**: `constexpr int kCamFormatVersion = 15;` (`core\CamJob.h:34`, history comments at `:31-33` and `CamJob.cpp:1951-1957`).
+>   - Checked at `CamJob.cpp:1937-1949`: `formatVersion` must be an integer ≥1, and above `kCamFormatVersion` gives `LoadStatus::NewerVersion`.
+>
+> ## 2. `ReadAssemblyPartFacets` and related readers
+>
+> - **Signature** (`GeometryReader.h:98`, `.cpp:1250`): `bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring&amp; leaveOutPath, std::vector&lt;camcore::Vec3&gt;&amp; triangles, std::wstring&amp; problem);`
+>   - Gets parts from `CollectPartOccurrences` (`.cpp:1233`), which skips suppressed and hidden occurrences.
+>   - Leaves a part out when `SamePathKey(session-&gt;GetfilePath()) == SamePathKey(leaveOutPath)` (`:1276`). That is by file path only.
+>   - Facets come from `QI&lt;IADPartSessionPtr&gt;(design)-&gt;GetFacetData()` through `ReadFacetArray` (`:1196`). The fallback is `ReadPartFacets(path, ...)` scaled by `1/partMm`. Then `PartToAssembly(occurrence, assemblyMm).Point(p)`.
+> - **Path exclusion won't work for fixtures.** A screw part used several times shares one file, so fixtures need exclusion by occurrence key (the `GetKey` hex used by `TakeKey`), not path.
+> - **`PartSurfaces::Read`** (`.h:113`, `.cpp:1800`) does the same path-based exclusion at `:1829`.
+> - **`PartToAssembly`** (`.cpp:76-139`, anonymous namespace): `PartToAssembly(IADOccurrence*, double assemblyMm)`, with `Point`, `Length`, `PartPoint`, `Direction`.
+> - **`ReadPartFacets`** (`.h:85`, `.cpp:1392`): `bool ReadPartFacets(const std::wstring&amp; path, std::vector&lt;Vec3&gt;&amp; triangles, std::wstring&amp; problem);`
+>   - Opens the file hidden with `OpenFileEx`. Points are in the part's own coordinates, in mm.
+> - **Callers of `ReadAssemblyPartFacets`**:
+>   - `PrepareSimulationPart` (`CamTabCommand.cpp:1867-1894`, call at `:1879`).
+>   - `GenerateOperationMoves` for the 3D ops (`:2615`). With exact surfaces it uses `surfaces.Read` instead (`:2612`).
+>   - `leaveOut` is built at `:1876` and `:2596`.
+>   - `PrepareWaterline` is core-only and gets `input.partTriangles`.
+> - **`ReadPartFacets` callers**: `ReadStockShape` for Imported stock (`:1125`) and the fallback inside `ReadAssemblyPartFacets` (`:1301`).
+>
+> ## 3. Setup tree nodes (`addon\CamTabCommand.cpp`)
+>
+> - **`enum TreeImage`** (`:3870-3900`): `kImageSetup`, `kImageMachine`, `kImageTools`, `kImageMaterial`, `kImageStock`, `kImageOperations`, … `kImageParallelFinishing`, `kImageWarning`.
+>   - The comment says to add an image to every strip `res\CamTree16/24/32.bmp` (made by the scratch script `treeicons.py`).
+>   - `kTreeWarningOverlay = 1` (`:3902`). `SetOverlayImage(kImageWarning, kTreeWarningOverlay)` is at `:4273`.
+> - **Stock node**: `m_hStock = m_tree.InsertItem(L"Stock", kImageStock, kImageStock, hSetup);` (`:4020`). The member is at `CamTabCommand.h:460` and is initialised at `:3982`.
+>   - `ShowStock` (`:4309`) sets the label to "Stock - &lt;kind title&gt;".
+> - **Context menu** (`:4587-4618`): `ID_CAM_STOCK_BOX`, `ID_CAM_STOCK_PART_BOX`, `ID_CAM_STOCK_IMPORT`, separator, `ID_CAM_STOCK_EDIT`, `ID_CAM_STOCK_DELETE`.
+>   - These dispatch to `MakeStock(kind)`, `EditStock()` and `DeleteStock()` (`CamTabCommand.h:80-82`).
+>   - The IDs are not in `addon\resource.h`; `Grep` found them only in the `.cpp`, so they are defined locally.
+> - **Double-click** (`:5000-5005`): `if (hItem == m_hStock) { *pResult = 1; if (HasStock()) EditStock(); }`
+> - **Warnings**:
+>   - `UpdateTreeWarnings()` (`:3359`) calls `m_pWnd-&gt;ShowWarnings(m_job, machine, material, HasStock() &amp;&amp; m_stockUnreadable)`.
+>   - `CCamTabWnd::ShowWarnings(const camcore::Job&amp;, bool machine, bool material, bool stock)` (`:5134`) applies `mark(h, warn)` with `SetItemState(h, INDEXTOOVERLAYMASK(kTreeWarningOverlay), TVIS_OVERLAYMASK)`.
+>
+> ## 4. Stock drawing
+>
+> - **`ReadStockShape`** (`CamTabCommand.h:267`, `.cpp:1077`): `bool ReadStockShape(const camcore::Stock&amp;, std::vector&lt;camcore::LineSegment&gt;&amp; edges, camcore::StockBox&amp; box, std::wstring&amp; problem, std::vector&lt;camcore::Vec3&gt;* pPoints = nullptr);`
+>   - Imported stock caches `m_stockPartEdges = MeshOutlineEdges(triangles, 20.0, 1e-4)`, keyed by `m_stockFacetsPath`.
+> - **Scene**: `CamScene::stockEdges`, `showStock` and `stockShown` (`CamViewCommand.h:45-47`). They are filled in `RebuildScene` (`.cpp:3403-3437`) and drawn at `CamViewCommand.cpp:341-352` with `AddSegment(pCanvas, L"Stock", kStockColour, kStockLineWeight, scene.foreground)`.
+> - `kStockColour = {0,160,160,255}` (`DisplaySettings.h:66`).
+> - **`MeshOutlineEdges`** (`core\Stock.h:85`, `.cpp:122`): `std::vector&lt;LineSegment&gt; MeshOutlineEdges(const std::vector&lt;Vec3&gt;&amp; triangles, double angleDegrees, double tolerance = 1e-6);`
+> - **Show Stock toggle**:
+>   - Toolbar buttons are built at `:4056-4066`: `commands[4] = {IDC_CAM_FOREGROUND, IDC_CAM_SHOW_TOOLPATHS, IDC_CAM_SHOW_STOCK, IDC_CAM_SHOW_ORIGIN}`, `images[4] = {0,1,4,5}`, `BTNS_CHECK`.
+>   - Wired by `ON_BN_CLICKED` (`:3953`). `OnShowStock` (`:4297`) calls `SetStockShown(bool)` (`:1015`). The tooltip is at `:4331`.
+>   - Images in use: file bar 6-9, refresh 10, help 3, settings 2. The next free index is 11.
+>   - The strip loads in `ApplyViewSize` (`:4263-4285`): `IDB_CAM_TOOLBAR_16/24/32` from `res\CamToolbar16/24/32.bmp`, magenta mask, one image list shared by all four toolbars.
+>   - Adding a button means adding an image to all three bitmaps and growing the arrays at `:4056`.
+>
+> ## 5. Simulation collision checks (`core\Simulation.h` / `.cpp`)
+>
+> - **`SimCylinder`** (`.h:192`): `{ double start, radius, length; bool Present() const; }`.
+> - **`SimOperation`** (`.h:295`): `name`, `tool`, `profile`, `frame`, `toolpath`, `neck`, `shank`, `holder`.
+> - **`CountMove`** (`.h:186`, `.cpp:835`): `long long CountMove(const VoxelStock&amp;, const ToolProfile&amp;, const Vec3&amp; from, const Vec3&amp; to, const Vec3&amp; axis, bool stopAtFirst = true);`
+>   - It is the read-only `SweepTool&lt;false&gt;`.
+> - **`DexelsTouch`** (`TriDexel.h:153`, `.cpp:1069`): `bool DexelsTouch(const TriDexelStock&amp;, const ToolProfile&amp;, const Vec3&amp; from, const Vec3&amp; to, const Vec3&amp; axis, double tolerance = 1e-3);`
+>   - It is `SweepDexels&lt;false&gt;`. The dexel model has no count, only this bool.
+> - **`enum class SimWarning`** (`.h:230`): `None`, `RapidIntoStock`, `ShankHitsStock`, `NeckHitsStock`, `HolderHitsStock`.
+>   - Messages are at `addon\SimulationDialog.cpp:255-263`, for example "The tool holder hits the stock in &lt;op&gt;, toolpath move N."
+>   - The view's segment is always labelled "Rapid into stock" (`CamViewCommand.cpp:335`).
+> - **`CutPiece`** (`.cpp:1562-1598`):
+>   - The `touches(cylinder)` lambda builds a flat `ToolProfile` from the cylinder and offsets by `w * cylinder.start`.
+>   - It runs `DexelsTouch` or `CountMove(...) &gt; 0` against the stock being cut, in order holder → shank → neck, then the cut, then `RapidIntoStock`.
+>   - `m_ignoreCollisions` skips everything. `SetIgnoreCollisions` is at `.h:389` and called from `SimulationDialog.cpp:145,325`.
+>   - A fixture check fits here: test `operation.profile` plus neck, shank and holder against a separate fixture grid, using `CountMove` / `DexelsTouch` read-only.
+> - **The simulation grid covers only the stock box.**
+>   - `Start` resets the voxel or dexel grid to `box` (`.cpp:1415-1459`).
+>   - `ResetPartGrid` (`:1398`) reuses that grid.
+>   - `PrepareSimulationPart` (`CamTabCommand.cpp:1886-1887`) calls `m_simulation.ResetPartGrid(m_simulationPart); m_simulationPart.FillMesh(triangles);`.
+>   - So fixtures outside the stock box would be clipped. A fixture grid needs its own box (the fixtures' bounds), and `VoxelStock::FillMesh` needs closed meshes.
+> - **Start signature**: `void Start(const StockBox&amp; box, const std::vector&lt;Vec3&gt;&amp; stockTriangles, const std::vector&lt;SimOperation&gt;&amp; operations, const SimResolution&amp; = {}, double rapidRate = 5000.0);`
+> - **Callers of `Start`**:
+>   - `SimulateOperations` (`CamTabCommand.cpp:1762`).
+>   - `RestartSimulation` (`:1796`).
+>   - `ComputeRemainingStock` (`:1687`), which calls `ClearWarning()` after each run.
+> - **`MakeSimOperation`** (`:1607`) fills `profile = ProfileOf(tool)`, `NeckOf`, `ShankOf`, `HolderOf(tool, m_machine.holderDiameter, m_machine.holderDepth)` and the frame.
+>
+> ## 6. Clearance
+>
+> - **`ClearanceHeight`** (`core\Clearance.h:39`, `.cpp:18`): `bool ClearanceHeight(const ClearanceSettings&amp;, bool havePartMaxZ, double partMaxZ, double&amp; height, std::string&amp; problem, bool haveStockMaxZ = false, double stockMaxZ = 0.0);`
+> - **Modes**: `Automatic` (max of part and stock, plus `kAutomaticClearanceAboveParts = 5`), `PartMaxZ` (+`partDistance`), `StockMaxZ` (+`stockDistance`), `AbsoluteZ`.
+> - **Callers**: `DrillToolpath.cpp:78`, `EngraveToolpath.cpp:215`, `FacingToolpath.cpp:288`, `HolePocketToolpath.cpp:141`, `PlungeRoughToolpath.cpp:703`, `ProfileToolpath.cpp:1100,1772`, `WaterlineRoughToolpath.cpp:440`.
+> - **In Generate** (`CamTabCommand.cpp:2297-2340`):
+>   - `partMaxZ` comes from `m_boundsLower/Upper`, which `ReadModelSize` (`:3339`) fills with `ReadAssemblyBounds` on the whole root occurrence. So part max Z already includes fixtures, and fixture-aware clearance may need a new Z or must exclude them.
+>   - `haveStockMaxZ = HighestAlongZ(frame, points, stockMaxZ)` (`:2332`), with `stockMinZ` from the same points.
+>   - Each op's input gets `havePartMaxZ/partMaxZ/haveStockMaxZ/stockMaxZ` (`:2435-2873`).
+>
+> ## 7. 3D operations and obstacles
+>
+> - **Input structs**:
+>   - `PlungeRoughToolpathInput::partTriangles` (`PlungeRoughToolpath.h:30`).
+>   - `WaterlineRoughToolpathInput::partTriangles`, `partTriangleFaces`, `closestPoint`, `faceSurfaces` (`WaterlineRoughToolpath.h:47,57-62`).
+> - **`PartHeightField`** (`PlungeRoughToolpath.h:50-88`):
+>   - `Build(tris, xLow, yLow, xHigh, yHigh, cell)` and `BuildGrid(tris, xLow, yLow, nx, ny, cell)`.
+>   - `TipHeights(profile, stockToLeave)`, `TipHeight(...)`, `HasPart`, `HeightAt`.
+>   - Only one `stockToLeave` applies to every triangle, so a per-fixture clearance needs grown meshes or a second field combined with max.
+> - **Plunge Roughing** (`PlungeRoughToolpath.cpp:766-790`):
+>   - `heights.Build(input.partTriangles, ...)`. Then `area.Finish([&amp;](x,y){ return heights.HasPart(x,y); }, sideMargin)`, so obstacles also block area edges.
+>   - Plunge depth comes from `heights.TipHeight`.
+> - **Waterline prep** (`WaterlineRoughToolpath.cpp:400-589`):
+>   - `heights.BuildGrid(input.partTriangles, ...)`, then `w.tips = heights.TipHeights(ProfileOf(tool), w.s)` (`:546-548`).
+>   - Rest machining `w.partTops` uses `heights.HeightAt` (`:549-561`).
+>   - Flat levels use `FlatHeights(input.partTriangles)` (`:586`).
+> - **Finish Flats**: `FlatHeights(input.partTriangles)` (`:2561`).
+> - **`FlatHeights`** (`.h:86`, `.cpp:118`) uses the mesh's signed volume to orient faces, so mixing in fixture triangles would also disturb that.
+> - **Exact heights** (`:1538-1550`): `ExactHeights` builds `DropCutter m_cutter(input.partTriangles, ProfileOf(*tool), stockToLeave, input.partTriangleFaces)`.
+>   - Refinement only happens when `contact.face &gt;= 0`, so obstacle triangles with face `-1` (or past the end of `partTriangleFaces`; see `DropCutter.cpp:38`) are never refined.
+>   - Waterline Finishing uses it at `:1827`, Parallel Finishing at `:2890`.
+> - **`DropCutter`** (`DropCutter.h:17-74`): `DropCutter(const std::vector&lt;Vec3&gt;&amp; triangles, const ToolProfile&amp;, double stockToLeave, const std::vector&lt;int&gt;&amp; faces = {});`, with `TipAt`, `ContactAt`, `NearFace`, `Rise`, `Reach`.
+> - **Addon side**:
+>   - `waterlineInput.partMinZ` is computed from `partTriangles` (`CamTabCommand.cpp:2665-2670`).
+>   - `FlatHeights` is logged (`:2713`).
+>   - `SaveFinishingInput` dumps `partTriangles` and `partTriangleFaces` (`core\FinishingDump.cpp:136-137, 207-208`). A new obstacle field must be added to the dump too.
+> - **A clean seam**: add `std::vector&lt;Vec3&gt; obstacleTriangles` (plus a per-fixture clearance) to both input structs.
+>   - Fold them only into `PartHeightField` (or a second field merged by max), `HasPart`, and `DropCutter` with face `-1`.
+>   - Keep them out of `FlatHeights`, `partMinZ`, `partTops` and the area extents.
+>
+> ## 8. Generate flow
+>
+> - **`GenerateTargets`** (`CamTabCommand.cpp:2035-2077`):
+>   - Calls `ReadModelSize()` and runs `GenerateProgress` with `m_pProgress`.
+>   - Calls `GenerateOperation(target, problem)` for each target. On failure it clears the toolpath and appends "\n&lt;name&gt;: &lt;problem&gt;".
+>   - It ends with `m_sequenceStatus = "Generated N of M operations."`, `ShowStatus()`, and a `MessageBoxW` only when there are problems.
+>   - The dialog path is `OnOperationDialogGenerate` (`:3172-3210`).
+> - **`GenerateOperation`** (`:2252-2265`): `bool GenerateOperation(const StepRef&amp;, std::string&amp; problem);`
+>   - Calls `GenerateOperationMoves`, then `FitArcs(operation.toolpath, m_machine.arcs)` and `SimplifyStraightRuns(operation.toolpath, kFinalSimplify)` (`ArcFit.h:52,59`).
+>   - Checking right after `SimplifyStraightRuns` (final moves) or before `FitArcs` (dense lines, easier to trim) fits naturally.
+>   - Profiling, Pocketing (`AdaptiveClearing`) and Hole Pocketing already emit arcs before fitting.
+> - **`GenerateOperationMoves`** (`:2267-2884`) branches by type: Engrave `:2421`, Profiling/Chamfer `:2454`, the 3D group `:2585-2760`, Pocketing `:2763`, Facing `:2809`, HolePocketing `:2846`, Drill `:2866`.
+> - **`ToolpathResult`** (`core\Toolpath.h:71-100`): `ok`, `toolpath`, `problem`, plus refine, lap and entry counters only. **There is no warnings field.**
+>   - Success can't carry a warning today; you'd need a new out-parameter or a `warnings` field gathered in `GenerateTargets`.
+>
+> ## 9. Templates
+>
+> - `JobAsTemplate` (`CamJob.cpp:2209`) copies the whole job, including `stock.parts` with their occurrence keys. It strips only features, toolpaths and boundaries from steps.
+> - `ApplyJobTemplate(job, tmpl, replace)` (`:2218`): replace takes the template's whole setup, stock and keys included. Append keeps the job's setup.
+> - Tests are at `tests\OriginTests.cpp:967-1008`.
+> - Fixtures with occurrence keys will carry over the same way, and their keys will be stale in another assembly. Decide whether to strip them, as features are stripped.
+>
+> ## 10. Reusable geometry helpers
+>
+> - `MovePoints(from, move)` and `ArcMovePoints(from, move, stepRadians)` are at `core\Toolpath.h:60,68`. The simulation already turns arcs into chords at `Simulation.cpp:1495-1507`.
+> - **Point-to-triangle distance**: `TriangleDistanceSquared(p, a, b, c)` (Ericson) is at `core\DropCutter.cpp:208`, in an anonymous namespace. It would need exposing.
+> - **Spatial index**: `DropCutter`'s XY bucket grid (`DropCutter.cpp:66-89`, query pattern in `NearFace` `:248-275`) is the only one. There is no k-d tree.
+> - **Point-to-segment distance**: duplicated privately in `Simulation.cpp:49`, `TriDexel.cpp:53`, `ArcFit.cpp:304`, `WaterlineRoughToolpath.cpp:35,2800`, and 2D at `AdaptiveClearing.cpp:50`.
+> - **Nothing tests a move against a mesh.** The nearest things are:
+>   - the voxel and dexel sweeps (`CountMove` / `DexelsTouch`), which handle a swept cylinder exactly when given a flat profile with radius = tool radius + clearance;
+>   - `DropCutter::TipAt` sampled along the move, which compares the move's Z with the lowest allowed tip.
+> - For "swept tool cylinder vs fixture mesh", the cheapest route is a `VoxelStock` or `TriDexelStock` over the fixtures' box, filled with `FillMesh`, then `CountMove(grid, flatProfile{radius + clearance, length}, a, b, axis)` per chord. A bucketed `TriangleDistanceSquared` against capsule samples is the exact alternative.</result>
+> <usage><subagent_tokens>203618</subagent_tokens><tool_uses>72</tool_uses><duration_ms>220749</duration_ms></usage>
+> </task-notification>
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Fixtures (work holding: vices, clamps, screws)
+>
+> ## Context
+>
+> Nothing stops a toolpath, the holder or a rapid from hitting a vice, clamp or screw. Today a modelled clamp counts as part of the job, because `ReadAssemblyPartFacets` takes every visible part. So 3D operations avoid it by accident, the simulation's Not enough removed / Too much removed compare against it, and 2 1/2 axis operations ignore it. This builds on the design in `docs\ClampsAndKeepOuts.md`, with Frank's answers:
+> - A fixture is always a picked Alibre part. A precise model, a plain box or a cylinder for a screw are all just parts.
+> - Each fixture has its own clearance, defaulting to 2 mm.
+> - 2 1/2 axis operations warn by default. A job-wide "Trim 2 1/2 axis toolpaths round fixtures" check box switches them to trimming. It lives in a Fixtures dialog, opened by Edit or a double-click on the Fixtures node.
+> - Fixtures apply to every operation. Suppress one to skip it, and templates carry them.
+>
+> ## Claude's choices (to confirm in the test round)
+>
+> - **Picking:** each picked occurrence is its own fixture. Several copies of one screw part are separate fixtures, because they're found by occurrence key, not by file path.
+> - **Hidden parts:** a fixture is checked even if its part is hidden in Alibre, because a hidden clamp is still on the machine. Only Suppress in the CAM tree skips one.
+> - **Missing fixtures:** a fixture whose occurrence can't be found gets a tree warning, and Generate and Simulate stop with "Fixture X can't be found". A crash is worse than a stop.
+> - **Simulation:** checks the real geometry with no clearance, so it shows actual crashes. Toolpaths use the clearance.
+> - **Automatic clearance height:** rises to 5 mm above the highest fixture plus its clearance, as well as above the parts and the stock. If an Absolute Z, Part max Z or Stock max Z clearance is below a fixture's top plus its clearance, Generate warns, or refuses when trimming, since the trim lifts to the clearance height.
+> - **Warnings:** a fixture warning isn't saved. It's worked out again at Generate, held by step ID in the tab, and shown as the tree's red overlay and in the Generate message.
+> - **Drawing:** fixture outlines are drawn in their own colour only while the Fixtures node or a fixture is selected in the tree. The parts are already visible in Alibre, so there's no new toolbar button.
+>
+> ## Core
+>
+> **New `core\Fixtures.h/.cpp`**
+> - Types:
+>   - `struct Fixture { std::string id; std::string name; PersistentKey occurrenceKey; double clearance = 2.0; bool suppressed = false; }`
+>   - `struct FixtureSettings { std::vector<Fixture> fixtures; bool trim = false; }`
+>   - `ValidateFixtures` requires each clearance to be 0 or more.
+> - `struct FixtureMesh { std::string name; std::vector<Vec3> triangles; double clearance; }`, in the operation's frame or the simulation's.
+> - `FixtureGrid`: a `VoxelStock` over the mesh's box, grown by its clearance plus the tool reach, and filled with `FillMesh`. The cell is min(0.25, clearance / 2), coarsened so the grid has at most about 4 million columns.
+> - `CheckFixtures(toolpath, frame, tool, holder, fixtures, settings, result)`:
+>   - It walks the moves, splitting arcs into chords with `ArcMovePoints`.
+>   - It tests each chord with `CountMove`, using a flat `ToolProfile` grown by the fixture's clearance: the tool radius from the tip to the overall length, then the holder cylinder (`HolderOf`). This is the same pattern as `Simulation::CutPiece`'s `touches` lambda.
+>   - It reports the first hit per fixture: the move index and the fixture's name.
+> - `TrimAroundFixtures(toolpath, ..., clearanceHeight, plungeFeed)`:
+>   - It runs on dense lines before `FitArcs`.
+>   - It bisects each colliding chord down to a cell to find where the collision starts and ends.
+>   - It replaces each colliding stretch with: feed up to the clearance height, a rapid across, a rapid down to 2 mm above where the cut resumes, then the plunge feed. Arcs that are hit are split into chords.
+>   - It's a problem if the lift or the rapid itself hits a fixture.
+> - Saving in `core\CamJob`:
+>   - `Job::fixtures` is saved as `setup.fixtures {trim, items:[{id, name, occurrence, clearance, suppressed}]}`.
+>   - The format goes to version 16, and older jobs load with no fixtures.
+>   - `JobAsTemplate` and `ApplyJobTemplate` carry them, as they carry the stock (replace takes them, append keeps the job's).
+> - `ClearanceHeight` gains `haveFixtureMaxZ`/`fixtureMaxZ`, the highest top plus clearance along the frame's Z. Automatic takes the max of all three. A separate `ClearanceBelowFixtures(...)` check gives the warning text.
+>
+> **Simulation (`core\Simulation`)**
+> - `Simulation::SetFixtures(std::vector<FixtureMesh>)` builds one `FixtureGrid` per fixture, sized to the fixture and not clipped to the stock box, with clearance 0.
+> - `CutPiece` checks the holder, then the shank, the neck and the tool profile against each grid with `CountMove`, read-only. This is done for both the voxel and the dexel stock models, because the fixture grids are always voxels.
+> - New warnings `SimWarning::ToolHitsFixture` and `HolderHitsFixture`, each with the fixture's name (`Simulation::WarningFixture()`).
+> - `SetIgnoreCollisions` skips these too.
+> - `ComputeRemainingStock` doesn't set fixtures.
+>
+> **3D operations (`PlungeRoughToolpathInput`, `WaterlineRoughToolpathInput`)**
+> - Add `std::vector<FixtureMesh> fixtures`.
+> - In `PrepareWaterline` and Plunge Roughing:
+>   - Build a `PartHeightField` per fixture on the same grid.
+>   - Its `TipHeights(profile, clearance)` is folded into `w.tips` by max.
+>   - Its `HasPart` is ORed into the blocked test.
+>   - They stay out of `FlatHeights`, `partMinZ`, `partTops` and the area extents.
+> - In `ExactHeights` and Parallel Finishing's drop, one `DropCutter` per fixture (stockToLeave = clearance, no faces, so it's never refined) raises the answer by max.
+> - `SaveFinishingInput` and the replay also carry `fixtures`.
+>
+> ## Add-on
+>
+> **`addon\GeometryReader`**
+> - `ReadAssemblyPartFacets` and `PartSurfaces::Read` take a `leaveOutKeys` set of occurrence key hexes, as well as the path.
+> - New `ReadFixtureMeshes(pAssembly, fixtures, meshes, problem)`:
+>   - It binds each unsuppressed fixture by key (`BindKey`), reads its facets as `ReadAssemblyPartFacets` does (`PartToAssembly`), and doesn't skip hidden parts.
+>   - Results are cached by key and the occurrence's transform.
+> - `ReadPartsBounds`'s "All parts" leaves fixtures out. `ReadModelSize`'s part max Z does too, through a new bounds over the non-fixture occurrences.
+>
+> **Tree and dialogs (`addon\CamTabCommand`, new `addon\FixtureDialog.h/.cpp`)**
+> - **Setup ▸ Fixtures node** (`m_hFixtures`), under Stock, with a child per fixture.
+>   - Children use a new tree image `kImageFixture`, added to the CamTree16/24/32 strips. Suppressed fixtures are grey.
+>   - The node is labelled "Fixtures (n)".
+>   - Menu on the node: Add Fixtures, Edit (the Fixtures dialog).
+>   - Menu on a child: Edit, Suppress, Delete.
+>   - Double-click edits.
+> - **Add Fixtures:** a modeless `CAddFixturesDlg`, like `CPartBoxStockDlg`.
+>   - Select Parts and Done reuse `BeginPartSelect`/`EndPartSelect`, and `HandleSelection` routes picks to it.
+>   - Each click toggles a part, with the new parts listed.
+>   - OK adds them with the default clearance from the Fixtures dialog. Parts that are already fixtures, or the imported stock's part, are skipped with a note.
+> - **`CFixturesDlg` (`IDD_FIXTURES`):** the "Trim 2 1/2 axis toolpaths round fixtures" check box, plus "Clearance for new fixtures" (default 2 mm, saved as `defaultClearance`). It has a ? button.
+> - **`CFixtureDlg` (`IDD_FIXTURE`):** Name (the occurrence's name by default) and Clearance (mm). It has a ? button.
+> - **Warnings:** `ShowWarnings` marks fixtures that can't be found, and operations in `m_fixtureHits`.
+> - **Generate (`GenerateOperation`)** reads the fixture meshes once per run (in `GenerateTargets`).
+>   - 3D operations get `fixtures` in the frame.
+>   - For 2 1/2 axis operations, after `GenerateOperationMoves`: when trimming is on, `TrimAroundFixtures` runs before `FitArcs`. Then `CheckFixtures` runs on every operation after `SimplifyStraightRuns`, as a last safety check, 3D included.
+>   - A hit adds to a new `warnings` list. `GenerateTargets` shows warnings in its message box after the problems, and the status reads "Generated N of M operations, K with fixture warnings."
+> - **Simulate** passes `ReadFixtureMeshes` in the simulation frame to `SetFixtures`.
+>   - `SimulationDialog`'s messages: "The tool hits fixture <name> in <op>, toolpath move N." and "The tool holder hits fixture <name> ...".
+>   - The view's red segment is labelled for the warning.
+> - **IDs:** new 13xxx IDs from 13526, the tree menu IDs beside the stock ones, and the new files in `addon\CAMForAlibre.vcxproj` and its `.filters` file.
+>
+> ## Docs (same change)
+> - `help\CAMForAlibre.html`: the Fixtures node, the Add Fixtures, Fixtures and Fixture dialogs, what fixtures do in Generate, Simulate and clearance, and the new simulation messages.
+> - `docs\SPEC.md`: a "Fixtures (decided)" entry. Tell Frank it now differs from the Claude doc.
+> - `docs\ClampsAndKeepOuts.md`: record the decisions.
+> - `TODO.md`: the clamps line.
+> - `CLAUDE.md`: a current-state line, and a product decision for the tree's Setup.
+>
+> ## Verification
+> 1. Core tests in a new `tests\FixturesTests.cpp`:
+>    - a save round trip, a version 15 job loading, and templates;
+>    - `CheckFixtures` flagging a profile through a box, passing one just outside the clearance, and flagging a holder hit on a tall clamp;
+>    - `TrimAroundFixtures` lifting over a box and the result clearing it, plus the problem when the clearance height is too low;
+>    - the simulation stopping with `ToolHitsFixture` and `HolderHitsFixture` in both the voxel and dexel models, and a fixture outside the stock box;
+>    - Automatic clearance above a tall fixture;
+>    - Waterline Roughing and Parallel Finishing keeping the clearance from a fixture box, with no flat level made at its top.
+> 2. Build Release x64, run `CamCoreTests.exe` (all pass), close Alibre, install, then run `python tools\BuildDiscussion.py`.
+> 3. A numbered test list for Frank in Alibre:
+>    - add a modelled vice and a screw as fixtures, then edit, suppress, delete, save and reload;
+>    - check that the simulation's part comparison no longer counts them;
+>    - check that Profiling through a clamp warns, then that it lifts over once trimming is ticked;
+>    - check that a 3D operation goes round it;
+>    - check that the simulation stops on a holder crash;
+>    - check that a hidden fixture part is still checked;
+>    - check that the help has changed.
+
+*(Frank turned the plan down.)*
+
+### 🧑 Frank · 15:11
+
+> The option should be "Trim toolpaths round fixtures", not just "Trim 2 1/2 axis toolpaths round fixtures"; all operations should watch out for fixtures.
+> The fixtures tree node, should be under Operations, just like set origin, so the fixtures can be moved, and rest machining used to clean up later in the operations list.
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Fixtures (work holding: vices, clamps, screws)
+>
+> ## Context
+>
+> Nothing stops a toolpath, the holder or a rapid from hitting a vice, clamp or screw. Today a modelled clamp counts as part of the job, because `ReadAssemblyPartFacets` takes every visible part. So 3D operations avoid it by accident, the simulation's Not enough removed / Too much removed compare against it, and 2 1/2 axis operations ignore it.
+>
+> This builds on `docs\ClampsAndKeepOuts.md`, with Frank's answers:
+> - **What a fixture is:** always a picked Alibre part. A precise model, a plain box, or a cylinder for a screw are all just parts.
+> - **Clearance:** each fixture part has its own, defaulting to 2 mm.
+> - **Every operation watches out for fixtures.** By default a collision is a warning. A "Trim toolpaths round fixtures" check box makes every operation avoid them instead.
+> - **Fixtures are a step in the Operations sequence**, like Set Origin. Each operation uses the nearest Fixtures step above it. So a job can clamp at one place, machine, then move the clamps with a later Fixtures step, and use rest machining to clean up where the clamps were.
+>
+> ## How a Fixtures step works
+>
+> - **`StepType::Fixtures`:**
+>   - Added from the Operations and folder menus as Add Fixtures, beside Set Origin.
+>   - It has a tree image, `kImageFixtures`, and is labelled "Fixtures (n parts)".
+>   - It can be dragged, duplicated, suppressed and deleted like any step.
+> - **The active fixtures** for an operation come from `ActiveFixturesIndex(job, ref)`. It mirrors `ActiveOriginIndex`: the nearest unsuppressed Fixtures step above the operation, looking inside the operation's folder first and then the sequence above. An operation with none above it has no fixtures.
+> - **Settings:**
+>   - Each step is saved as `fixtures {trim, defaultClearance, parts:[{occurrence, name, clearance}]}` in `core\Fixtures` (`FixtureSettings`, `FixturePart`).
+>   - The `.cam` format goes to version 16.
+>   - Templates carry the step as they carry Set Origin's picks.
+> - **Trim setting:** it's per Fixtures step. This is how the job-wide box carries over now that fixtures are steps: a moved clamp's step can choose for itself, and it lives in the step's dialog, beside the parts it affects. The default is off.
+> - **The dialog:** `CFixturesDlg` (`IDD_FIXTURES`, with a ? button) is modeless, like `CPartBoxStockDlg`, and opened by Edit or a double-click on the step.
+>   - Its controls are Name, Select Parts / Done, a list of parts showing name and clearance, a Clearance box for the chosen rows, Remove, Clearance for new parts, Trim toolpaths round fixtures, and OK / Cancel.
+>   - Picking reuses `BeginPartSelect`/`EndPartSelect` and the `HandleSelection` routing, with each click toggling a part. The imported stock's part is refused with a note.
+> - **Drawing:** the step's part outlines (`MeshOutlineEdges`) are drawn in a new `kFixtureColour` while the step is selected or its dialog is open. They're hidden while picking.
+>
+> ## Claude's choices (to confirm in the test round)
+>
+> - **Parts and keys:** each picked occurrence is a separate part, found by occurrence key, so several copies of one screw file all count.
+> - **Hidden parts:** a fixture part is checked even if it's hidden in Alibre, because a hidden clamp is still on the machine.
+> - **Missing parts:** a part whose occurrence can't be found gives the step a tree warning. Generate and Simulate of operations under that step stop with "Fixture part X can't be found".
+> - **Simulation:** checks the real geometry with no clearance. Toolpaths use the clearance.
+> - **Automatic clearance height:** rises to 5 mm above the highest active fixture top plus its clearance. If an Absolute Z, Part max Z or Stock max Z clearance is below that, Generate warns, or refuses when trimming, because trimming lifts to the clearance height.
+> - **"The part":** an occurrence used in any Fixtures step in the job is left out of the part, for comparisons, flats, bounds and Part Box "All parts".
+> - **Warnings:** a fixture warning isn't saved. It's worked out again at Generate, held by step ID in the tab, and shown as the red tree overlay and in Generate's message.
+>
+> ## What fixtures do at Generate (every operation)
+>
+> - **Trim off:**
+>   - The operation generates as now, without the fixtures. Then `CheckFixtures` runs on the final moves.
+>   - A hit is a warning naming the fixture part and the move: "Profiling 1 comes within 2 mm of Clamp<2> at move 143."
+> - **Trim on:**
+>   - **3D operations** (Plunge Roughing, Waterline Roughing and Finishing, Parallel Finishing) avoid fixtures as they're generated, because their own path planning works round obstacles better than a lift over them.
+>     - Each fixture's `PartHeightField` `TipHeights(profile, clearance)` is folded into `w.tips` by max, its `HasPart` is ORed into the blocked test, and one `DropCutter` per fixture (stockToLeave = its clearance, no faces, so never refined) is folded into the exact heights and Parallel Finishing's drop by max.
+>     - They stay out of `FlatHeights`, `partMinZ`, `partTops` and the area extents.
+>   - **Then every operation** goes through `TrimAroundFixtures` before `FitArcs`:
+>     - It bisects each colliding chord down to a grid cell.
+>     - It replaces each colliding stretch with: feed up to the clearance height, a rapid across, a rapid down to 2 mm above where the cut resumes, then the plunge feed.
+>     - It's a problem if the lift or the rapid itself hits.
+>   - **Last:** `CheckFixtures` runs again as a safety check, and a hit left over is a warning.
+>
+> ## Core
+>
+> - **New `core\Fixtures.h/.cpp`:**
+>   - Settings and validation (clearances 0 or more).
+>   - `ActiveFixturesIndex`.
+>   - `FixtureMesh {name, triangles, clearance}`.
+>   - `FixtureGrid`: a `VoxelStock` over the mesh's box, grown by its clearance and reach, filled with `FillMesh`. The cell is min(0.25, clearance / 2), coarsened to at most about 4 million columns.
+>   - `CheckFixtures`:
+>     - It splits moves into chords, splitting arcs with `ArcMovePoints`.
+>     - It tests each chord with `CountMove`, using a flat `ToolProfile` of the tool radius plus the clearance from the tip to the overall length, then the holder (`HolderOf`). This is the same pattern as `Simulation::CutPiece`'s `touches`.
+>     - It reports the first hit per fixture part.
+>   - `TrimAroundFixtures`.
+> - **`core\CamJob`:**
+>   - The new step type, its saving, `SameSettings`, and `DuplicateStep`.
+>   - Version 16, with older jobs loading unchanged.
+>   - `JobAsTemplate` keeps Fixtures steps.
+> - **`core\Clearance`:** `ClearanceHeight` gains `haveFixtureMaxZ`/`fixtureMaxZ`, with the warning check beside it.
+> - **`core\Simulation`:**
+>   - `SimOperation::fixtures` (`std::shared_ptr<const std::vector<FixtureGrid>>`, shared by every operation under the same step), with no clearance, not clipped to the stock box.
+>   - `CutPiece` checks the holder, then the shank, the neck and the tool profile against them, read-only, for both the voxel and dexel models.
+>   - New warnings: `SimWarning::ToolHitsFixture`, `HolderHitsFixture`, plus `WarningFixture()` for the name.
+>   - `SetIgnoreCollisions` skips them, and `ComputeRemainingStock` leaves them out.
+> - **3D inputs:** `PlungeRoughToolpathInput::fixtures` and `WaterlineRoughToolpathInput::fixtures`, used only when trimming. `SaveFinishingInput` and the replay carry them.
+>
+> ## Add-on
+>
+> - **`addon\GeometryReader`:**
+>   - `ReadAssemblyPartFacets` and `PartSurfaces::Read` take a set of occurrence key hexes to leave out.
+>   - New `ReadFixtureMeshes(pAssembly, parts, meshes, problem)` binds by key, doesn't skip hidden parts, maps with `PartToAssembly`, and caches by key and transform.
+>   - `ReadPartsBounds`' "All parts" and `ReadModelSize`'s part bounds leave fixture parts out.
+> - **`addon\CamTabCommand`:**
+>   - Menus (Add Fixtures), the tree image added to the CamTree16/24/32 strips, label, double-click, and `ShowWarnings` for missing parts and for operations in `m_fixtureHits`.
+>   - `GenerateTargets` reads each Fixtures step's meshes once per run. `GenerateOperation` gets a `warnings` list, shown after problems in Generate's message box. The status reads "Generated N of M operations, K with fixture warnings."
+>   - `MakeSimOperation` attaches the active step's grids.
+>   - `SimulationDialog` messages: "The tool hits fixture <name> in <op>, toolpath move N." and "The tool holder hits fixture <name> ...".
+> - **New `addon\FixturesDialog.h/.cpp`;** IDs from 13526 in `resource.h`, and the new files in the vcxproj and its `.filters` file.
+>
+> ## Docs (same change)
+>
+> - `help\CAMForAlibre.html`: the Fixtures step and dialog, what fixtures do in Generate, Simulate and clearance, and the new messages.
+> - `docs\SPEC.md`: a "Fixtures (decided)" entry. Tell Frank it now differs from the Claude doc.
+> - `docs\ClampsAndKeepOuts.md`: record the decisions.
+> - `TODO.md`, and `CLAUDE.md`'s current state and product decisions (the tree now has Fixtures steps in the sequence).
+>
+> ## Verification
+>
+> 1. **Core tests,** in a new `tests\FixturesTests.cpp`:
+>    - a save round trip, a version 15 job loading, templates, and `ActiveFixturesIndex` with folders and suppression;
+>    - `CheckFixtures` flagging a profile through a box, passing one just outside the clearance, and flagging a holder hit on a tall clamp;
+>    - `TrimAroundFixtures` lifting over a box and the result passing `CheckFixtures`, plus the problem when the clearance height is too low;
+>    - the simulation stopping with `ToolHitsFixture` and `HolderHitsFixture` in the voxel and dexel models, with the fixture outside the stock box, and an operation below a second Fixtures step using the new set;
+>    - Automatic clearance above a tall fixture;
+>    - Waterline Roughing and Parallel Finishing with trimming keeping the clearance and making no flat level at the fixture's top.
+> 2. **Build and install:** build Release x64, run `CamCoreTests.exe`, close Alibre, install, then run `python tools\BuildDiscussion.py`.
+> 3. **Frank's numbered tests in Alibre:**
+>    - add a Fixtures step with a vice and screws; set clearances, save and reload;
+>    - check that Profiling through a clamp warns, and lifts over once trimming is ticked;
+>    - check that a 3D operation goes round a clamp when trimming;
+>    - move the clamps with a second Fixtures step and use rest machining to clean up;
+>    - check that the simulation stops on a holder crash, and that fixtures are no longer in the part comparison;
+>    - check that a hidden fixture part is still checked;
+>    - check that the help has changed.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Writing the core fixture code now: settings, the new step type and saving. Then the toolpath check and trim.
+
+> Adding the fixture settings and step type to the core, then the check and trim code.
+
+> Now the core job file: the Fixtures step type, saving, and finding the active step.
+
+> Adding fixtures to the finishing replay dump, then the project files and a first build of the core.
+
+> Split the fixture header to break an include loop; building the core again.
+
+> Core builds; tests are running. Starting on the add-on: the geometry reader first.
+
+> Unchanged so far. Checking the test results first.
+
+> Fixture core tests pass (7 cases). Now applying the add-on geometry reader changes.
+
+> Reader done. Now the tab: how Set Origin and the Part Box dialog are wired, to mirror them for Fixtures.
+
+> Writing the Fixtures dialog and wiring it into the CAM tab.
+
+> The vice icon is in the strips. Now the tab's code changes.
+
+> Now the main tab edit script.
+
+> Add-on wiring is in place; building the whole solution now.
+
+> Some post tests fail in the full run, which looks unrelated to fixtures. Checking what the APT writer actually outputs.
+
+> Still checking a pre-existing post-test failure; adding a debug print.
+
+> A stale object file: the step's layout differs between the tests and the core library. Doing a full rebuild.
+
+> While that rebuilds, the docs. Looking at the help page's layout.
+
+> Writing the help changes.
+
+> Docs updated. Waiting on the full rebuild and test run.
+
+> Still running. I'll wait for its notification.
+
+### 🧑 Frank · 15:49
+
+> <task-notification>
+> <task-id>bwwlfco56</task-id>
+> <tool-use-id>toolu_01XJutxiPet9dT2D9DBk2sVH</tool-use-id>
+> <output-file>C:\Users\FRANKT~1\AppData\Local\Temp\claude\af67b47206b29857\3929cb7f-8be9-474a-b824-50f2445f44e3\tasks\bwwlfco56.output</output-file>
+> <status>completed</status>
+> <summary>Background command "cd D:\Projects\alibre\AlibreCAM; $msb = &amp; "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1; &amp; $msb CAMForAlibre.sln /t:Rebuild /p:Configuration=Release /p:Platform=x64 /m /v:minimal /nologo 2&gt;&amp;1 | Select-String -Pattern " error |warning C(?!4278|4192)" | Select-Object -First 20; bin\x64\Release\CamCoreTests.exe 2&gt;&amp;1 | Select-Object -Last 4" completed (exit code 0)</summary>
+> </task-notification>
+
+### 🤖 Claude
+
+> Clean rebuild: all 362 tests pass. Checking whether Alibre is running before installing.
+
+> Alibre isn't running. Installing (this asks for administrator rights).
+
+> Work holding is in as a **Fixtures** step in the Operations sequence, like Set Origin. The release build is clean, all 362 core tests pass after a full rebuild, and it's installed: the installed DLL matches the build and the installed help has the new Fixtures section. None of it has been tried in Alibre yet, and nothing is committed.
+>
+> **What it does**
+> - **Adding one:** right-click Operations ▸ **Add Fixtures...** opens a Fixtures dialog. Select Parts toggles parts you click in the view. Each part gets its own clearance (2 mm by default), and there's a **Trim toolpaths round fixtures** check box.
+> - **Which operations use it:** each operation uses the nearest Fixtures step above it that isn't suppressed. A later Fixtures step replaces it, so you can move the clamps and use rest machining to clean up where they were.
+> - **Warning, the default:** after Generate, every operation is checked against its fixtures, including rapids and the holder. A move that comes too close gives a warning naming the part and the move, and puts a red mark on the operation in the tree. The toolpath is left as it was.
+> - **Trim:**
+>   - Plunge Roughing, Waterline Roughing and Parallel Finishing go round the fixtures as they're generated, and never make a flat level at a clamp's top.
+>   - Then any stretch of any operation that's still too close lifts straight up to the clearance plane, crosses at rapid, and feeds back in from 2 mm above.
+>   - If the clearance plane is too low to lift over, Generate stops and says so.
+> - **Clearance plane:** Automatic now goes above the fixtures plus their clearance. Any other clearance setting that's below them gives a warning.
+> - **Simulation:** it stops with "The tool hits fixture X" or "The tool holder hits fixture X". This works even when the fixture is outside the stock.
+> - **Left out of "the part":** fixture parts no longer count in what operations cut round, in the simulation's comparison, or in Part Box Stock's All Parts.
+>
+> **Choices I made that you might want to change**
+> - Fixture parts are checked even when hidden in Alibre, since a hidden clamp is still on the machine.
+> - A fixture part that can't be found marks its Fixtures step in the tree, and Generate and Simulate stop for the operations under it.
+> - Fixture warnings aren't saved. They're worked out again at each Generate.
+> - With Trim, Waterline Finishing doesn't avoid fixtures itself; only the lift-over trim moves it clear of them.
+> - The check is accurate to about half the clearance, because each fixture part is read into small cells (0.05 to 0.25 mm).
+>
+> **Not done**
+> - Part max Z still measures the whole assembly, fixtures included.
+> - The imported stock's own part isn't refused if you pick it as a fixture.
+> - `docs\SPEC.md` now differs from the Claude doc.
+>
+> **To test in Alibre**
+> 1. Add a Fixtures step with a vice and a couple of screws, set different clearances, then save and reload the job.
+> 2. Select the step: its parts should be outlined in purple, and the tree should show a vice icon with "(n parts)".
+> 3. Run a Profiling or Facing pass through a clamp. You should get a warning at Generate and a red mark on the operation.
+> 4. Tick Trim and generate again. The toolpath should lift over the clamp, cutting up to it on both sides.
+> 5. With Trim on, run Waterline Roughing or Parallel Finishing next to a clamp. It should go round it.
+> 6. Set an Absolute Z clearance below a clamp's top: with Trim off you should get a warning, and with Trim on Generate should stop.
+> 7. Add a second Fixtures step lower in the list with the clamps moved, plus an operation with Rest Machining below it.
+> 8. In Simulate, make the holder or tool hit a clamp. It should stop with the fixture's name. With Part shown, the fixture parts shouldn't be in the comparison.
+> 9. Hide a fixture part in Alibre. It should still be checked.
+> 10. The help has a new Fixtures section, and the tree, menus, simulation and Clearance tab sections are updated. Check the ? button on the Fixtures dialog.
+
+### 🧑 Frank · 16:14
+
+> Tests pass
+
 ---
 
 # Side conversation

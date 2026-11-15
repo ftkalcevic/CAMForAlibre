@@ -90,6 +90,7 @@
     <ClCompile Include="SimulationTests.cpp" />
     <ClCompile Include="TriDexelTests.cpp" />
     <ClCompile Include="FeedsCalculatorTests.cpp" />
+    <ClCompile Include="FixturesTests.cpp" />
     <ClCompile Include="SourceTests.cpp" />
     <ClCompile Include="FeatureTests.cpp" />
     <ClCompile Include="OriginTests.cpp" />

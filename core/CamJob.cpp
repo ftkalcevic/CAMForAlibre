@@ -1681,6 +1681,21 @@ namespace camcore
                          { "features", WriteFeatures(step.features) }, { "clearance", WriteClearance(step.clearance) },
                          { "drilling", WriteDrilling(step.drill) } };
 
+            if (step.type == StepType::Fixtures)
+            {
+                json parts = json::array();
+                for (const FixturePart& part : step.fixtures.parts)
+                {
+                    parts.push_back({ { "occurrence", WriteKey(part.occurrenceKey) }, { "name", part.name },
+                                      { "clearance", part.clearance } });
+                }
+                return { { "type", "fixtures" }, { "id", step.id }, { "name", step.name },
+                         { "fixtures",
+                           { { "trim", step.fixtures.trim },
+                             { "defaultClearance", step.fixtures.defaultClearance },
+                             { "parts", parts } } } };
+            }
+
             const OriginDefinition& origin = step.origin;
             return
             {
@@ -1830,6 +1845,38 @@ namespace camcore
                 return drilling == item.end() || ReadDrilling(*drilling, step.drill);
             }
 
+            if (type == "fixtures")
+            {
+                step.type = StepType::Fixtures;
+                const auto fixtures = item.find("fixtures");
+                if (fixtures == item.end() || !fixtures->is_object() ||
+                    !ReadBool(*fixtures, "trim", step.fixtures.trim))
+                    return false;
+                const auto clearance = fixtures->find("defaultClearance");
+                if (clearance != fixtures->end())
+                {
+                    if (!clearance->is_number())
+                        return false;
+                    step.fixtures.defaultClearance = clearance->get<double>();
+                }
+                const auto parts = fixtures->find("parts");
+                if (parts == fixtures->end() || !parts->is_array())
+                    return false;
+                for (const json& entry : *parts)
+                {
+                    FixturePart part;
+                    if (!entry.is_object() || !ReadKey(entry, "occurrence", part.occurrenceKey) ||
+                        !ReadString(entry, "name", part.name))
+                        return false;
+                    const auto partClearance = entry.find("clearance");
+                    if (partClearance == entry.end() || !partClearance->is_number())
+                        return false;
+                    part.clearance = partClearance->get<double>();
+                    step.fixtures.parts.push_back(part);
+                }
+                return true;
+            }
+
             if (type != "setOrigin")
                 return false;
             step.type = StepType::SetOrigin;
@@ -1954,7 +2001,7 @@ namespace camcore
         // machine and material, and stopped saving the tool library. Version 6
         // added Chamfer operations, version 7 Engrave, version 8 Plunge Roughing, version 9
         // an operation's stock footprint, version 10 Waterline Roughing, and version 11
-        // Waterline Finishing.
+        // Waterline Finishing. Version 16 added Fixtures steps.
 
         const auto assembly = root.find("assembly");
         if (assembly == root.end() || !assembly->is_object())
@@ -2092,6 +2139,19 @@ namespace camcore
         {
             const SequenceStep& step = job.sequence[i];
             if (step.type == StepType::SetOrigin && (i == stepIndex || !step.suppressed))
+                return i;
+        }
+        return kNoStepIndex;
+    }
+
+    size_t ActiveFixturesIndex(const Job& job, size_t stepIndex)
+    {
+        if (stepIndex >= job.sequence.size())
+            return kNoStepIndex;
+        for (size_t i = stepIndex + 1; i-- > 0;)
+        {
+            const SequenceStep& step = job.sequence[i];
+            if (step.type == StepType::Fixtures && (i == stepIndex || !step.suppressed))
                 return i;
         }
         return kNoStepIndex;

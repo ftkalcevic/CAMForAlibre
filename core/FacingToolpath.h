@@ -41,6 +41,8 @@ namespace camcore
         // The stock's highest point along the frame's Z, when there's a stock.
         bool haveStockMaxZ = false;
         double stockMaxZ = 0.0;
+        bool haveFixtureMaxZ = false;     // the active fixtures' highest point plus clearance
+        double fixtureMaxZ = 0.0;
     };
 
     // The direction passes run in the frame's X and Y. 90 degrees is along X,

@@ -76,7 +76,7 @@ namespace camcore
         double clearance = 0.0;
         std::string clearanceProblem;
         if (!ClearanceHeight(pOperation->clearance, input.havePartMaxZ, input.partMaxZ, clearance, clearanceProblem,
-                             input.haveStockMaxZ, input.stockMaxZ))
+                             input.haveStockMaxZ, input.stockMaxZ, input.haveFixtureMaxZ, input.fixtureMaxZ))
             return Failure(clearanceProblem);
 
         const FeedSettings& feeds = pOperation->feeds;

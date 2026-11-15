@@ -16,7 +16,8 @@ namespace camcore
     }
 
     bool ClearanceHeight(const ClearanceSettings& clearance, bool havePartMaxZ, double partMaxZ, double& height,
-                         std::string& problem, bool haveStockMaxZ, double stockMaxZ)
+                         std::string& problem, bool haveStockMaxZ, double stockMaxZ, bool haveFixtureMaxZ,
+                         double fixtureMaxZ)
     {
         switch (clearance.mode)
         {
@@ -54,6 +55,8 @@ namespace camcore
             double top = havePartMaxZ ? partMaxZ : stockMaxZ;
             if (haveStockMaxZ && stockMaxZ > top)
                 top = stockMaxZ;
+            if (haveFixtureMaxZ && fixtureMaxZ > top)
+                top = fixtureMaxZ;
             height = top + kAutomaticClearanceAboveParts;
             return true;
         }

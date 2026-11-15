@@ -47,6 +47,9 @@ struct CamScene
     bool stockShown = true;         // the toolbar's Show Stock
     bool originShown = true;        // the toolbar's Show Origin: the active origin's axes and plane
 
+    // The chosen Fixtures step's parts (or its dialog's), as edges in assembly mm. Off while picking.
+    std::vector<camcore::LineSegment> fixtureEdges;
+
     // The simulation, while its dialog is open: the cut stock as one mesh in
     // assembly mm (in place of the stock's edges), the tool where it is, and a
     // rapid that cut stock.

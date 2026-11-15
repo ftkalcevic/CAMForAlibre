@@ -259,6 +259,13 @@ void CSimulationDlg::ShowState()
             what = L"The tool's shank hits the stock";
         else if (simulation.Warning() == camcore::SimWarning::NeckHitsStock)
             what = L"The tool's neck hits the stock";
+        std::wstring fixture;
+        if (simulation.Warning() == camcore::SimWarning::ToolHitsFixture)
+            fixture = L"The tool hits fixture " + FromUtf8(simulation.WarningFixture());
+        else if (simulation.Warning() == camcore::SimWarning::HolderHitsFixture)
+            fixture = L"The tool holder hits fixture " + FromUtf8(simulation.WarningFixture());
+        if (!fixture.empty())
+            what = fixture.c_str();
         warning = std::wstring(what) + L" in " + FromUtf8(simulation.Operations()[move.operation].name) +
                   L", toolpath move " + std::to_wstring(move.toolpathMove + 1) + L".";
     }

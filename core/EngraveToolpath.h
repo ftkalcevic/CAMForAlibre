@@ -40,6 +40,8 @@ namespace camcore
         double partMaxZ = 0.0;
         bool haveStockMaxZ = false;
         double stockMaxZ = 0.0;
+        bool haveFixtureMaxZ = false;     // the active fixtures' highest point plus clearance
+        double fixtureMaxZ = 0.0;
     };
 
     // The tool's centre follows each line at every cut level from the Cut Levels

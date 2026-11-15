@@ -131,8 +131,15 @@ namespace camcore
                 return false;
             }
 
+            json fixtures = json::array();
+            for (const FixtureMesh& fixture : input.fixtures)
+            {
+                fixtures.push_back({ { "name", fixture.name }, { "clearance", fixture.clearance },
+                                     { "triangles", Points(fixture.triangles) } });
+            }
             json root = { { "version", kDumpVersion },
                           { "tool", ToolToJson(*input.tool) },
+                          { "fixtures", fixtures },
                           { "partTriangles", Points(input.partTriangles) },
                           { "partTriangleFaces", input.partTriangleFaces },
                           { "havePartMaxZ", input.havePartMaxZ },
@@ -206,6 +213,17 @@ namespace camcore
             input.tool = &dump.tool;
             input.partTriangles = PointsFrom(root.at("partTriangles"));
             input.partTriangleFaces = root.at("partTriangleFaces").get<std::vector<int>>();
+            if (root.contains("fixtures"))
+            {
+                for (const json& item : root.at("fixtures"))
+                {
+                    FixtureMesh fixture;
+                    fixture.name = item.at("name").get<std::string>();
+                    fixture.clearance = item.at("clearance").get<double>();
+                    fixture.triangles = PointsFrom(item.at("triangles"));
+                    input.fixtures.push_back(std::move(fixture));
+                }
+            }
             input.havePartMaxZ = root.at("havePartMaxZ").get<bool>();
             input.partMaxZ = root.at("partMaxZ").get<double>();
             input.havePartMinZ = root.at("havePartMinZ").get<bool>();

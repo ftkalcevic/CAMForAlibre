@@ -46,6 +46,11 @@ namespace camcore
         std::vector<ProfileChain> outlines;
         std::vector<Vec3> partTriangles;            // the parts, three points to a triangle, in the frame
 
+        // Fixtures to keep clear of (each by its clearance), in the frame, when the
+        // operation trims round them; empty otherwise. Waterline Roughing and Parallel
+        // Finishing go round them; Waterline Finishing leaves them to the trim.
+        std::vector<FixtureMesh> fixtures;
+
         // Waterline Roughing with Rest Machining: what the operations before this one
         // left, along this operation's Z.
         const RemainingStock* remainingStock = nullptr;
@@ -75,6 +80,8 @@ namespace camcore
         double partMinZ = 0.0;
         bool haveStockMaxZ = false;
         double stockMaxZ = 0.0;
+        bool haveFixtureMaxZ = false;     // the active fixtures' highest point plus clearance
+        double fixtureMaxZ = 0.0;
         bool haveStockMinZ = false;
         double stockMinZ = 0.0;
     };

@@ -1587,6 +1587,52 @@ namespace camcore
         else if (touches(operation.neck))
             warning = SimWarning::NeckHitsStock;
 
+        // Fixtures: the tool's own shape, its neck and shank, then the holder.
+        if (warning == SimWarning::None && !m_ignoreCollisions && operation.fixtures)
+        {
+            Vec3 w;
+            if (Normalise(operation.frame.zAxis, w))
+            {
+                const auto hits = [&](const FixtureGrid& fixture, const ToolProfile& profile, double start) {
+                    if (fixture.grid.SizeX() == 0)
+                        return false;
+                    const Vec3 pa = a + w * start, pb = b + w * start;
+                    Vec3 lo = pa, hi = pa;
+                    for (const Vec3& p : { pb, pa + w * profile.length, pb + w * profile.length })
+                    {
+                        lo = { (std::min)(lo.x, p.x), (std::min)(lo.y, p.y), (std::min)(lo.z, p.z) };
+                        hi = { (std::max)(hi.x, p.x), (std::max)(hi.y, p.y), (std::max)(hi.z, p.z) };
+                    }
+                    const double r = profile.radius;
+                    if (hi.x + r < fixture.lower.x || lo.x - r > fixture.upper.x || hi.y + r < fixture.lower.y ||
+                        lo.y - r > fixture.upper.y || hi.z + r < fixture.lower.z || lo.z - r > fixture.upper.z)
+                        return false;
+                    return CountMove(fixture.grid, profile, pa, pb, w) > 0;
+                };
+                const auto plain = [](const SimCylinder& cylinder) {
+                    ToolProfile profile;
+                    profile.type = ToolType::FlatEndMill;
+                    profile.radius = cylinder.radius;
+                    profile.length = cylinder.length;
+                    return profile;
+                };
+                for (const FixtureGrid& fixture : *operation.fixtures)
+                {
+                    if (hits(fixture, operation.profile, 0.0) ||
+                        (operation.neck.Present() && hits(fixture, plain(operation.neck), operation.neck.start)) ||
+                        (operation.shank.Present() && hits(fixture, plain(operation.shank), operation.shank.start)))
+                        warning = SimWarning::ToolHitsFixture;
+                    else if (operation.holder.Present() && hits(fixture, plain(operation.holder), operation.holder.start))
+                        warning = SimWarning::HolderHitsFixture;
+                    if (warning != SimWarning::None)
+                    {
+                        m_warningFixture = fixture.name;
+                        break;
+                    }
+                }
+            }
+        }
+
         bool cut = false;
         if (m_model == StockModel::TriDexel)
             cut = CutDexels(m_dexels, operation.profile, a, b, operation.frame.zAxis) > kDexelTouch;

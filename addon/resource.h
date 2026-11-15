@@ -230,6 +230,7 @@
 #define IDD_CHOOSE_MATERIAL             13048
 #define IDD_FEEDS_CALC                  13049
 #define IDD_MATERIAL                    13050
+#define IDD_FIXTURES                    13051
 #define IDC_VIEW_SMALL                  13296
 #define IDC_VIEW_MEDIUM                 13297
 #define IDC_VIEW_LARGE                  13298
@@ -445,6 +446,16 @@
 #define IDC_MATDLG_FACTOR_1             13521
 #define IDC_MATDLG_FACTOR_2             13522
 #define IDC_MATDLG_FACTOR_3             13523
+#define IDC_FIX_NAME                    13526
+#define IDC_FIX_PARTS                   13527
+#define IDC_FIX_SELECT_PARTS            13528
+#define IDC_FIX_REMOVE                  13529
+#define IDC_FIX_CLEARANCE               13530
+#define IDC_FIX_SET_CLEARANCE           13531
+#define IDC_FIX_DEFAULT_CLEARANCE       13532
+#define IDC_FIX_TRIM                    13533
+#define IDC_FIX_PROMPT                  13534
+#define IDC_FIX_RESULT                  13535
 #define IDC_MATDLG_TYPICAL              13524
 #define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
@@ -495,9 +506,9 @@
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        13051
+#define _APS_NEXT_RESOURCE_VALUE        13052
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13526
+#define _APS_NEXT_CONTROL_VALUE         13536
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

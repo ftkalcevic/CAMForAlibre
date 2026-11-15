@@ -1130,16 +1130,51 @@ bool ReadSelectedParts(IADSession* pAssembly, std::vector<camcore::StockPart>& p
     }
 }
 
+namespace
+{
+    void CollectPartOccurrences(IADOccurrence* pOccurrence, std::vector<IADOccurrencePtr>& parts);
+}
+
 bool ReadPartsBounds(IADSession* pAssembly, const std::vector<camcore::StockPart>& parts, Vec3& lower, Vec3& upper,
-                     std::wstring& problem)
+                     std::wstring& problem, const OccurrenceKeys& leaveOut)
 {
     problem.clear();
-    if (parts.empty())
+    if (parts.empty() && leaveOut.empty())
     {
         if (ReadAssemblyBounds(pAssembly, lower, upper))
             return true;
         problem = L"The assembly's size couldn't be read.";
         return false;
+    }
+    if (parts.empty())
+    {
+        // Every visible part but the fixtures.
+        std::vector<camcore::StockPart> others;
+        try
+        {
+            IADAssemblySessionPtr assembly = QI<IADAssemblySessionPtr>(pAssembly);
+            std::vector<IADOccurrencePtr> occurrences;
+            if (assembly != nullptr)
+                CollectPartOccurrences(assembly->GetRootOccurrence(), occurrences);
+            for (IADOccurrencePtr& occurrence : occurrences)
+            {
+                camcore::StockPart part;
+                part.occurrenceKey = TakeKey(occurrence->GetKey());
+                part.name = ToUtf8(static_cast<const wchar_t*>(occurrence->GetName()));
+                if (!part.occurrenceKey.IsEmpty() && leaveOut.count(part.occurrenceKey.hex) == 0)
+                    others.push_back(part);
+            }
+        }
+        catch (const _com_error& error)
+        {
+            Log(L"[stock] could not list the parts: hr=0x%08X", static_cast<unsigned>(error.Error()));
+        }
+        if (others.empty())
+        {
+            problem = L"There are no parts but fixtures to measure.";
+            return false;
+        }
+        return ReadPartsBounds(pAssembly, others, lower, upper, problem);
     }
 
     try
@@ -1247,8 +1282,93 @@ namespace
     }
 }
 
+namespace
+{
+    // A part occurrence's facets in the assembly's coordinates in mm: from its own
+    // session, failing that from its file. False if it has none.
+    bool ReadOccurrenceTriangles(IADOccurrence* pOccurrence, double assemblyMm, std::vector<Vec3>& triangles,
+                                 const wchar_t* tag)
+    {
+        const std::wstring name = BstrText(pOccurrence->GetName());
+        IADDesignSessionPtr design = pOccurrence->GetDesignSession();
+        IADSessionPtr session = QI<IADSessionPtr>(design);
+        const std::wstring path = (session != nullptr) ? BstrText(session->GetfilePath()) : std::wstring();
+        std::vector<Vec3> points;
+        try
+        {
+            SAFEARRAY* pFacets = QI<IADPartSessionPtr>(design)->GetFacetData();
+            ReadFacetArray(pFacets, points);
+            if (pFacets != nullptr)
+                SafeArrayDestroy(pFacets);
+        }
+        catch (const _com_error& error)
+        {
+            Log(L"%s %s: facets from its session failed, hr=0x%08X", tag, name.c_str(),
+                static_cast<unsigned>(error.Error()));
+            points.clear();
+        }
+        if (points.empty() && !path.empty())
+        {
+            std::wstring fileProblem;
+            std::vector<Vec3> millimetres;
+            if (ReadPartFacets(path, millimetres, fileProblem))
+            {
+                const double partMm = MillimetresPerModelUnit(design);
+                for (const Vec3& p : millimetres)
+                    points.push_back(p * (1.0 / partMm));
+            }
+        }
+        if (points.empty())
+            return false;
+        const PartToAssembly toAssembly(pOccurrence, assemblyMm);
+        for (const Vec3& p : points)
+            triangles.push_back(toAssembly.Point(p));
+        return true;
+    }
+}
+
+bool ReadFixtureMeshes(IADSession* pAssembly, const std::vector<camcore::FixturePart>& parts,
+                       std::vector<camcore::FixtureMesh>& meshes, std::wstring& problem)
+{
+    meshes.clear();
+    problem.clear();
+    try
+    {
+        const double assemblyMm = MillimetresPerModelUnit(QI<IADDesignSessionPtr>(pAssembly));
+        for (const camcore::FixturePart& part : parts)
+        {
+            IADOccurrencePtr occurrence =
+                QI<IADOccurrencePtr>(BindKey(pAssembly, part.occurrenceKey, ADObjectType_AD_OCCURRENCE));
+            if (occurrence == nullptr)
+            {
+                problem = L"The fixture part " + FromUtf8(part.name) + L" can't be found. It may have been deleted.";
+                return false;
+            }
+            camcore::FixtureMesh mesh;
+            mesh.name = part.name;
+            mesh.clearance = part.clearance;
+            if (!ReadOccurrenceTriangles(occurrence, assemblyMm, mesh.triangles, L"[fixtures]"))
+            {
+                problem = L"The fixture part " + FromUtf8(part.name) + L" couldn't be read.";
+                return false;
+            }
+            Log(L"[fixtures] %s: %zu triangles, clearance %.3f mm", FromUtf8(part.name).c_str(),
+                mesh.triangles.size() / 3, part.clearance);
+            meshes.push_back(std::move(mesh));
+        }
+        return true;
+    }
+    catch (const _com_error& error)
+    {
+        Log(L"[fixtures] could not read the fixtures: hr=0x%08X", static_cast<unsigned>(error.Error()));
+        problem = L"The fixtures couldn't be read.";
+        meshes.clear();
+        return false;
+    }
+}
+
 bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutPath, std::vector<Vec3>& triangles,
-                            std::wstring& problem)
+                            std::wstring& problem, const OccurrenceKeys& leaveOutKeys)
 {
     triangles.clear();
     problem.clear();
@@ -1278,44 +1398,20 @@ bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutP
                 Log(L"[compare] %s is the stock part, left out", name.c_str());
                 continue;
             }
+            if (!leaveOutKeys.empty() && leaveOutKeys.count(TakeKey(occurrence->GetKey()).hex) > 0)
+            {
+                Log(L"[compare] %s is a fixture, left out", name.c_str());
+                continue;
+            }
 
-            // The part's facets in its own units, from its session; failing that, its file.
-            std::vector<Vec3> points;
-            try
-            {
-                SAFEARRAY* pFacets = QI<IADPartSessionPtr>(design)->GetFacetData();
-                ReadFacetArray(pFacets, points);
-                if (pFacets != nullptr)
-                    SafeArrayDestroy(pFacets);
-            }
-            catch (const _com_error& error)
-            {
-                Log(L"[compare] %s: facets from its session failed, hr=0x%08X", name.c_str(),
-                    static_cast<unsigned>(error.Error()));
-                points.clear();
-            }
-            if (points.empty() && !path.empty())
-            {
-                std::wstring fileProblem;
-                std::vector<Vec3> millimetres;
-                if (ReadPartFacets(path, millimetres, fileProblem))
-                {
-                    const double partMm = MillimetresPerModelUnit(design);
-                    for (const Vec3& p : millimetres)
-                        points.push_back(p * (1.0 / partMm));
-                }
-            }
-            if (points.empty())
+            const size_t before = triangles.size();
+            if (!ReadOccurrenceTriangles(occurrence, assemblyMm, triangles, L"[compare]"))
             {
                 Log(L"[compare] %s has no facets to read", name.c_str());
                 continue;
             }
-
-            const PartToAssembly toAssembly(occurrence, assemblyMm);
-            for (const Vec3& p : points)
-                triangles.push_back(toAssembly.Point(p));
             ++read;
-            Log(L"[compare] %s: %zu triangles", name.c_str(), points.size() / 3);
+            Log(L"[compare] %s: %zu triangles", name.c_str(), (triangles.size() - before) / 3);
         }
         Log(L"[compare] read %d of %zu parts, %zu triangles, in %llu ms", read, parts.size(), triangles.size() / 3,
             GetTickCount64() - start);
@@ -1798,7 +1894,7 @@ PartSurfaces::PartSurfaces() : m_impl(std::make_unique<Impl>())
 PartSurfaces::~PartSurfaces() = default;
 
 bool PartSurfaces::Read(IADSession* pAssembly, const std::wstring& leaveOutPath, std::vector<Vec3>& triangles,
-                        std::vector<int>& faces, std::wstring& problem)
+                        std::vector<int>& faces, std::wstring& problem, const OccurrenceKeys& leaveOutKeys)
 {
     triangles.clear();
     faces.clear();
@@ -1827,6 +1923,8 @@ bool PartSurfaces::Read(IADSession* pAssembly, const std::wstring& leaveOutPath,
             IADSessionPtr session = QI<IADSessionPtr>(design);
             const std::wstring path = (session != nullptr) ? BstrText(session->GetfilePath()) : std::wstring();
             if (!leaveOut.empty() && SamePathKey(path) == leaveOut)
+                continue;
+            if (!leaveOutKeys.empty() && leaveOutKeys.count(TakeKey(occurrence->GetKey()).hex) > 0)
                 continue;
             const PartToAssembly toAssembly(occurrence, assemblyMm);
             const size_t partIndex = m_impl->parts.size();

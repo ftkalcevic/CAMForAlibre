@@ -18,6 +18,7 @@
 #include "EntryExit.h"
 #include "Facing.h"
 #include "Feeds.h"
+#include "Fixtures.h"
 #include "Origin.h"
 #include "HolePocketing.h"
 #include "Pocketing.h"
@@ -31,7 +32,8 @@ namespace camcore
     // Version 2 added Set Origin steps and groups to the sequence.
     // Version 13 added arc moves in the ZX and YZ planes.
     // Version 14 added helix entries (Entry/Exit's Helix, Waterline Roughing's entry).
-    constexpr int kCamFormatVersion = 15;
+    // Version 16 added Fixtures steps.
+    constexpr int kCamFormatVersion = 16;
 
     // Which assembly a job belongs to. The GUID comes from the assembly file,
     // and is empty if it couldn't be read.
@@ -55,7 +57,8 @@ namespace camcore
         PlungeRoughing, // an operation, 3 axis: plunges straight down on a packed grid
         WaterlineRoughing,  // an operation, 3 axis: pockets level by level down round the parts
         WaterlineFinishing, // an operation, 3 axis: one lap round the parts at each level
-        ParallelFinishing   // an operation, 3 axis: straight rows following the parts' surface
+        ParallelFinishing,  // an operation, 3 axis: straight rows following the parts' surface
+        Fixtures            // the work holding the operations below it keep clear of
     };
 
     bool IsOperation(StepType type);
@@ -79,6 +82,9 @@ namespace camcore
 
         // Set Origin steps only
         OriginDefinition origin;
+
+        // Fixtures steps only
+        FixtureSettings fixtures;
 
         // Operations only: the picked geometry, in the order it's machined, and
         // where the clearance plane is.
@@ -204,6 +210,11 @@ namespace camcore
     // The Set Origin a step runs under: the step itself if it's a Set Origin,
     // otherwise the nearest one above it. kNoStepIndex if there's none.
     size_t ActiveOriginIndex(const Job& job, size_t stepIndex);
+
+    // The Fixtures step the operations in a top-level step run among: the step
+    // itself if it's a Fixtures step, otherwise the nearest unsuppressed one above
+    // it. kNoStepIndex if there's none.
+    size_t ActiveFixturesIndex(const Job& job, size_t stepIndex);
 
     // The job's work zero: its first Set Origin that isn't suppressed, or
     // kNoStepIndex if there's none.

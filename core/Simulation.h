@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -234,6 +235,19 @@ namespace camcore
         ShankHitsStock,     // the shank above the flutes (or above the neck) touched stock
         NeckHitsStock,      // a reduced neck touched stock
         HolderHitsStock,    // the tool holder touched stock
+        ToolHitsFixture,    // the tool, its neck or its shank touched a fixture
+        HolderHitsFixture,  // the tool holder touched a fixture
+    };
+
+    // A fixture (work holding) as cells, in assembly mm: filled where its part is.
+    // The grid's box is lower to upper; clearance is how close toolpaths may come.
+    struct FixtureGrid
+    {
+        std::string name;
+        double clearance = 0.0;
+        VoxelStock grid;
+        Vec3 lower;
+        Vec3 upper;
     };
 
     // A chunk's surface (32 x 32 cells across, one word tall): the faces between filled and empty cells, merged into
@@ -302,6 +316,10 @@ namespace camcore
         SimCylinder neck;       // checked for touching stock, if present
         SimCylinder shank;
         SimCylinder holder;
+
+        // The fixtures the operation runs among (its Fixtures step's), shared, or none.
+        // The simulation checks them at their true size, without the clearance.
+        std::shared_ptr<const std::vector<FixtureGrid>> fixtures;
     };
 
     // Steps through the operations' moves, cutting the stock.
@@ -382,10 +400,12 @@ namespace camcore
         bool HasWarning() const { return m_warning != SimWarning::None; }
         SimWarning Warning() const { return m_warning; }
         size_t WarningMove() const { return m_warningMove; }
+        // The fixture a ToolHitsFixture or HolderHitsFixture warning is about.
+        const std::string& WarningFixture() const { return m_warningFixture; }
         void ClearWarning() { m_warning = SimWarning::None; }
 
-        // With collisions ignored, nothing is checked: a rapid cutting stock, and the
-        // shank, neck or holder touching it, don't stop it. Kept when started again.
+        // With collisions ignored, nothing is checked: a rapid cutting stock, the
+        // shank, neck or holder touching it, and fixtures, don't stop it. Kept when started again.
         void SetIgnoreCollisions(bool ignore) { m_ignoreCollisions = ignore; }
         bool IgnoreCollisions() const { return m_ignoreCollisions; }
 
@@ -407,6 +427,7 @@ namespace camcore
         std::vector<double> m_moveStarts;       // each move's start in machining time, then the total
         SimWarning m_warning = SimWarning::None;
         size_t m_warningMove = 0;
+        std::string m_warningFixture;
         bool m_ignoreCollisions = false;
     };
 }

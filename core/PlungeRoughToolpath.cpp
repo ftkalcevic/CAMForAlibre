@@ -701,7 +701,7 @@ namespace camcore
         double clearance = 0.0;
         std::string clearanceProblem;
         if (!ClearanceHeight(pOperation->clearance, input.havePartMaxZ, input.partMaxZ, clearance, clearanceProblem,
-                             input.haveStockMaxZ, input.stockMaxZ))
+                             input.haveStockMaxZ, input.stockMaxZ, input.haveFixtureMaxZ, input.fixtureMaxZ))
             return Failure(clearanceProblem);
 
         // The top of the material, and the floor where no part is under a plunge:
@@ -764,8 +764,18 @@ namespace camcore
         if (input.progress)
             input.progress(0.0, "Working out the area and the parts' heights");
         PartHeightField heights;
+        const double heightCell = (std::min)(0.5, (std::max)(0.02, tool.diameter / 20.0));
         heights.Build(input.partTriangles, boxLowX - margin, boxLowY - margin, boxHighX + margin, boxHighY + margin,
-                      (std::min)(0.5, (std::max)(0.02, tool.diameter / 20.0)));
+                      heightCell);
+
+        // Fixtures, each kept clear of by its own clearance: plunges stop above them.
+        std::vector<PartHeightField> fixtureHeights(input.fixtures.size());
+        for (size_t f = 0; f < input.fixtures.size(); ++f)
+        {
+            const double grow = input.fixtures[f].clearance;
+            fixtureHeights[f].Build(input.fixtures[f].triangles, boxLowX - margin - grow, boxLowY - margin - grow,
+                                    boxHighX + margin + grow, boxHighY + margin + grow, heightCell);
+        }
 
         PlungeArea area;
         const double areaCell = (std::min)(0.25, (std::max)(0.02, tool.diameter / 40.0));
@@ -825,6 +835,12 @@ namespace camcore
                 double tip = floor;
                 if (heights.TipHeight(profile, settings.stockToLeave, p.x, p.y, tip) && input.haveStockMinZ)
                     tip = (std::max)(tip, floor);
+                for (size_t f = 0; f < fixtureHeights.size(); ++f)
+                {
+                    double above = 0.0;
+                    if (fixtureHeights[f].TipHeight(profile, input.fixtures[f].clearance, p.x, p.y, above))
+                        tip = (std::max)(tip, above);
+                }
                 if (tip >= top - 1e-6)
                     continue;       // nothing to cut here
 

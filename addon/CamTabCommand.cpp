@@ -19,6 +19,7 @@
 #include "ScriptedPost.h"
 #include "SettingsDialog.h"
 #include "StockDialog.h"
+#include "FixturesDialog.h"
 #include "SimulationDialog.h"
 #include "ProgressDialog.h"
 #include "PseudoPost.h"
@@ -73,6 +74,7 @@ namespace
 
         // Tree menu commands
         ID_CAM_ADD_ORIGIN,
+        ID_CAM_ADD_FIXTURES,
         ID_CAM_ADD_FOLDER,
         ID_CAM_ADD_DRILL,
         ID_CAM_ADD_HOLE_POCKETING,
@@ -330,6 +332,7 @@ STDMETHODIMP CCamTabCommand::OnTerminate()
     CloseOriginDialog(true);
     CloseOperationDialog();
     ClosePartBoxDialog(true);
+    CloseFixturesDialog(true);
     CloseSimulationDialog();
     StopView(L"tab closing");
     WarnIfUnsaved();
@@ -369,6 +372,7 @@ void CCamTabCommand::CloseFromAddOn()
     CloseOriginDialog(true);
     CloseOperationDialog();
     ClosePartBoxDialog(true);
+    CloseFixturesDialog(true);
     CloseSimulationDialog();
     StopView(L"add-on unloading");
     WarnIfUnsaved();
@@ -431,6 +435,7 @@ void CCamTabCommand::OnWindowGone()
     CloseOriginDialog(false);
     CloseOperationDialog();
     ClosePartBoxDialog(false);
+    CloseFixturesDialog(false);
     CloseSimulationDialog();
     LeaveAddOn();
 }
@@ -1028,10 +1033,19 @@ void CCamTabCommand::BeginPartSelect()
 {
     SelectionFilter wanted;
     wanted.solid = ADSelectionFilterOption_AD_PARTS;
-    if (!PrepareSelection(wanted) && m_pPartBoxDlg != nullptr)
+    if (!PrepareSelection(wanted))
     {
-        m_pPartBoxDlg->StopSelectingParts();
-        m_pPartBoxDlg->ShowResult(L"Selecting couldn't start. Click the CAM tab, then click Select Parts again.");
+        const wchar_t* text = L"Selecting couldn't start. Click the CAM tab, then click Select Parts again.";
+        if (m_pPartBoxDlg != nullptr)
+        {
+            m_pPartBoxDlg->StopSelectingParts();
+            m_pPartBoxDlg->ShowResult(text);
+        }
+        if (m_pFixturesDlg != nullptr)
+        {
+            m_pFixturesDlg->StopSelectingParts();
+            m_pFixturesDlg->ShowResult(text);
+        }
     }
 }
 
@@ -1056,6 +1070,119 @@ void CCamTabCommand::OnPartBoxDialogDone(CPartBoxStockDlg* pDialog, bool apply)
         ApplyStock(pDialog->GetStock());
     else
         RebuildScene();
+}
+
+void CCamTabCommand::OpenFixturesDialog(const camcore::SequenceStep& step, size_t editIndex)
+{
+    m_fixturesEditIndex = editIndex;
+    StartView(L"fixtures");
+    m_pFixturesDlg = new CFixturesDlg(this, step);
+    if (!m_pFixturesDlg->CreateModeless(CWnd::FromHandle(theApp.m_hAlibreWnd)))
+    {
+        Log(L"[fixtures] could not create the Fixtures dialog");
+        delete m_pFixturesDlg;
+        m_pFixturesDlg = nullptr;
+        return;
+    }
+    m_pFixturesDlg->ShowWindow(SW_SHOW);
+    RebuildScene();
+}
+
+void CCamTabCommand::OnFixturesPreviewChanged()
+{
+    RebuildScene();
+}
+
+void CCamTabCommand::OnFixturesDialogDone(CFixturesDlg* pDialog, bool apply)
+{
+    if (pDialog != m_pFixturesDlg)
+        return;
+
+    m_pFixturesDlg = nullptr;
+    RestoreSelectionFilter();
+    if (apply && CanEditSequence())
+    {
+        const camcore::SequenceStep& step = pDialog->GetStep();
+        if (m_fixturesEditIndex == kNewStep)
+        {
+            m_job.sequence.push_back(step);
+            m_selected = StepRef{ m_job.sequence.size() - 1 };
+        }
+        else if (m_fixturesEditIndex < m_job.sequence.size())
+        {
+            m_job.sequence[m_fixturesEditIndex] = step;
+            m_selected = StepRef{ m_fixturesEditIndex };
+        }
+        m_fixtureMissing.erase(step.id);
+        Log(L"[fixtures] applied %s: %zu parts", FromUtf8(step.name).c_str(), step.fixtures.parts.size());
+        MarkJobChanged();
+        ShowSequence();
+    }
+    RebuildScene();
+}
+
+void CCamTabCommand::CloseFixturesDialog(bool callAlibre)
+{
+    if (m_pFixturesDlg == nullptr)
+        return;
+
+    CFixturesDlg* pDialog = m_pFixturesDlg;
+    m_pFixturesDlg = nullptr;
+    pDialog->DetachFromTab();
+    pDialog->DestroyWindow();
+
+    if (callAlibre)
+        RestoreSelectionFilter();
+    else
+        m_filterChanged = false;
+}
+
+OccurrenceKeys CCamTabCommand::FixtureKeys() const
+{
+    OccurrenceKeys keys;
+    for (const camcore::SequenceStep& step : m_job.sequence)
+    {
+        if (step.type != camcore::StepType::Fixtures)
+            continue;
+        for (const camcore::FixturePart& part : step.fixtures.parts)
+            keys.insert(part.occurrenceKey.hex);
+    }
+    return keys;
+}
+
+const CCamTabCommand::FixtureRun& CCamTabCommand::FixturesFor(size_t step)
+{
+    static const FixtureRun kNone = []() {
+        FixtureRun none;
+        none.read = true;
+        return none;
+    }();
+    const size_t index = camcore::ActiveFixturesIndex(m_job, step);
+    if (index == camcore::kNoStepIndex)
+        return kNone;
+
+    FixtureRun& run = m_fixtureRuns[index];
+    if (!run.read)
+    {
+        run.read = true;
+        const camcore::SequenceStep& fixtures = m_job.sequence[index];
+        run.settings = &fixtures.fixtures;
+        std::wstring problem;
+        if (ReadFixtureMeshes(GetSession(), fixtures.fixtures.parts, run.meshes, problem))
+        {
+            run.grids = camcore::MakeFixtureGrids(run.meshes);
+            m_fixtureMissing.erase(fixtures.id);
+        }
+        else
+        {
+            run.problem = problem;
+            run.meshes.clear();
+            m_fixtureMissing.insert(fixtures.id);
+        }
+        Log(L"[fixtures] %s: %zu parts read%s%s", FromUtf8(fixtures.name).c_str(), run.meshes.size(),
+            problem.empty() ? L"" : L"; ", problem.c_str());
+    }
+    return run;
 }
 
 void CCamTabCommand::ClosePartBoxDialog(bool callAlibre)
@@ -1097,7 +1224,7 @@ bool CCamTabCommand::ReadStockShape(const camcore::Stock& stock, std::vector<cam
         bool read = false;
         try
         {
-            read = ReadPartsBounds(GetSession(), stock.parts, lower, upper, problem);
+            read = ReadPartsBounds(GetSession(), stock.parts, lower, upper, problem, FixtureKeys());
         }
         catch (const _com_error& error)
         {
@@ -1164,7 +1291,7 @@ bool CCamTabCommand::CanEditSequence() const
 bool CCamTabCommand::IsDialogOpen() const
 {
     return m_pOriginDlg != nullptr || m_pOperationDlg != nullptr || m_pPartBoxDlg != nullptr ||
-           m_pSimulationDlg != nullptr;
+           m_pFixturesDlg != nullptr || m_pSimulationDlg != nullptr;
 }
 
 camcore::SequenceStep* CCamTabCommand::FindStep(const StepRef& ref)
@@ -1209,6 +1336,8 @@ bool CCamTabCommand::FocusOpenDialog()
         m_pOperationDlg->SetForegroundWindow();
     else if (m_pPartBoxDlg != nullptr)
         m_pPartBoxDlg->SetForegroundWindow();
+    else if (m_pFixturesDlg != nullptr)
+        m_pFixturesDlg->SetForegroundWindow();
     else if (m_pSimulationDlg != nullptr)
         m_pSimulationDlg->SetForegroundWindow();
     else
@@ -1228,6 +1357,21 @@ void CCamTabCommand::AddSetOrigin()
     step.id = camcore::NewStableId();
     step.name = NewStepName(m_job, "Set Origin");
     OpenOriginDialog(step, kNewStep);
+}
+
+void CCamTabCommand::AddFixtures()
+{
+    AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+    // The sequence starts with a Set Origin; a Fixtures step goes after it.
+    if (!CanAddFolder() || FocusOpenDialog())
+        return;
+
+    camcore::SequenceStep step;
+    step.type = camcore::StepType::Fixtures;
+    step.id = camcore::NewStableId();
+    step.name = NewStepName(m_job, "Fixtures");
+    OpenFixturesDialog(step, kNewStep);
 }
 
 bool CCamTabCommand::CanAddFolder() const
@@ -1340,6 +1484,8 @@ void CCamTabCommand::EditStep(const StepRef& ref)
 
     if (pStep->type == camcore::StepType::SetOrigin)
         OpenOriginDialog(*pStep, ref.step);
+    else if (pStep->type == camcore::StepType::Fixtures)
+        OpenFixturesDialog(*pStep, ref.step);
     else if (camcore::IsOperation(pStep->type))
         OpenOperationDialog(*pStep, ref);
 }
@@ -1735,6 +1881,7 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
     });
     std::vector<camcore::SimOperation> operations;
     std::wstring leftOut;
+    m_fixtureRuns.clear();
     for (const StepRef& ref : refs)
     {
         const camcore::SequenceStep* pStep = FindStep(ref);
@@ -1746,8 +1893,20 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
             leftOut += (leftOut.empty() ? L"" : L", ") + FromUtf8(pStep->name);
             continue;
         }
+
+        // The fixtures it runs among, checked at their true size.
+        const FixtureRun& fixtures = FixturesFor(ref.step);
+        if (!fixtures.problem.empty())
+        {
+            m_fixtureRuns.clear();
+            UpdateTreeWarnings();
+            ShowError(fixtures.problem);
+            return;
+        }
+        operation.fixtures = fixtures.grids;
         operations.push_back(std::move(operation));
     }
+    m_fixtureRuns.clear();
     if (operations.empty())
     {
         ShowError(L"There's nothing to simulate. Generate the operations first.");
@@ -1876,7 +2035,8 @@ bool CCamTabCommand::PrepareSimulationPart()
         const std::wstring leaveOut = (m_job.stock.kind == camcore::StockKind::Imported)
                                           ? FromUtf8(m_job.stock.partPath)
                                           : std::wstring();
-        ReadAssemblyPartFacets(GetSession(), leaveOut, m_simulationPartTriangles, m_simulationPartProblem);
+        ReadAssemblyPartFacets(GetSession(), leaveOut, m_simulationPartTriangles, m_simulationPartProblem,
+                               FixtureKeys());
     }
     if (m_simulationPartTriangles.empty())
         return false;
@@ -2036,6 +2196,8 @@ void CCamTabCommand::GenerateTargets(const std::vector<StepRef>& targets)
 {
     // The clearance plane can depend on the parts' size, which may have changed.
     ReadModelSize();
+    m_fixtureRuns.clear();
+    m_generateWarnings.clear();
 
     size_t generated = 0;
     std::wstring problems;
@@ -2064,16 +2226,24 @@ void CCamTabCommand::GenerateTargets(const std::vector<StepRef>& targets)
         m_pProgress = nullptr;
     }
 
+    m_fixtureRuns.clear();
     MarkJobChanged();
     RebuildScene();
+    UpdateTreeWarnings();
 
-    const std::wstring summary = L"Generated " + std::to_wstring(generated) + L" of " +
-                                 std::to_wstring(targets.size()) +
-                                 (targets.size() == 1 ? L" operation." : L" operations.");
+    std::wstring summary = L"Generated " + std::to_wstring(generated) + L" of " + std::to_wstring(targets.size()) +
+                           (targets.size() == 1 ? L" operation" : L" operations");
+    summary += m_generateWarnings.empty()
+                   ? L"."
+                   : L", " + std::to_wstring(m_generateWarnings.size()) + L" with fixture warnings.";
     m_sequenceStatus = summary;
     ShowStatus();
-    if (!problems.empty())
-        ::MessageBoxW(MessageOwner(), (summary + L"\n" + problems).c_str(), L"CAMForAlibre", MB_OK | MB_ICONWARNING);
+    std::wstring warnings;
+    for (const std::wstring& warning : m_generateWarnings)
+        warnings += L"\n" + warning;
+    if (!problems.empty() || !warnings.empty())
+        ::MessageBoxW(MessageOwner(), (summary + L"\n" + problems + warnings).c_str(), L"CAMForAlibre",
+                      MB_OK | MB_ICONWARNING);
 }
 
 std::vector<StepRef> CCamTabCommand::OperationsIn(const StepRef& scope, bool forPost) const
@@ -2251,16 +2421,77 @@ void CCamTabCommand::Post(const StepRef& scope)
 
 bool CCamTabCommand::GenerateOperation(const StepRef& target, std::string& problem)
 {
+    camcore::SequenceStep& operation = m_job.sequence[target.step].children[target.child];
+    m_fixtureHits.erase(operation.id);
     if (!GenerateOperationMoves(target, problem))
         return false;
 
+    // The fixtures it runs among, the frame, and the tool, for trimming and checking.
+    const FixtureRun& fixtures = FixturesFor(target.step);
+    const bool haveFixtures = fixtures.grids && !fixtures.grids->empty();
+    camcore::Frame frame;
+    camcore::FixtureTool fixtureTool;
+    if (haveFixtures)
+    {
+        const size_t active = camcore::ActiveOriginIndex(m_job, target.step);
+        frame = camcore::BuildFrame(m_job.sequence[active].origin).frame;
+        if (const camcore::Tool* pTool = camcore::FindToolById(m_library, operation.toolId))
+            fixtureTool = camcore::FixtureToolOf(camcore::ToolInMillimetres(*pTool), m_machine.holderDiameter,
+                                                 m_machine.holderDepth);
+    }
+
+    // With Trim, each stretch too close to a fixture is lifted over it, on the dense moves.
+    if (haveFixtures && fixtures.settings != nullptr && fixtures.settings->trim)
+    {
+        if (m_pProgress != nullptr)
+            m_pProgress->Update(-1.0, L"Trimming round fixtures");
+        double height = 0.0;
+        std::string clearanceProblem;
+        if (!camcore::ClearanceHeight(operation.clearance, m_lastClearance.havePartMaxZ, m_lastClearance.partMaxZ,
+                                      height, clearanceProblem, m_lastClearance.haveStockMaxZ,
+                                      m_lastClearance.stockMaxZ, m_lastClearance.haveFixtureMaxZ,
+                                      m_lastClearance.fixtureMaxZ))
+        {
+            problem = clearanceProblem;
+            return false;
+        }
+        int trimmed = 0;
+        std::string trimProblem;
+        if (!camcore::TrimAroundFixtures(operation.toolpath, frame, fixtureTool, *fixtures.grids, height,
+                                         operation.feeds.plunge, trimmed, trimProblem))
+        {
+            problem = trimProblem;
+            return false;
+        }
+        Log(L"[fixtures] %s: %d stretches lifted over fixtures", FromUtf8(operation.name).c_str(), trimmed);
+    }
+
     // Arcs fitted to the dense straight moves, in the planes the machine allows, then
     // what stays straight simplified to 0.01 mm.
-    camcore::SequenceStep& operation = m_job.sequence[target.step].children[target.child];
     const camcore::ArcFitCounts counts = camcore::FitArcs(operation.toolpath, m_machine.arcs);
     const size_t simplified = camcore::SimplifyStraightRuns(operation.toolpath, kFinalSimplify);
     Log(L"[generate] arcs: %zu straight moves into %zu arcs; %zu more left out simplifying; %zu moves to %zu",
         counts.linesReplaced, counts.arcsMade, simplified, counts.movesBefore, operation.toolpath.moves.size());
+
+    // Every operation is checked against its fixtures last.
+    if (haveFixtures)
+    {
+        if (m_pProgress != nullptr)
+            m_pProgress->Update(-1.0, L"Checking against fixtures");
+        const std::vector<camcore::FixtureHit> hits =
+            camcore::CheckFixtures(operation.toolpath, frame, fixtureTool, *fixtures.grids);
+        if (!hits.empty())
+        {
+            m_fixtureHits.insert(operation.id);
+            for (const camcore::FixtureHit& hit : hits)
+            {
+                const std::wstring text =
+                    FromUtf8(operation.name) + L" " + FromUtf8(camcore::FixtureHitText(hit, *fixtures.grids)) + L".";
+                m_generateWarnings.push_back(text);
+                Log(L"[fixtures] %s", text.c_str());
+            }
+        }
+    }
     return true;
 }
 
@@ -2336,6 +2567,45 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
             const double z = camcore::WorldToFrame(frame.frame, point).z;
             stockMinZ = haveStockMinZ ? (std::min)(stockMinZ, z) : z;
             haveStockMinZ = true;
+        }
+    }
+
+    // The fixtures the operation runs among: their highest point plus clearance
+    // raises the automatic clearance plane, and with Trim the 3D operations go round them.
+    const FixtureRun& fixtureRun = FixturesFor(target.step);
+    if (!fixtureRun.problem.empty())
+    {
+        problem = ToUtf8(fixtureRun.problem);
+        return false;
+    }
+    double fixtureMaxZ = 0.0;
+    const bool haveFixtureMaxZ =
+        !fixtureRun.meshes.empty() && camcore::FixtureTopAlongZ(frame.frame, fixtureRun.meshes, fixtureMaxZ);
+    std::vector<camcore::FixtureMesh> fixturesInFrame;
+    if (fixtureRun.settings != nullptr && fixtureRun.settings->trim)
+    {
+        fixturesInFrame = fixtureRun.meshes;
+        for (camcore::FixtureMesh& mesh : fixturesInFrame)
+        {
+            for (camcore::Vec3& point : mesh.triangles)
+                point = camcore::WorldToFrame(frame.frame, point);
+        }
+    }
+    m_lastClearance = { havePartMaxZ, partMaxZ, haveStockMaxZ, stockMaxZ, haveFixtureMaxZ, fixtureMaxZ };
+
+    // A clearance plane set below a fixture is worth saying, as rapids across it would hit.
+    if (haveFixtureMaxZ && operation.clearance.mode != camcore::ClearanceMode::Automatic)
+    {
+        double height = 0.0;
+        std::string ignored;
+        if (camcore::ClearanceHeight(operation.clearance, havePartMaxZ, partMaxZ, height, ignored, haveStockMaxZ,
+                                     stockMaxZ) &&
+            height < fixtureMaxZ)
+        {
+            wchar_t text[200];
+            swprintf_s(text, L" has its clearance plane at %.3f mm, below the fixtures' top plus clearance (%.3f mm).",
+                       height, fixtureMaxZ);
+            m_generateWarnings.push_back(FromUtf8(operation.name) + text);
         }
     }
 
@@ -2436,6 +2706,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         engraveInput.partMaxZ = partMaxZ;
         engraveInput.haveStockMaxZ = haveStockMaxZ;
         engraveInput.stockMaxZ = stockMaxZ;
+        engraveInput.haveFixtureMaxZ = haveFixtureMaxZ;
+        engraveInput.fixtureMaxZ = fixtureMaxZ;
         engraveInput.lines = camcore::JoinEngraveLines(pieces, areas.level);
         Log(L"[generate] %zu pieces joined into %zu lines", pieces.size(), engraveInput.lines.size());
 
@@ -2464,6 +2736,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         profileInput.partMaxZ = partMaxZ;
         profileInput.haveStockMaxZ = haveStockMaxZ;
         profileInput.stockMaxZ = stockMaxZ;
+        profileInput.haveFixtureMaxZ = haveFixtureMaxZ;
+        profileInput.fixtureMaxZ = fixtureMaxZ;
         for (size_t n = 0; n < areas.areas.size(); ++n)
         {
             camcore::ProfileChain chain = camcore::ChainProfile(areas.areas[n], areas.level);
@@ -2609,10 +2883,10 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         std::vector<int> partTriangleFaces;
         if (exactSurfaces)
         {
-            if (!surfaces.Read(GetSession(), leaveOut, partTriangles, partTriangleFaces, partProblem))
+            if (!surfaces.Read(GetSession(), leaveOut, partTriangles, partTriangleFaces, partProblem, FixtureKeys()))
                 Log(L"[generate] finishing without parts: %s", partProblem.c_str());
         }
-        else if (!ReadAssemblyPartFacets(GetSession(), leaveOut, partTriangles, partProblem))
+        else if (!ReadAssemblyPartFacets(GetSession(), leaveOut, partTriangles, partProblem, FixtureKeys()))
         {
             Log(L"[generate] roughing without parts: %s", partProblem.c_str());
         }
@@ -2630,11 +2904,14 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
             plungeInput.partMaxZ = partMaxZ;
             plungeInput.haveStockMaxZ = haveStockMaxZ;
             plungeInput.stockMaxZ = stockMaxZ;
+            plungeInput.haveFixtureMaxZ = haveFixtureMaxZ;
+            plungeInput.fixtureMaxZ = fixtureMaxZ;
             plungeInput.haveStockMinZ = haveStockMinZ;
             plungeInput.stockMinZ = stockMinZ;
             plungeInput.faces = std::move(areaFaces);
             plungeInput.outlines = std::move(areaLoops);
             plungeInput.partTriangles = std::move(partTriangles);
+            plungeInput.fixtures = fixturesInFrame;
             if (m_pProgress != nullptr)
             {
                 GenerateProgress* pProgress = m_pProgress;
@@ -2660,6 +2937,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
             waterlineInput.partMaxZ = partMaxZ;
             waterlineInput.haveStockMaxZ = haveStockMaxZ;
             waterlineInput.stockMaxZ = stockMaxZ;
+            waterlineInput.haveFixtureMaxZ = haveFixtureMaxZ;
+            waterlineInput.fixtureMaxZ = fixtureMaxZ;
             waterlineInput.haveStockMinZ = haveStockMinZ;
             waterlineInput.stockMinZ = stockMinZ;
             for (const camcore::Vec3& point : partTriangles)
@@ -2671,6 +2950,7 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
             waterlineInput.faces = std::move(areaFaces);
             waterlineInput.outlines = std::move(areaLoops);
             waterlineInput.partTriangles = std::move(partTriangles);
+            waterlineInput.fixtures = fixturesInFrame;
             if (m_pProgress != nullptr)
             {
                 GenerateProgress* pProgress = m_pProgress;
@@ -2779,6 +3059,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         pocketInput.partMaxZ = partMaxZ;
         pocketInput.haveStockMaxZ = haveStockMaxZ;
         pocketInput.stockMaxZ = stockMaxZ;
+        pocketInput.haveFixtureMaxZ = haveFixtureMaxZ;
+        pocketInput.fixtureMaxZ = fixtureMaxZ;
         for (size_t n = 0; n < areas.areas.size(); ++n)
         {
             camcore::ProfileChain chain = camcore::ChainProfile(areas.areas[n], areas.level);
@@ -2832,6 +3114,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         facingInput.partMaxZ = partMaxZ;
         facingInput.haveStockMaxZ = haveStockMaxZ;
         facingInput.stockMaxZ = stockMaxZ;
+        facingInput.haveFixtureMaxZ = haveFixtureMaxZ;
+        facingInput.fixtureMaxZ = fixtureMaxZ;
         const camcore::ToolpathResult facingResult = camcore::GenerateFacingToolpath(facingInput);
         if (!facingResult.ok)
         {
@@ -2853,6 +3137,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         holeInput.partMaxZ = partMaxZ;
         holeInput.haveStockMaxZ = haveStockMaxZ;
         holeInput.stockMaxZ = stockMaxZ;
+        holeInput.haveFixtureMaxZ = haveFixtureMaxZ;
+        holeInput.fixtureMaxZ = fixtureMaxZ;
         const camcore::ToolpathResult holeResult = camcore::GenerateHolePocketToolpath(holeInput);
         if (!holeResult.ok)
         {
@@ -2871,6 +3157,8 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
     input.partMaxZ = partMaxZ;
     input.haveStockMaxZ = haveStockMaxZ;
     input.stockMaxZ = stockMaxZ;
+    input.haveFixtureMaxZ = haveFixtureMaxZ;
+    input.fixtureMaxZ = fixtureMaxZ;
 
     const camcore::ToolpathResult result = camcore::GenerateDrillToolpath(input);
     if (!result.ok)
@@ -3184,6 +3472,8 @@ void CCamTabCommand::OnOperationDialogGenerate(COperationDlg* pDialog)
 
     // The clearance plane can depend on the parts' size, which may have changed.
     ReadModelSize();
+    m_fixtureRuns.clear();
+    m_generateWarnings.clear();
 
     std::string problem;
     bool ok = false;
@@ -3201,13 +3491,18 @@ void CCamTabCommand::OnOperationDialogGenerate(COperationDlg* pDialog)
     const std::wstring name = FromUtf8(operation.name);
     Log(L"[generate] %s from its dialog: %s", name.c_str(), ok ? L"ok" : FromUtf8(problem).c_str());
 
+    m_fixtureRuns.clear();
     MarkJobChanged();
     ShowSequence();
     RebuildScene();
-    m_sequenceStatus = ok ? L"Generated " + name + L"." : L"Couldn't generate " + name + L".";
+    m_sequenceStatus = ok ? L"Generated " + name + (m_generateWarnings.empty() ? L"." : L", with a fixture warning.")
+                          : L"Couldn't generate " + name + L".";
     ShowStatus();
     if (!ok)
         ::MessageBoxW(pDialog->GetSafeHwnd(), (name + L": " + FromUtf8(problem)).c_str(), L"CAMForAlibre",
+                      MB_OK | MB_ICONWARNING);
+    else if (!m_generateWarnings.empty())
+        ::MessageBoxW(pDialog->GetSafeHwnd(), m_generateWarnings.front().c_str(), L"CAMForAlibre",
                       MB_OK | MB_ICONWARNING);
 }
 
@@ -3279,6 +3574,13 @@ void CCamTabCommand::OnViewTerminated(CCamViewCommand* pView)
         m_pPartBoxDlg->StopSelectingParts();
         m_pPartBoxDlg->ShowResult(L"Selecting stopped because another command started. Click Select Parts to "
                                   L"carry on.");
+        RestoreSelectionFilter();
+    }
+    if (m_pFixturesDlg != nullptr && m_pFixturesDlg->IsSelectingParts())
+    {
+        m_pFixturesDlg->StopSelectingParts();
+        m_pFixturesDlg->ShowResult(L"Selecting stopped because another command started. Click Select Parts to "
+                                   L"carry on.");
         RestoreSelectionFilter();
     }
     if (m_pOriginDlg != nullptr && m_pOriginDlg->GetPickSlot() != PickSlot::None)
@@ -3362,7 +3664,9 @@ void CCamTabCommand::UpdateTreeWarnings()
         return;
     const bool machine = m_machine.id.empty();
     const bool material = !m_job.materialId.empty() && camcore::FindMaterial(m_materials, m_job.materialId) == nullptr;
-    m_pWnd->ShowWarnings(m_job, machine, material, HasStock() && m_stockUnreadable);
+    std::set<std::string> warnIds = m_fixtureHits;
+    warnIds.insert(m_fixtureMissing.begin(), m_fixtureMissing.end());
+    m_pWnd->ShowWarnings(m_job, machine, material, HasStock() && m_stockUnreadable, warnIds);
 }
 
 void CCamTabCommand::RebuildScene()
@@ -3434,6 +3738,47 @@ void CCamTabCommand::RebuildScene()
             m_stockShapeValid = true;
         }
         m_scene.stockEdges = m_stockEdges;
+    }
+
+    // The chosen Fixtures step's parts (or the dialog's), outlined, read again when they change.
+    {
+        const camcore::FixtureSettings* pFixtures = nullptr;
+        if (m_pFixturesDlg != nullptr)
+            pFixtures = &m_pFixturesDlg->GetStep().fixtures;
+        else if (const camcore::SequenceStep* pChosen = FindStep(m_selected);
+                 pChosen != nullptr && pChosen->type == camcore::StepType::Fixtures)
+            pFixtures = &pChosen->fixtures;
+        std::string keys;
+        if (pFixtures != nullptr)
+        {
+            for (const camcore::FixturePart& part : pFixtures->parts)
+                keys += part.occurrenceKey.hex + ";";
+        }
+        if (keys != m_fixtureEdgesFor)
+        {
+            m_fixtureEdgesFor = keys;
+            m_fixtureEdges.clear();
+            std::vector<camcore::FixtureMesh> meshes;
+            std::wstring problem;
+            if (pFixtures != nullptr && !pFixtures->parts.empty())
+            {
+                if (ReadFixtureMeshes(GetSession(), pFixtures->parts, meshes, problem))
+                {
+                    for (const camcore::FixtureMesh& mesh : meshes)
+                    {
+                        const std::vector<camcore::LineSegment> edges = camcore::MeshOutlineEdges(mesh.triangles, 20.0, 1e-4);
+                        m_fixtureEdges.insert(m_fixtureEdges.end(), edges.begin(), edges.end());
+                    }
+                }
+                else
+                {
+                    Log(L"[fixtures] %s", problem.c_str());
+                    if (m_pFixturesDlg != nullptr)
+                        m_pFixturesDlg->ShowResult(problem);
+                }
+            }
+        }
+        m_scene.fixtureEdges = m_fixtureEdges;
     }
 
     // The chosen operation's features, outlined in orange.
@@ -3547,6 +3892,7 @@ bool CCamTabCommand::PrepareSelection(const SelectionFilter& wanted)
 bool CCamTabCommand::IsPicking() const
 {
     return (m_pPartBoxDlg != nullptr && m_pPartBoxDlg->IsSelectingParts()) ||
+           (m_pFixturesDlg != nullptr && m_pFixturesDlg->IsSelectingParts()) ||
            (m_pOriginDlg != nullptr && m_pOriginDlg->GetPickSlot() != PickSlot::None) ||
            (m_pOperationDlg != nullptr && (m_pOperationDlg->IsLocating() || m_pOperationDlg->IsSelectingFeatures()));
 }
@@ -3707,6 +4053,26 @@ void CCamTabCommand::RestoreSelectionFilter()
 
 void CCamTabCommand::HandleSelection()
 {
+    if (m_pFixturesDlg != nullptr && m_pFixturesDlg->IsSelectingParts())
+    {
+        // Each click adds a part, or takes a listed one off, as for Part Box Stock.
+        std::vector<camcore::StockPart> parts;
+        try
+        {
+            if (ReadSelectedParts(GetSession(), parts) && !parts.empty())
+            {
+                m_pFixturesDlg->ToggleParts(parts);
+                if (m_pWnd != nullptr)
+                    m_pWnd->PostClearSelection();
+            }
+        }
+        catch (const _com_error& error)
+        {
+            Log(L"[fixtures] could not find the session: hr=0x%08X", static_cast<unsigned>(error.Error()));
+        }
+        return;
+    }
+
     if (m_pPartBoxDlg != nullptr && m_pPartBoxDlg->IsSelectingParts())
     {
         // Each click adds a part, or takes a listed one off. The selection is then
@@ -3896,6 +4262,7 @@ namespace
         kImageWaterlineRoughing,
         kImageWaterlineFinishing,
         kImageParallelFinishing,
+        kImageFixtures,
         kImageWarning       // drawn over another image, as overlay 1
     };
 
@@ -3933,6 +4300,7 @@ namespace
         case camcore::StepType::WaterlineRoughing: return kImageWaterlineRoughing;
         case camcore::StepType::WaterlineFinishing: return kImageWaterlineFinishing;
         case camcore::StepType::ParallelFinishing: return kImageParallelFinishing;
+        case camcore::StepType::Fixtures: return kImageFixtures;
         default:                               return kImageOperations;
         }
     }
@@ -4687,6 +5055,8 @@ void CCamTabWnd::OnTreeRightClick(NMHDR* /*pNotify*/, LRESULT* pResult)
     else
     {
         menu.AppendMenu(MF_STRING | editable, ID_CAM_ADD_ORIGIN, L"Add Set Origin...");
+        menu.AppendMenu(MF_STRING | (m_pTab->CanAddFolder() ? MF_ENABLED : MF_GRAYED), ID_CAM_ADD_FIXTURES,
+                        L"Add Fixtures...");
         menu.AppendMenu(MF_STRING | (m_pTab->CanAddFolder() ? MF_ENABLED : MF_GRAYED), ID_CAM_ADD_FOLDER,
                         L"Add Folder");
         if (onStep)
@@ -4719,6 +5089,7 @@ void CCamTabWnd::OnTreeRightClick(NMHDR* /*pNotify*/, LRESULT* pResult)
     switch (command)
     {
     case ID_CAM_ADD_ORIGIN:  m_pTab->AddSetOrigin(); break;
+    case ID_CAM_ADD_FIXTURES: m_pTab->AddFixtures(); break;
     case ID_CAM_ADD_FOLDER:  m_pTab->AddFolder(); break;
     case ID_CAM_ADD_DRILL:   m_pTab->AddOperation(ref.step, camcore::StepType::Drill); break;
     case ID_CAM_ADD_HOLE_POCKETING: m_pTab->AddOperation(ref.step, camcore::StepType::HolePocketing); break;
@@ -5036,6 +5407,12 @@ void CCamTabWnd::ShowSequence(const camcore::Job& job, const StepRef& selected)
         std::wstring text = FromUtf8(step.name);
         if (step.type == camcore::StepType::SetOrigin && !camcore::BuildFrame(step.origin).ok)
             text += L" (incomplete)";
+        if (step.type == camcore::StepType::Fixtures)
+        {
+            const size_t count = step.fixtures.parts.size();
+            text += L" (" + std::to_wstring(count) + (count == 1 ? L" part" : L" parts") +
+                    (step.fixtures.trim ? L", trim)" : L")");
+        }
 
         const int image = StepImage(step.type);
         const HTREEITEM hItem = m_tree.InsertItem(text.c_str(), image, image, m_hOperations);
@@ -5131,7 +5508,8 @@ void CCamTabWnd::ShowTools(const camcore::ToolLibrary& library, const std::strin
     m_fillingTree = false;
 }
 
-void CCamTabWnd::ShowWarnings(const camcore::Job& job, bool machine, bool material, bool stock)
+void CCamTabWnd::ShowWarnings(const camcore::Job& job, bool machine, bool material, bool stock,
+                              const std::set<std::string>& warnIds)
 {
     const auto mark = [&](HTREEITEM hItem, bool warn) {
         if (hItem != nullptr)
@@ -5147,7 +5525,8 @@ void CCamTabWnd::ShowWarnings(const camcore::Job& job, bool machine, bool materi
         if (ref.step >= job.sequence.size())
             continue;
         const camcore::SequenceStep& step = job.sequence[ref.step];
-        mark(hItem, step.type == camcore::StepType::SetOrigin && !camcore::BuildFrame(step.origin).ok);
+        mark(hItem, (step.type == camcore::StepType::SetOrigin && !camcore::BuildFrame(step.origin).ok) ||
+                        warnIds.count(step.id) > 0);
 
         // A folder's operations without a toolpath. Suppressed ones aren't
         // generated on purpose, so they aren't marked.
@@ -5157,7 +5536,8 @@ void CCamTabWnd::ShowWarnings(const camcore::Job& job, bool machine, bool materi
             if (child.child >= step.children.size())
                 continue;
             const camcore::SequenceStep& operation = step.children[child.child];
-            mark(hChild, !step.suppressed && !operation.suppressed && operation.toolpath.moves.empty());
+            mark(hChild, (!step.suppressed && !operation.suppressed && operation.toolpath.moves.empty()) ||
+                             warnIds.count(operation.id) > 0);
         }
     }
 }

@@ -24,6 +24,8 @@ namespace camcore
         // The stock's highest point along the frame's Z, when there's a stock.
         bool haveStockMaxZ = false;
         double stockMaxZ = 0.0;
+        bool haveFixtureMaxZ = false;     // the active fixtures' highest point plus clearance
+        double fixtureMaxZ = 0.0;
     };
 
     // Each hole, in the Features list's order, is centred on its circle, hole

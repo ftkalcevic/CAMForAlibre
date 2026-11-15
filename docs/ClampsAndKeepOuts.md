@@ -1,5 +1,7 @@
 # Clamps and keep-outs: suggested design
 
+> **Decided and built (2026-11-15).** Frank's answers changed this design: a fixture is always a picked Alibre part (no typed boxes); each part has its own clearance; every operation warns by default and a "Trim toolpaths round fixtures" check box makes every operation go round them; and fixtures are a **Fixtures step in the Operations sequence**, like Set Origin, so they can be moved and rest machining can clean up later. The trim check box is on each Fixtures step. See the Fixtures entry in `docs\SPEC.md` and the help's Fixtures section. The rest of this page is the original suggestion.
+
 ## Context
 
 Nothing stops a toolpath hitting a clamp, a vice or a screw. `TODO.md` lists "Clamps and vices as keep-out for toolpaths and the simulation". A crash here costs a cutter or a spindle, so it's the most valuable safety feature left.

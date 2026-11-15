@@ -65,3 +65,4 @@ const float kSimWarningLineWeight = 4.0f;
 // The stock, drawn as its edges.
 const DisplayColour kStockColour = { 0, 160, 160, 255 };
 const float kStockLineWeight = 1.5f;
+const DisplayColour kFixtureColour = { 170, 60, 200, 255 };     // a Fixtures step's parts, purple

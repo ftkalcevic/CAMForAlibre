@@ -76,6 +76,7 @@
     <ClCompile Include="Features.cpp" />
     <ClCompile Include="Feeds.cpp" />
     <ClCompile Include="FeedsCalculator.cpp" />
+    <ClCompile Include="Fixtures.cpp" />
     <ClCompile Include="FileIO.cpp" />
     <ClCompile Include="Origin.cpp" />
     <ClCompile Include="PseudoPost.cpp" />
@@ -145,6 +146,8 @@
     <ClInclude Include="Features.h" />
     <ClInclude Include="Feeds.h" />
     <ClInclude Include="FeedsCalculator.h" />
+    <ClInclude Include="FixtureCheck.h" />
+    <ClInclude Include="Fixtures.h" />
     <ClInclude Include="FileIO.h" />
     <ClInclude Include="Origin.h" />
     <ClInclude Include="PseudoPost.h" />

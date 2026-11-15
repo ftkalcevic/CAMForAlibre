@@ -30,12 +30,15 @@ namespace camcore
     // Returns a sentence for each problem. Empty means the settings are valid.
     std::vector<std::string> ValidateClearance(const ClearanceSettings& settings);
 
-    // Automatic means this far above the parts, or the stock where that's higher.
+    // Automatic means this far above the parts, or the stock or fixtures (each plus its
+    // clearance) where that's higher.
     constexpr double kAutomaticClearanceAboveParts = 5.0;
 
     // The clearance plane's Z in the operation's frame, given the parts' highest
-    // point in it, and the stock's when there's a stock. Returns false and sets
-    // problem if it can't be worked out.
+    // point in it, the stock's when there's a stock, and the fixtures' (their highest
+    // point plus clearance) when there are any. Returns false and sets problem if it
+    // can't be worked out.
     bool ClearanceHeight(const ClearanceSettings& clearance, bool havePartMaxZ, double partMaxZ, double& height,
-                         std::string& problem, bool haveStockMaxZ = false, double stockMaxZ = 0.0);
+                         std::string& problem, bool haveStockMaxZ = false, double stockMaxZ = 0.0,
+                         bool haveFixtureMaxZ = false, double fixtureMaxZ = 0.0);
 }

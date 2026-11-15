@@ -28,7 +28,7 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
 - More posts (GRBL, Mach3/4, UCCNC, Masso)
 - Undo in the CAM tree
 - Inch display units
-- Clamps and vices as keep-out for toolpaths and the simulation (design saved in `docs\ClampsAndKeepOuts.md`, its decisions still open)
+- Fixtures (clamps, vices, screws): built as Fixtures steps and tested (see `docs\ClampsAndKeepOuts.md`)
 - Tool holder from a model: pick an Alibre part (or file) as the holder's shape, used in the simulation in place of the plain cylinder
 - Pictures on the dialog tabs showing what each parameter means, where it helps
 - Performance

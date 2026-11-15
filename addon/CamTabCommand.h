@@ -6,10 +6,12 @@
 
 #pragma once
 
+#include <map>
 #include <set>
 
 #include "CommandBase.h"
 #include "CamJob.h"
+#include "FixtureCheck.h"
 #include "CamViewCommand.h"
 #include "GeometryReader.h"
 #include "Machine.h"
@@ -22,6 +24,7 @@
 class CAddOnInterface;
 class CCamTabWnd;
 class CPartBoxStockDlg;
+class CFixturesDlg;
 class CSimulationDlg;
 
 // A place in the sequence: a top-level step, or an operation in a group.
@@ -89,8 +92,13 @@ public:
     void OnStockPreviewChanged();
     void OnPartBoxDialogDone(CPartBoxStockDlg* pDialog, bool apply);
 
+    // From the Fixtures dialog
+    void OnFixturesPreviewChanged();
+    void OnFixturesDialogDone(CFixturesDlg* pDialog, bool apply);
+
     // The operation sequence
     void AddSetOrigin();
+    void AddFixtures();
     void AddFolder();
     void AddOperation(size_t folder, camcore::StepType type);
     bool CanAddFolder() const;
@@ -258,6 +266,23 @@ private:
     void OpenStockDialog(camcore::StockKind kind);
     void ApplyStock(const camcore::Stock& stock);
     void ClosePartBoxDialog(bool callAlibre);
+    void OpenFixturesDialog(const camcore::SequenceStep& step, size_t editIndex);
+    void CloseFixturesDialog(bool callAlibre);
+
+    // The occurrence keys of every fixture part in the job, which aren't part of "the part".
+    OccurrenceKeys FixtureKeys() const;
+
+    // The fixtures the operations in a top-level step run among, read once per
+    // Generate (or Simulate): none if there's no Fixtures step above it.
+    struct FixtureRun
+    {
+        bool read = false;
+        std::wstring problem;                       // why they couldn't be read
+        const camcore::FixtureSettings* settings = nullptr;
+        std::vector<camcore::FixtureMesh> meshes;   // in assembly mm
+        camcore::FixtureGrids grids;
+    };
+    const FixtureRun& FixturesFor(size_t step);
     void CloseSimulationDialog();
     void UpdateSimulationScene();
     bool PrepareSimulationPart();           // the parts read and put in the simulation's grid
@@ -312,6 +337,29 @@ private:
 
     // Only one dialog is open at a time, so this is set only when the others aren't.
     CPartBoxStockDlg* m_pPartBoxDlg;
+    CFixturesDlg* m_pFixturesDlg = nullptr;
+    size_t m_fixturesEditIndex = static_cast<size_t>(-1);  // the step the Fixtures dialog edits, or kNewStep
+
+    // Fixtures, read for the run in progress, by Fixtures step index; and what
+    // Generate found: operations (by ID) that come too close to a fixture, Fixtures
+    // steps (by ID) whose parts can't be read, and the warnings to show.
+    std::map<size_t, FixtureRun> m_fixtureRuns;
+    std::set<std::string> m_fixtureHits;
+    std::set<std::string> m_fixtureMissing;
+    std::vector<std::wstring> m_generateWarnings;
+    // The last clearance inputs GenerateOperationMoves worked out, for trimming.
+    struct ClearanceInputs
+    {
+        bool havePartMaxZ = false;
+        double partMaxZ = 0.0;
+        bool haveStockMaxZ = false;
+        double stockMaxZ = 0.0;
+        bool haveFixtureMaxZ = false;
+        double fixtureMaxZ = 0.0;
+    } m_lastClearance;
+    // The chosen Fixtures step's outlines, and the parts they were read for.
+    std::string m_fixtureEdgesFor;
+    std::vector<camcore::LineSegment> m_fixtureEdges;
 
     // The progress window's helper while Generate runs, or null.
     GenerateProgress* m_pProgress = nullptr;
@@ -375,7 +423,10 @@ public:
     // Marks with a red exclamation mark the nodes with a problem: an operation
     // with no toolpath (unless it's suppressed), an incomplete Set Origin, and the
     // machine, material or stock when they can't be found or read. Never folders.
-    void ShowWarnings(const camcore::Job& job, bool machine, bool material, bool stock);
+    // warnIds: steps (by ID) with a fixture problem: a Fixtures step that can't be
+    // read, or an operation that comes too close to one.
+    void ShowWarnings(const camcore::Job& job, bool machine, bool material, bool stock,
+                      const std::set<std::string>& warnIds);
 
     // Starts editing a step's name in place.
     void StartRename(const StepRef& ref);
