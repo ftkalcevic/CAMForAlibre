@@ -327,6 +327,12 @@ void CCamViewCommand::DrawScene(IADAddOnCanvasDisplay* pCanvas, const CamScene& 
             const __int64 segment = AddSegment(pCanvas, L"Too much removed", kSimTooMuchColour, 1.0f, true);
             DrawMesh(pCanvas, segment, *scene.simTooMuchMesh, unit);
         }
+        if (scene.simFixtureMesh != nullptr)
+        {
+            // Over the stock and model, so screws through the stock show.
+            const __int64 segment = AddSegment(pCanvas, L"Fixtures", kFixtureColour, 1.0f, true);
+            DrawMesh(pCanvas, segment, *scene.simFixtureMesh, unit);
+        }
         if (scene.simToolShown)
             DrawTool(pCanvas, scene, unit);
         if (scene.simWarning)

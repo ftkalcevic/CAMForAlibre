@@ -1907,6 +1907,21 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
         operations.push_back(std::move(operation));
     }
     m_fixtureRuns.clear();
+
+    // Each Fixtures step's parts, meshed once, to draw over the stock.
+    m_simulationFixtureMeshes.clear();
+    for (const camcore::SimOperation& operation : operations)
+    {
+        if (!operation.fixtures || m_simulationFixtureMeshes.count(operation.fixtures.get()) > 0)
+            continue;
+        std::vector<camcore::StockMesh> meshes;
+        for (const camcore::FixtureGrid& fixture : *operation.fixtures)
+        {
+            if (fixture.grid.SizeX() > 0)
+                meshes.push_back(camcore::MeshStock(fixture.grid));
+        }
+        m_simulationFixtureMeshes[operation.fixtures.get()] = camcore::JoinMeshes(meshes);
+    }
     if (operations.empty())
     {
         ShowError(L"There's nothing to simulate. Generate the operations first.");
@@ -2119,6 +2134,13 @@ void CCamTabCommand::UpdateSimulationScene()
     m_scene.simTooMuchMesh = (comparing && m_simulationShow.tooMuch) ? &m_simulationTooMuchMesh : nullptr;
 
     const camcore::SimOperation* pOperation = m_simulation.CurrentOperation();
+    m_scene.simFixtureMesh = nullptr;
+    if (m_simulationShow.fixtures && pOperation != nullptr && pOperation->fixtures)
+    {
+        const auto found = m_simulationFixtureMeshes.find(pOperation->fixtures.get());
+        if (found != m_simulationFixtureMeshes.end())
+            m_scene.simFixtureMesh = &found->second;
+    }
     m_scene.simToolShown = pOperation != nullptr;
     if (pOperation != nullptr)
     {
@@ -2171,6 +2193,8 @@ void CCamTabCommand::CloseSimulationDialog()
     m_simulationChunks.clear();
     m_simulationMesh = camcore::StockMesh();
     m_scene.simMesh = nullptr;
+    m_scene.simFixtureMesh = nullptr;
+    m_simulationFixtureMeshes.clear();
     m_scene.simulating = false;
     ClearSimulationCompare();
     m_simulationPartTriangles.clear();

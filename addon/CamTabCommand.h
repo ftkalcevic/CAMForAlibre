@@ -149,6 +149,7 @@ public:
         bool part = false;
         bool notEnough = false;
         bool tooMuch = false;
+        bool fixtures = true;   // the current operation's fixtures, shaded over the stock
     };
     void SetSimulationShow(const SimulationShow& show);
     std::wstring SimulationCompareText() const;     // the volumes, or why the parts can't be compared
@@ -378,6 +379,8 @@ private:
     double m_simulationNotEnough = 0.0;                 // mm^3
     double m_simulationTooMuch = 0.0;
     camcore::StockMesh m_simulationPartMesh;
+    // Each Fixtures step's parts as their cells' surface, by the grids the operations share.
+    std::map<const void*, camcore::StockMesh> m_simulationFixtureMeshes;
     camcore::StockMesh m_simulationNotEnoughMesh;
     camcore::StockMesh m_simulationTooMuchMesh;
     std::vector<camcore::Vec3> m_simulationTriangles;

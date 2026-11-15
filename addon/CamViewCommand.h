@@ -62,6 +62,7 @@ struct CamScene
     const camcore::StockMesh* simPartMesh = nullptr;
     const camcore::StockMesh* simNotEnoughMesh = nullptr;
     const camcore::StockMesh* simTooMuchMesh = nullptr;
+    const camcore::StockMesh* simFixtureMesh = nullptr;    // the current operation's fixtures, over the stock
     bool simToolShown = false;
     camcore::Vec3 simTip;
     camcore::Vec3 simAxis{ 0.0, 0.0, 1.0 };

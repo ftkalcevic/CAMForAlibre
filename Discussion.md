@@ -11783,6 +11783,68 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Tests pass
 
+### 🤖 Claude
+
+> Thanks. `CLAUDE.md` and `TODO.md` now say fixtures are tested by you in Alibre. Nothing is committed.
+
+### 🧑 Frank · 16:22
+
+> If I add screw fixtures, they aren't shown when I simulate.
+
+### 🤖 Claude
+
+> Questions:
+> - How should fixtures show in the simulation, so screws inside the stock can be seen?
+>   - Shaded, over the stock (Recommended): A new Show ▸ Fixtures check box (on by default). Each operation's fixture parts are drawn shaded in purple, over the stock as Too much removed is, so a screw inside the stock shows. The meshes come from the fixture parts' cells, like the Part view.
+>   - Purple outlines over the stock: The same check box, but the parts' outline edges are drawn in purple over everything. Lighter, and the stock stays visible round them.
+>   - Shaded, clipped by the stock: Shaded in purple but hidden by the stock like the parts, so you only see a screw where the stock has been cut away round it.
+
+### 🧑 Frank · 16:23
+
+> Answers:
+> - How should fixtures show in the simulation, so screws inside the stock can be seen?
+>   **Shaded, over the stock (Recommended)**
+
+### 🤖 Claude
+
+> Built clean, and Alibre isn't running. Installing now.
+
+> Screws were missing because the simulation never drew fixtures. Alibre draws the screw parts, but a screw through the stock sits inside the shaded simulated stock, which covers it. The fix is built, but **the install failed**: the administrator prompt didn't complete, so Alibre still has the old add-on.
+>
+> **What changed**
+> - The Simulation dialog has a new **Show ▸ Fixtures** check box, on by default, beside Part.
+> - It draws the current operation's fixture parts shaded in purple, over the stock and the model, so screws through the stock show.
+> - Each operation shows its own Fixtures step's parts, so the display changes when a later step moves the clamps.
+> - What's drawn is the cells the simulation checks the tool against (0.05 to 0.25 mm), so round parts like screws look a little blocky.
+> - The help's Simulation section and `CLAUDE.md` are updated.
+>
+> The add-on builds without errors or new warnings. Core code didn't change, so I didn't run the tests again.
+>
+> **To test once it's installed**
+> 1. Simulate an operation under a Fixtures step with screws. They should show in purple through the stock.
+> 2. Untick Show ▸ Fixtures. They should go, and come back when ticked.
+> 3. With a second Fixtures step lower down, step past it. The purple parts should change to the new step's.
+> 4. Check the help's Simulation ▸ Show section.
+
+### 🧑 Frank · 16:27
+
+> Install again
+
+### 🤖 Claude
+
+> It's installed this time: the installed DLL matches the build, and the installed help has the new Fixtures text. Restart Alibre, then:
+>
+> 1. Simulate an operation under a Fixtures step with screws. The screws should show in purple through the stock.
+> 2. Untick Show ▸ Fixtures in the Simulation dialog. They should go, and come back when you tick it.
+> 3. If there's a second Fixtures step lower down, step past it. The purple parts should change to that step's.
+> 4. Check the help's Simulation ▸ Show section.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 16:30
+
+> Tests passed
+
 ---
 
 # Side conversation

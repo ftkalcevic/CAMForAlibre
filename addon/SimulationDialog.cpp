@@ -76,6 +76,7 @@ BEGIN_MESSAGE_MAP(CSimulationDlg, CDialog)
     ON_BN_CLICKED(IDC_SIM_SAVE_STL, &CSimulationDlg::OnSaveStl)
     ON_BN_CLICKED(IDC_SIM_SHOW_STOCK, &CSimulationDlg::OnShowChanged)
     ON_BN_CLICKED(IDC_SIM_SHOW_PART, &CSimulationDlg::OnShowChanged)
+    ON_BN_CLICKED(IDC_SIM_SHOW_FIXTURES, &CSimulationDlg::OnShowChanged)
     ON_BN_CLICKED(IDC_SIM_SHOW_NOT_ENOUGH, &CSimulationDlg::OnShowChanged)
     ON_BN_CLICKED(IDC_SIM_SHOW_TOO_MUCH, &CSimulationDlg::OnShowChanged)
     ON_BN_CLICKED(IDC_SIM_REALTIME, &CSimulationDlg::OnRealTimeChanged)
@@ -147,6 +148,7 @@ BOOL CSimulationDlg::OnInitDialog()
     // What's shown.
     CheckDlgButton(IDC_SIM_SHOW_STOCK, g_show.stock ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_SIM_SHOW_PART, g_show.part ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(IDC_SIM_SHOW_FIXTURES, g_show.fixtures ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_SIM_SHOW_NOT_ENOUGH, g_show.notEnough ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_SIM_SHOW_TOO_MUCH, g_show.tooMuch ? BST_CHECKED : BST_UNCHECKED);
     if (m_pTab != nullptr)
@@ -282,6 +284,7 @@ void CSimulationDlg::OnShowChanged()
 {
     g_show.stock = IsDlgButtonChecked(IDC_SIM_SHOW_STOCK) == BST_CHECKED;
     g_show.part = IsDlgButtonChecked(IDC_SIM_SHOW_PART) == BST_CHECKED;
+    g_show.fixtures = IsDlgButtonChecked(IDC_SIM_SHOW_FIXTURES) == BST_CHECKED;
     g_show.notEnough = IsDlgButtonChecked(IDC_SIM_SHOW_NOT_ENOUGH) == BST_CHECKED;
     g_show.tooMuch = IsDlgButtonChecked(IDC_SIM_SHOW_TOO_MUCH) == BST_CHECKED;
     if (m_pTab == nullptr)

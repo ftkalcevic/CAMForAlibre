@@ -456,6 +456,7 @@
 #define IDC_FIX_TRIM                    13533
 #define IDC_FIX_PROMPT                  13534
 #define IDC_FIX_RESULT                  13535
+#define IDC_SIM_SHOW_FIXTURES           13536
 #define IDC_MATDLG_TYPICAL              13524
 #define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
@@ -508,7 +509,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        13052
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13536
+#define _APS_NEXT_CONTROL_VALUE         13537
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

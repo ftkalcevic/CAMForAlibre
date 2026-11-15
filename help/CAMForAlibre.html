@@ -283,6 +283,7 @@
   <dd>What's drawn in the view. Each is remembered until Alibre closes.
     <ul>
       <li><strong>Stock</strong>: the cut stock, shaded (on at first).</li>
+      <li><strong>Fixtures</strong>: the parts of the current operation's <a href="#fixtures">Fixtures</a> step, shaded in purple and drawn over the stock and model, so screws through the stock show (on at first). They're the cells the simulation checks the tool against (0.05 to 0.25 mm), so curved parts look a little blocky. Each operation shows its own step's fixtures, so they change when a later Fixtures step moves the clamps.</li>
       <li><strong>Part</strong>: the parts as the simulation sees them, in green: every visible, unsuppressed part in the assembly, in the same cells as the stock, so you can check they line up with the model. An imported stock's own part, and every part in a Fixtures step, are left out. The parts are read the first time any of the last three boxes is ticked, which can take a moment.</li>
       <li><strong>Not enough removed</strong>: stock still left outside the parts, in amber. Stock to Leave shows here too.</li>
       <li><strong>Too much removed</strong>: part material the simulation has cut away, in red, drawn over the model so it shows inside the part.</li>
