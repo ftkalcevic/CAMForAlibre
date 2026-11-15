@@ -51,6 +51,17 @@ namespace camcore
                 problems.push_back("Two materials have the same ID.");
             if (!material.name.empty() && !names.insert(LowerCase(material.name)).second)
                 problems.push_back("There's already a material called " + material.name + ".");
+            for (ToolMaterial toolMaterial : ToolMaterials())
+            {
+                const MaterialCutting& cutting = material.CuttingFor(toolMaterial);
+                if (!cutting.set)
+                    continue;
+                const std::string what = material.name + "'s " + ToolMaterialTitle(toolMaterial);
+                if (!(cutting.surfaceSpeed > 0.0))
+                    problems.push_back(what + " surface speed must be more than 0.");
+                if (!(cutting.chipLoadFactor >= 1.0 && cutting.chipLoadFactor <= 500.0))
+                    problems.push_back(what + " chip load factor must be from 1 to 500%.");
+            }
         }
         return problems;
     }
@@ -104,6 +115,22 @@ namespace camcore
                 Material material;
                 material.id = item.at("id").get<std::string>();
                 material.name = item.at("name").get<std::string>();
+
+                // Version 1 has no cutting values.
+                const auto cutting = item.find("cutting");
+                if (cutting != item.end())
+                {
+                    for (auto entry = cutting->begin(); entry != cutting->end(); ++entry)
+                    {
+                        ToolMaterial toolMaterial;
+                        if (!ParseToolMaterial(entry.key(), toolMaterial))
+                            continue;   // a tool material from a newer build
+                        MaterialCutting& value = material.CuttingFor(toolMaterial);
+                        value.set = true;
+                        value.surfaceSpeed = entry.value().at("surfaceSpeed").get<double>();
+                        value.chipLoadFactor = entry.value().at("chipLoadFactor").get<double>();
+                    }
+                }
                 result.list.materials.push_back(material);
             }
         }
@@ -132,7 +159,22 @@ namespace camcore
 
         json materials = json::array();
         for (const Material& material : list.materials)
-            materials.push_back({ { "id", material.id }, { "name", material.name } });
+        {
+            json item = { { "id", material.id }, { "name", material.name } };
+            json cutting = json::object();
+            for (ToolMaterial toolMaterial : ToolMaterials())
+            {
+                const MaterialCutting& value = material.CuttingFor(toolMaterial);
+                if (value.set)
+                {
+                    cutting[ToolMaterialText(toolMaterial)] =
+                        { { "surfaceSpeed", value.surfaceSpeed }, { "chipLoadFactor", value.chipLoadFactor } };
+                }
+            }
+            if (!cutting.empty())
+                item["cutting"] = cutting;
+            materials.push_back(item);
+        }
         const json root =
         {
             { "format", kFormatName },

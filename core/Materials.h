@@ -10,15 +10,34 @@
 #include <vector>
 
 #include "CamJob.h"     // LoadStatus, SaveResult
+#include "ToolLibrary.h"    // ToolMaterial
 
 namespace camcore
 {
-    constexpr int kMaterialsFormatVersion = 1;
+    // Version 2 added each material's cutting values per tool material.
+    constexpr int kMaterialsFormatVersion = 2;
+
+    // How a material is cut with tools of one tool material, for the feeds calculator.
+    struct MaterialCutting
+    {
+        bool set = false;
+        double surfaceSpeed = 0.0;      // m/min
+        double chipLoadFactor = 100.0;  // percent of the tool's chip load
+
+        bool operator==(const MaterialCutting& other) const
+        {
+            return set == other.set && surfaceSpeed == other.surfaceSpeed && chipLoadFactor == other.chipLoadFactor;
+        }
+    };
 
     struct Material
     {
         std::string id;     // stable
         std::string name;
+        MaterialCutting cutting[kToolMaterialCount];    // by ToolMaterial
+
+        const MaterialCutting& CuttingFor(ToolMaterial material) const { return cutting[static_cast<int>(material)]; }
+        MaterialCutting& CuttingFor(ToolMaterial material) { return cutting[static_cast<int>(material)]; }
     };
 
     struct MaterialList
@@ -28,7 +47,8 @@ namespace camcore
 
     // Returns a sentence for each problem. Empty means the list is valid.
     // Every material needs an ID and a name, and names and IDs are unique
-    // (names ignoring case).
+    // (names ignoring case). A cutting value that's set needs a surface speed
+    // over 0 and a chip load factor from 1 to 500%.
     std::vector<std::string> ValidateMaterials(const MaterialList& list);
 
     const Material* FindMaterial(const MaterialList& list, const std::string& id);

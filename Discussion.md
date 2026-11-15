@@ -10908,6 +10908,278 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Tests passed
 
+### 🤖 Claude
+
+> Thanks. `CLAUDE.md` now records Ignore collisions as tested by you in Alibre. Tri-dexel mode is still marked untested, and its test list from before is still to do. Nothing is committed.
+
+### 🧑 Frank · 09:33
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> We will add a feeds and speeds calculator that can be used to populate the feeds & speeds dialog, and the feeds & speeds defaults in the tool dialog.  We will use the tool diameter, number of flutes, stickout, tool material (HSS, carbied) from the tool.  from the cutting material/tool material we have the surface speed, chip load.  We add cut depth, cut width, and aggression slider.  From that we compute the spindle rpm, and feedrate for each entry in the dialog.  We will have a fixed set of tool material type eg HSS, Carbide, etc.  The material definition will have surface speed, for each tool type.
+
+### 🤖 Claude
+
+> Questions:
+> - How should a material store chip load for each tool material? Chip load depends strongly on the cutter's diameter.
+>   - Table by diameter (Recommended): Chip load (mm/tooth) at a few fixed diameters, e.g. 1, 3, 6, 10, 16, 25 mm, interpolated for the tool. Matches how vendor charts are published.
+>   - Fraction of diameter: One number per tool material, chip load = k x D (e.g. 0.01 x D). Simplest, less accurate at the ends.
+>   - One value at 6 mm, scaled: One chip load quoted for a 6 mm cutter, scaled in proportion to the tool's diameter.
+> - Stickout isn't on the tool yet. Where should it come from, and what should it do to the result?
+>   - Tool field, derate feed (Recommended): New Stickout field on the Tool dialog. Above 3 x D, the chip load is reduced by a deflection factor ((3D/L)^3, capped), so long tools feed slower.
+>   - Calculator input only: Typed in the calculator each time, defaulting to the overall length less the machine's holder depth; same derating.
+>   - Tool field, warning only: Stored on the tool; the calculator only warns when it's long, without changing numbers.
+> - How should the other feeds (plunge, approach, engage, retract, departure, transfer) be worked out from the cutting feed?
+>   - Fixed ratios (Recommended): Plunge 30%, engage 50%, approach, retract and departure 100% of cut; transfer left as it is (Use Rapid kept). Ratios fixed in code.
+>   - Ratios in the calculator: The calculator dialog has editable percentages for each feed, remembered between uses.
+>   - Ratios per material: Each material stores its own plunge and engage percentages (e.g. lower plunge in steel).
+> - Which fixed tool materials should the list have?
+>   - HSS, Cobalt, Carbide, Coated (Recommended): HSS, Cobalt HSS, Carbide, Coated carbide. New tools default to Carbide; existing tools load as Carbide.
+>   - HSS and Carbide only: The two main ones; existing tools load as Carbide.
+>   - HSS, Carbide, Diamond: Adds PCD/diamond for aluminium and composites.
+
+### 🧑 Frank · 09:45
+
+> Answers:
+> - How should a material store chip load for each tool material? Chip load depends strongly on the cutter's diameter.
+>   **Default chip load should be with the tool**
+> - Stickout isn't on the tool yet. Where should it come from, and what should it do to the result?
+>   **Use overall length as the sitckout.**
+> - How should the other feeds (plunge, approach, engage, retract, departure, transfer) be worked out from the cutting feed?
+>   **Fixed ratios (Recommended)**
+> - Which fixed tool materials should the list have?
+>   **HSS, Cobalt, Carbide, Coated (Recommended)**
+
+### 🤖 Claude
+
+> Questions:
+> - With the default chip load on the tool, what does the material add to it?
+>   - Chip load factor per tool mat (Recommended): Each material has, per tool material, a surface speed (m/min) and a chip load factor (%), e.g. aluminium 100%, steel 50%. Chip load = tool's default x factor.
+>   - Surface speed only: The material only gives surface speed; chip load is the tool's own value, the same in every material.
+> - With stickout taken as the overall length, should a long tool slow the feed?
+>   - Derate above 3 x D (Recommended): Chip load times (3D / L)^3 when L > 3D, no lower than 25%; the calculator shows the factor.
+>   - No effect: Shown for information only.
+> - What should the aggression slider scale, and over what range?
+>   - Chip load 50-150% (Recommended): Scales the chip load (feed) only, 50% to 150%, default 100%. Surface speed stays at the material's value.
+>   - Speed and chip load 50-150%: Scales both surface speed and chip load together.
+>   - Chip load 25-200%: A wider range on chip load only.
+> - Should a set of starting materials with surface speeds be provided?
+>   - Fill blanks on request (Recommended): Materials stay as you've named them; their speeds start empty, and the material editor has a 'Typical values' pick (aluminium, mild steel, stainless, brass, plastics, hardwood, MDF) to fill one in.
+>   - Add a starter list: If materials.json is empty, create those materials with typical values.
+>   - No defaults: You enter every value.
+
+### 🧑 Frank · 09:46
+
+> Answers:
+> - With the default chip load on the tool, what does the material add to it?
+>   **Chip load factor per tool mat (Recommended)**
+> - With stickout taken as the overall length, should a long tool slow the feed?
+>   **Derate above 3 x D (Recommended)**
+> - What should the aggression slider scale, and over what range?
+>   **Chip load 50-150% (Recommended)**
+> - Should a set of starting materials with surface speeds be provided?
+>   **Fill blanks on request (Recommended)**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Feeds and speeds calculator
+>
+> ## Context
+>
+> The Feeds & Speeds fields are typed in by hand at the moment, both on an operation's Feeds & Speeds tab and in a tool's per-material rows (`CToolFeedsDlg`, which hosts the same `CFeedsPage`). Frank wants a calculator that fills them in. It works the spindle RPM and every feed out from:
+> - the tool: its diameter, flute count, overall length (used as the stickout), tool material, and default chip load;
+> - the material: a surface speed and a chip load factor for each tool material;
+> - what's typed into the calculator: depth of cut, width of cut, and an aggression slider.
+>
+> Frank's choices:
+> - The tool materials are a fixed list: HSS, Cobalt HSS, Carbide and Coated carbide.
+> - The default chip load is a property of the tool.
+> - Each material has, for each tool material, a surface speed and a chip load factor (%).
+> - The stickout is the tool's overall length. Past 3 × D, the feed is reduced.
+> - The aggression slider runs from 50% to 150% and scales the chip load only.
+> - The other feeds are fixed ratios of the cutting feed.
+> - The material editor has a list of typical values that can fill a material in. Nothing is filled in automatically.
+>
+> ## Core (`core\`, testable)
+>
+> **New `core\FeedsCalculator.h/.cpp`**
+>
+> - `enum class ToolMaterial { Hss, CobaltHss, Carbide, CoatedCarbide }`, plus `ToolMaterials()` and `ToolMaterialTitle()`. They're saved as `"hss"`, `"cobalt"`, `"carbide"` and `"coatedCarbide"`.
+> - `struct MaterialCutting { bool set; double surfaceSpeed; /* m/min */ double chipLoadFactor; /* % */ }`.
+> - `struct FeedsCalcInput`: the tool (in mm), the `MaterialCutting` for its tool material, `depth`, `width`, `aggression` (0.5 to 1.5), an optional chip load override, and `maxSpindleRpm` (0 means no limit).
+> - `struct FeedsCalcResult`: `FeedSettings feeds`, and for the calculator to show: the effective diameter, RPM before and after the limit, `rpmLimited`, the tool chip load, each factor (material, aggression, chip thinning, stickout), the final chip load, and the material removal rate. Plus `std::vector<std::string> problems`.
+> - `CalculateFeeds(input)`:
+>   - **Effective diameter:** the tool's cutting diameter at the depth of cut. Use the existing profile (`ProfileOf` in `core\Simulation`) for ball, corner radius, V and chamfer mills, so a ball mill skimming at a shallow depth spins faster. Otherwise it's D.
+>   - **RPM:** Vc × 1000 / (π × Deff), limited to the machine's maximum spindle speed.
+>   - **Chip load:**
+>     - Start from the tool's chip load, or the override.
+>     - × the material factor.
+>     - × the aggression.
+>     - × radial chip thinning when the width is under D/2: D / (2√(w(D−w))), capped at 3. The cap is Claude's choice.
+>     - × the stickout factor when L > 3D: (3D/L)³, no lower than 0.25.
+>   - **Cut feed:** RPM × flutes × chip load.
+>   - **Drills:** the chip load is per revolution. There's no thinning, and the feed is RPM × chip load.
+>   - **Other feeds** (fixed ratios):
+>     - Plunge: 30% of the cut feed (for drills, the drilling feed itself).
+>     - Engage: 50%.
+>     - Approach, retract and departure: 100%.
+>     - Transfer: left as it is.
+> - `TypicalMaterials()`: named presets for the material editor. These are Claude's conservative starting values, written down in the spec and help. Surface speed in m/min for HSS / Cobalt / Carbide / Coated, then the chip load factor:
+>
+>   | Material | HSS | Cobalt | Carbide | Coated | Chip load factor |
+>   |---|---|---|---|---|---|
+>   | Aluminium | 90 | 110 | 300 | 400 | 100% |
+>   | Brass | 60 | 75 | 200 | 250 | 80% |
+>   | Mild steel | 25 | 30 | 100 | 150 | 50% |
+>   | Stainless | 12 | 15 | 60 | 90 | 40% |
+>   | Acrylic / plastics | 100 | 100 | 300 | 300 | 100% |
+>   | Hardwood | 300 | 300 | 500 | 500 | 100% |
+>   | MDF | 300 | 300 | 600 | 600 | 120% |
+>
+> **`core\Materials`**
+> - `Material` gains `MaterialCutting cutting[4]`, indexed by tool material.
+> - The format goes to version 2. Each material has a `cutting` object keyed by tool material, and only the entries that are set are written. Version 1 files load with nothing set.
+> - Validation: a surface speed that's set must be over 0, and the chip load factor must be between 1% and 500%.
+>
+> **`core\ToolLibrary`**
+> - `Tool::toolMaterial` (default `Carbide`) and `Tool::chipLoad` (in the tool's own unit, per tooth, or per revolution for drills; 0 means not set).
+> - They're saved as `toolMaterial` and `chipLoad`, and are optional when read. The library and machine files stay at version 3, as the reduced neck fields did, and older tools load as Carbide with no chip load.
+> - `ToolInMillimetres` converts `chipLoad`. `ValidateTool` requires it to be 0 or more.
+>
+> **Tests:** a new `tests\FeedsCalculatorTests.cpp`, added to `tests\CamCoreTests.vcxproj`, covering:
+> - RPM from the surface speed, and the limit;
+> - the effective diameter of a ball mill at a shallow depth;
+> - chip thinning and its cap;
+> - the stickout factor;
+> - aggression;
+> - drills;
+> - the feed ratios;
+> - the problems reported when the material has no values for the tool material, or there's no chip load.
+>
+> The round trips in the existing materials and tool library tests also cover the new fields, and loading a version 1 materials file.
+>
+> ## Add-on (`addon\`)
+>
+> **Tool dialog (`IDD_TOOL_EDIT`, `CToolEditDlg`)**
+> - A Cutting row: a Tool material combo (`IDC_TOOL_MATERIAL`) and a Chip load box (`IDC_TOOL_CHIP_LOAD`) labelled "mm/tooth" or "in/tooth", which becomes "per rev" for drills (`UpdateFieldsForType`).
+> - The Speeds & Feeds group moves down, and the dialog grows to fit.
+> - Refactor `OnOK`'s field reading into `ReadTool(Tool&, problems)`, so Add and Edit on the feeds list can give `CToolFeedsDlg` the tool as currently typed, along with the machine's maximum spindle speed.
+>
+> **Calculator dialog (new `addon\FeedsCalculatorDialog.h/.cpp`, `CFeedsCalcDlg`, `IDD_FEEDS_CALC`, modal, with a ? button)**
+> - **Shown, not edited:** the tool (T number, name, type, diameter, flutes, stickout and tool material).
+> - **Inputs:**
+>   - the Material combo, starting at the job's material or the row's material;
+>   - the Chip load, prefilled from the tool and editable for this calculation only;
+>   - Depth of cut and Width of cut in mm, remembered as fractions of D until Alibre closes, starting at 1 × D and 0.5 × D;
+>   - the Aggression slider and its percentage.
+> - **Results:** recalculated as the user types (`ReadValue`-style quiet reading). They show the RPM (with "limited by the machine" when it is), the chip load with its factors, the Cut and Plunge feeds, and the material removal rate. Any problems are shown in red text, and OK is greyed while there are any.
+> - **OK** returns the `FeedSettings`.
+>
+> **Feeds & Speeds tab (`IDD_OP_FEEDS`, `CFeedsPage`)**
+> - A "Calculator..." button (`IDC_FEEDS_CALC`) beside Save to Tool.
+> - `CFeedsPage` gets a provider, `std::function<bool(FeedsCalcSource&, std::wstring& problem)>`, which supplies the tool (in mm), the materials, the starting material ID and the maximum RPM.
+>   - `COperationDlg` supplies it from the Tool tab's `ChosenToolId`, the machine's tools, the job's material and `Machine` (through `CCamTabCommand`).
+>   - `CToolFeedsDlg` supplies it from the tool being edited and its Material combo, and the material can't be changed in the calculator there.
+> - On OK, the page's boxes are filled. Transfer is kept.
+> - The button is hidden in bulk edits, as Save to Tool is.
+>
+> **Materials editor (`IDD_MACHINE`, Materials tab)**
+> - An Edit... button (`IDC_MATERIAL_EDIT`), and double-clicking a material, opens the new `CMaterialDlg` (`IDD_MATERIAL`).
+> - It holds the name, and four fixed rows, one for each tool material. Each row has a "Set" check box, a Surface speed box (m/min) and a Chip load factor box (%).
+> - A Typical values combo with an Apply button fills all four rows from `TypicalMaterials()`.
+>
+> **IDs:** new 13xxx IDs from `_APS_NEXT_CONTROL_VALUE` (13496), plus new IDD values, in `addon\resource.h`. Add the new files to `addon\CAMForAlibre.vcxproj`, its `.filters` file, and `core\CamCore.vcxproj`.
+>
+> ## Docs (in the same change)
+> - `help\CAMForAlibre.html`:
+>   - the Tool dialog's new fields;
+>   - a new Feeds Calculator section, covering the formulas, the factors and the typical values table;
+>   - the Feeds & Speeds tab's Calculator button;
+>   - the Materials tab's Edit and the Material dialog.
+> - `docs\SPEC.md`: a "Feeds and speeds calculator (decided)" entry, and the Materials entry updated (it's no longer names only). Tell Frank it differs from the Claude doc.
+> - `CLAUDE.md`: a current-state line, and the "nothing fills them automatically" product decision updated.
+> - `TODO.md`: mark the calculator as built if it's listed there.
+>
+> ## Verification
+> 1. Build Release x64 with MSBuild, then run `bin\x64\Release\CamCoreTests.exe`. All tests must pass, including the new calculator tests.
+> 2. Close Alibre, run `deploy\install.ps1`, then run `python tools\BuildDiscussion.py`.
+> 3. A numbered test list for Frank:
+>    - in the Tool dialog, set the tool material and chip load, then save and reopen;
+>    - on the Materials tab, use Edit and Typical values;
+>    - use Calculator on an operation's Feeds & Speeds tab, including the machine RPM limit, a ball mill at a shallow depth, a long tool, a narrow width and the slider;
+>    - use Calculator from a tool's Speeds & Feeds row;
+>    - check that bulk edit hides the button;
+>    - check that an old materials file loads;
+>    - check that the help has changed.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Writing the core parts now: the tool material and chip load on tools, the cutting values on materials, and the calculator itself.
+
+> Core code and tests are written; building and running the core tests now.
+
+> Core tests pass (355). Now wiring the add-on: the tool dialog fields, the material editor and the calculator dialog.
+
+> Now the calculator dialog files.
+
+> All three add-on dialogs are wired up. Now building the add-on.
+
+> Fixing a non-ASCII character a source check caught.
+
+> Docs are updated. Next I'll install, but only if Alibre is closed.
+
+> UAC was cancelled, so it isn't installed. Rebuilding the discussion file next.
+
+> The feeds and speeds calculator is built, but not installed: the administrator (UAC) prompt was cancelled. The Release build is clean and all 355 core tests pass, including the new calculator tests. Nothing is committed and none of it has been tried in Alibre.
+>
+> **What it does**
+> - **Tools:** the Tool dialog now has a Tool material (HSS, Cobalt HSS, Carbide or Coated carbide; Carbide by default) and a Chip load. The chip load is per tooth, or per revolution for drills, and a blank box means none. Older tool files load as Carbide with no chip load.
+> - **Materials:** the Materials tab has a new Edit button (double-click works too). It opens a Material dialog with a surface speed (m/min) and a chip load factor (%) for each tool material, and a Typical values list with an Apply button that fills all four. The materials file format goes to version 2; version 1 files still load, with no values set.
+> - **Calculator:** there's a Calculator... button on the Feeds & Speeds tab and in a tool's Speeds and Feeds row. You give it the material, the chip load (filled from the tool and editable), the depth and width of cut, and the aggression slider (50–150%). It shows its working and fills the fields:
+>   - The RPM uses the cutting diameter at the depth of cut, so a ball mill cutting shallow spins faster, and it's limited to the machine's maximum spindle speed.
+>   - The chip load is the tool's chip load × the material's factor × aggression × chip thinning × a stickout factor.
+>   - Plunge is 30% of the cut feed, engage 50%, and approach, retract and departure 100%. Transfer is left as it is.
+>   - The button is hidden in bulk edits.
+>
+> These were my choices, so check them:
+> - Chip thinning is capped at 3×.
+> - The stickout factor for tools longer than 3 × D is (3D/L)³, and never below 25%.
+> - The depth and width of cut start at 1 × D and 0.5 × D, and are remembered until Alibre closes.
+> - The typical values are conservative starting points: for example, aluminium at 300 m/min with carbide, and mild steel at 100 m/min with a 50% chip load factor.
+>
+> The help, the spec and `CLAUDE.md` are updated. `docs\SPEC.md` now differs from the Claude doc.
+>
+> **To test, after installing:**
+> 1. Edit a tool: set its tool material and chip load, press OK, then reopen it to check they were kept. Switch Units and Type to Drill and check the chip load label changes (in/tooth, mm/rev).
+> 2. On the Materials tab, use Edit on a material: Apply a typical value, untick a row, then OK and reopen. Check that a factor of 0 or a blank speed is refused.
+> 3. On an operation's Feeds & Speeds tab, use Calculator. Check:
+>    - with a machine maximum below the wanted RPM, it says "limited by the machine";
+>    - a ball mill at a 0.5 mm depth spins faster;
+>    - a narrow width raises the feed;
+>    - a tool longer than 3 × D lowers it;
+>    - the slider changes the feeds;
+>    - OK fills the tab and keeps Transfer.
+> 4. Use Calculator with a material that has no values for the tool's tool material, and with a tool that has no chip load. The error should show in red and OK should be greyed.
+> 5. In a tool's Speeds and Feeds row, use Calculator: the material should be fixed to the row's. With a bad tool field, such as an empty diameter, it should say to fix the tool's fields first.
+> 6. Bulk-edit several operations: Calculator should be hidden.
+> 7. Check that the help changed: the Material and Feeds and Speeds Calculator sections, and the Tool and Feeds & Speeds tab entries.
+
+### 🧑 Frank · 10:11
+
+> Install again
+
+### 🤖 Claude
+
+> The calculator is installed this time. The installed add-on DLL is the same build as the Release one, and the installed help includes the new calculator and material sections. Start Alibre and go through the seven-step test list from my last message. Nothing is committed yet.
+
+### 🧑 Frank · 10:15
+
+> Tests pass
+
 ---
 
 # Side conversation

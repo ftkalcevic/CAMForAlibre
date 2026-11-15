@@ -11,6 +11,7 @@
 #include "Features.h"
 #include "ToolLibrary.h"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -18,6 +19,7 @@
 
 class CCamTabCommand;
 class COperationDlg;
+struct FeedsCalcSource;
 
 // What a pick in the view is measuring for.
 enum class LocateTarget
@@ -205,6 +207,11 @@ public:
     void Load(const camcore::SequenceStep& step) override;
     bool Save(camcore::SequenceStep& step, std::wstring& problems) override;
 
+    // Without an owner (a tool's own feeds), where the calculator's tool and
+    // material come from. Set before the page is created, or the button is hidden.
+    using CalculatorSource = std::function<bool(FeedsCalcSource& source, std::wstring& problem)>;
+    void SetCalculatorSource(CalculatorSource source) { m_calculatorSource = std::move(source); }
+
     enum { IDD = IDD_OP_FEEDS };
 
 protected:
@@ -212,11 +219,14 @@ protected:
     afx_msg void OnTransferChanged();
     afx_msg void OnFromTool();
     afx_msg void OnToTool();
+    afx_msg void OnCalculator();
 
     DECLARE_MESSAGE_MAP()
 
 private:
     void UpdateFields();
+
+    CalculatorSource m_calculatorSource;
 };
 
 // The Clearance tab every operation has.
@@ -637,6 +647,9 @@ public:
     // if the job has none and before replacing a row. False with an empty problem if
     // the user turned it down.
     bool SaveFeedsToTool(const camcore::FeedSettings& feeds, std::wstring& problem);
+
+    // The Feeds & Speeds tab's Calculator: the chosen tool, the job's material and the machine's limit.
+    bool CalculatorSource(FeedsCalcSource& source, std::wstring& problem) const;
 
     enum { IDD = IDD_OPERATION };
 

@@ -70,8 +70,10 @@
   <a href="#machine">Machine</a>
   <a class="sub" href="#machine-tools">Tools tab</a>
   <a class="sub" href="#machine-materials">Materials tab</a>
+  <a class="sub" href="#material">Material</a>
   <a href="#tool-edit">Tool</a>
   <a class="sub" href="#tool-feeds">Speeds and Feeds</a>
+  <a class="sub" href="#feeds-calculator">Feeds and Speeds Calculator</a>
   <a class="sub" href="#choose-material">Choose Material</a>
   <a href="#set-origin">Set Origin</a>
   <a href="#post">Post</a>
@@ -408,16 +410,50 @@
 </dl>
 
 <h3 id="machine-materials">Materials tab</h3>
-<p>The materials jobs can be cut from. The list is shared by every machine (<code>%APPDATA%\CAMForAlibre\materials.json</code>). Only names for now.</p>
+<p>The materials jobs can be cut from. The list is shared by every machine (<code>%APPDATA%\CAMForAlibre\materials.json</code>). Each material has a name, and for the <a href="#feeds-calculator">feeds calculator</a> a surface speed and chip load factor for each tool material.</p>
 <dl>
   <dt>Material list</dt>
-  <dd>Every material. Double-click one to rename it.</dd>
+  <dd>Every material. Double-click one to edit it.</dd>
   <dt>Add</dt>
-  <dd>Adds a material. Names must be different.</dd>
+  <dd>Adds a material. Names must be different. Its cutting values start empty: use Edit to fill them in.</dd>
+  <dt>Edit</dt>
+  <dd>Changes the chosen material's name and cutting values in the <a href="#material">Material</a> dialog.</dd>
   <dt>Rename</dt>
   <dd>Renames the chosen material. Tools' speeds and feeds stay with it.</dd>
   <dt>Delete</dt>
   <dd>Deletes the chosen material, after asking. Every machine's tools lose their speeds and feeds for it, and a job using it is left with no material.</dd>
+</dl>
+</section>
+
+<section id="material">
+<h2>Material</h2>
+<p>A material's name and how it's cut with each tool material, for the <a href="#feeds-calculator">feeds calculator</a>. Opened by Edit on the Machine dialog's Materials tab.</p>
+<dl>
+  <dt>Name</dt>
+  <dd>The material's name, different from every other material's.</dd>
+  <dt>HSS, Cobalt HSS, Carbide, Coated carbide</dt>
+  <dd>Tick a tool material to give values for it. A tool material left unticked has none, and the calculator says so for tools made of it.</dd>
+  <dt>Surface speed (m/min)</dt>
+  <dd>How fast the cutting edge moves through this material, in metres per minute. The calculator turns it into a spindle speed. More than 0.</dd>
+  <dt>Chip load factor (%)</dt>
+  <dd>The part of the tool's own chip load to take in this material: 100% in aluminium, less in harder materials. From 1 to 500%. Ticking a tool material with this box empty fills in 100.</dd>
+  <dt>Typical values, Apply</dt>
+  <dd>Fills all four rows from the chosen typical material, to be changed. These are conservative starting points; the cutter maker's figures are better:
+  <table>
+    <tr><th>Material</th><th>HSS</th><th>Cobalt HSS</th><th>Carbide</th><th>Coated carbide</th><th>Chip load factor</th></tr>
+    <tr><td>Aluminium</td><td>90</td><td>110</td><td>300</td><td>400</td><td>100%</td></tr>
+    <tr><td>Brass</td><td>60</td><td>75</td><td>200</td><td>250</td><td>80%</td></tr>
+    <tr><td>Mild steel</td><td>25</td><td>30</td><td>100</td><td>150</td><td>50%</td></tr>
+    <tr><td>Stainless steel</td><td>12</td><td>15</td><td>60</td><td>90</td><td>40%</td></tr>
+    <tr><td>Acrylic and plastics</td><td>100</td><td>100</td><td>300</td><td>300</td><td>100%</td></tr>
+    <tr><td>Hardwood</td><td>300</td><td>300</td><td>500</td><td>500</td><td>100%</td></tr>
+    <tr><td>MDF</td><td>300</td><td>300</td><td>600</td><td>600</td><td>120%</td></tr>
+  </table>
+  Surface speeds are in m/min.</dd>
+  <dt>OK</dt>
+  <dd>Saves the material to the list straight away.</dd>
+  <dt>Cancel</dt>
+  <dd>Closes the dialog without changing the material.</dd>
 </dl>
 </section>
 
@@ -461,6 +497,10 @@
   <dd>Only with Reduced neck. How far from the tip the tool keeps its cutting diameter, before it widens to the shank. From the flute length to the overall length.</dd>
   <dt>Shank diameter (e)</dt>
   <dd>Only with Reduced neck. The diameter of the wide part, from the neck length up to the overall length (the part held in the collet). No less than the diameter.</dd>
+  <dt>Tool material</dt>
+  <dd>What the cutter is made of: HSS, Cobalt HSS, Carbide or Coated carbide. The <a href="#feeds-calculator">feeds calculator</a> takes the material's surface speed and chip load factor for it. New tools, and tools from older files, are Carbide.</dd>
+  <dt>Chip load</dt>
+  <dd>The tool's own chip load, in the tool's unit: how thick a chip each tooth takes (per revolution for drills), from the cutter maker's figures for a full-depth cut in aluminium. The feeds calculator scales it by the material's chip load factor. Blank is none, and the calculator then asks for one.</dd>
   <dt>Speeds &amp; Feeds</dt>
   <dd>One row for each material the tool has speeds and feeds for, with its spindle speed and cut feed. An operation's Feeds &amp; Speeds tab can be filled from the row for the job's material.</dd>
   <dt>Add, Edit, Remove</dt>
@@ -480,10 +520,43 @@
   <dd>The material these are for. Materials the tool already has a row for aren't offered.</dd>
   <dt>Spindle Speed, Feed Rates and Transfer</dt>
   <dd>As on the Feeds &amp; Speeds tab.</dd>
+  <dt>Calculator</dt>
+  <dd>Opens the <a href="#feeds-calculator">feeds calculator</a> for this tool, as its fields are typed in the Tool dialog, and the chosen material, and the machine's maximum spindle speed.</dd>
   <dt>OK</dt>
   <dd>Keeps the row. It's saved with the tool when the Tool dialog's OK is pressed.</dd>
   <dt>Cancel</dt>
   <dd>Closes the dialog without changing the row.</dd>
+</dl>
+</section>
+
+<section id="feeds-calculator">
+<h2>Feeds and Speeds Calculator</h2>
+<p>Works out the spindle speed and feeds from the tool, the material and the cut, and fills the Feeds &amp; Speeds fields with them. Opened by the Calculator button on an operation's <a href="#tab-feeds">Feeds &amp; Speeds tab</a> (for the tool chosen on the Tool tab) or in a tool's <a href="#tool-feeds">Speeds and Feeds</a> row. It shows the tool: its number, name, type, diameter, flutes, tool material, and its overall length, which is taken as how far it sticks out of the holder.</p>
+<dl>
+  <dt>Material</dt>
+  <dd>The material being cut, starting with the job's material (or the row's, which can't be changed). Its surface speed and chip load factor for the tool's tool material are set on the <a href="#material">Material</a> dialog.</dd>
+  <dt>Chip load</dt>
+  <dd>The tool's chip load in mm per tooth (per revolution for drills), filled in from the tool. A different one can be typed for this calculation; it isn't saved to the tool.</dd>
+  <dt>Depth of cut</dt>
+  <dd>How deep the tool cuts, in mm. For ball, corner radius, V and chamfer mills the cutting diameter at that depth is used for the spindle speed, so a shallow cut spins faster. Starts at the diameter, then remembers the last one, as a part of the diameter, until Alibre closes.</dd>
+  <dt>Width of cut</dt>
+  <dd>How wide the tool cuts (the stepover), in mm. Under half the diameter the chips come out thinner than the chip load, so the feed goes up to make up (chip thinning, at most 3 times). Starts at half the diameter, then remembered as the depth is. Not used for drills.</dd>
+  <dt>Aggression</dt>
+  <dd>50% to 150% of the chip load, for a lighter or harder cut. 100% at first, then remembered until Alibre closes.</dd>
+  <dt>Result</dt>
+  <dd>
+  <ul>
+    <li>Spindle speed = surface speed &times; 1000 / (&pi; &times; diameter at the depth of cut), no faster than the machine's maximum spindle speed (it says when it's limited).</li>
+    <li>Chip load = the tool's chip load &times; the material's chip load factor &times; aggression &times; chip thinning &times; the stickout factor. A tool longer than 3 diameters bends, so its chip load is reduced by (3 &times; diameter / length)&sup3;, to no less than 25%.</li>
+    <li>Cut = spindle speed &times; flutes &times; chip load (drills: spindle speed &times; chip load).</li>
+    <li>Plunge is 30% of the cut feed (drills: the same as cut), Engage 50%, and Approach, Retract and Departure the same as cut. Transfer isn't changed.</li>
+    <li>The removal rate is depth &times; width &times; cut feed, in cm&sup3;/min.</li>
+  </ul>
+  </dd>
+  <dt>OK</dt>
+  <dd>Fills the Feeds &amp; Speeds fields. Greyed while something is missing, which is shown in red: no material, no surface speed for the tool material, or no chip load.</dd>
+  <dt>Cancel</dt>
+  <dd>Closes the calculator without changing anything.</dd>
 </dl>
 </section>
 
@@ -618,6 +691,8 @@
   <dd>Fills every field from the speeds and feeds of the tool chosen on the Tool tab, for the job's material. If the tool has none for that material, it says so and changes nothing. The values can be changed afterwards.</dd>
   <dt>Save to Tool</dt>
   <dd>Saves this tab's values to the tool chosen on the Tool tab, for the job's material, in the machine's file straight away; the status on the CAM tab confirms it. If the job has no material you <a href="#choose-material">choose one</a>, which becomes the job's material. If the tool already has speeds and feeds for that material, you're asked before they're overwritten. Not offered when editing several operations at once.</dd>
+  <dt>Calculator</dt>
+  <dd>Opens the <a href="#feeds-calculator">feeds calculator</a> for the tool chosen on the Tool tab, starting with the job's material, and fills this tab's fields from it. Not offered when editing several operations at once.</dd>
   <dt>Spindle Speed</dt>
   <dd>In revolutions per minute.</dd>
   <dt>Plunge</dt>

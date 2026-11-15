@@ -228,6 +228,8 @@
 #define IDD_OP_CHAMFERING               13036
 #define IDD_OP_ENGRAVING                13037
 #define IDD_CHOOSE_MATERIAL             13048
+#define IDD_FEEDS_CALC                  13049
+#define IDD_MATERIAL                    13050
 #define IDC_VIEW_SMALL                  13296
 #define IDC_VIEW_MEDIUM                 13297
 #define IDC_VIEW_LARGE                  13298
@@ -415,6 +417,36 @@
 #define IDC_TOOL_SHANK_DIAMETER         13486
 #define IDC_TOOL_DRAWING                13487
 #define IDC_FEEDS_TO_TOOL               13488
+#define IDC_TOOL_MATERIAL               13496
+#define IDC_TOOL_CHIP_LOAD              13497
+#define IDC_TOOL_CHIP_LOAD_UNIT         13498
+#define IDC_FEEDS_CALC                  13499
+#define IDC_MATERIAL_EDIT               13500
+#define IDC_CALC_TOOL                   13501
+#define IDC_CALC_MATERIAL               13502
+#define IDC_CALC_CHIP_LOAD              13503
+#define IDC_CALC_CHIP_UNIT              13504
+#define IDC_CALC_DEPTH                  13505
+#define IDC_CALC_WIDTH                  13506
+#define IDC_CALC_AGGRESSION             13507
+#define IDC_CALC_AGGRESSION_TEXT        13508
+#define IDC_CALC_RESULTS                13509
+#define IDC_CALC_PROBLEM                13510
+#define IDC_MATDLG_NAME                 13511
+#define IDC_MATDLG_SET_0                13512
+#define IDC_MATDLG_SET_1                13513
+#define IDC_MATDLG_SET_2                13514
+#define IDC_MATDLG_SET_3                13515
+#define IDC_MATDLG_SPEED_0              13516
+#define IDC_MATDLG_SPEED_1              13517
+#define IDC_MATDLG_SPEED_2              13518
+#define IDC_MATDLG_SPEED_3              13519
+#define IDC_MATDLG_FACTOR_0             13520
+#define IDC_MATDLG_FACTOR_1             13521
+#define IDC_MATDLG_FACTOR_2             13522
+#define IDC_MATDLG_FACTOR_3             13523
+#define IDC_MATDLG_TYPICAL              13524
+#define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
 #define IDC_WL_REST                     13490
 #define IDC_WL_REST_MIN                 13491
@@ -463,9 +495,9 @@
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        13049
+#define _APS_NEXT_RESOURCE_VALUE        13051
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13496
+#define _APS_NEXT_CONTROL_VALUE         13526
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

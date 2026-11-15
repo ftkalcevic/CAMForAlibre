@@ -68,6 +68,7 @@ protected:
     afx_msg void OnToolDoubleClick(NMHDR* pNotify, LRESULT* pResult);
     afx_msg void OnToolSelectionChanged(NMHDR* pNotify, LRESULT* pResult);
     afx_msg void OnAddMaterial();
+    afx_msg void OnEditMaterial();
     afx_msg void OnRenameMaterial();
     afx_msg void OnDeleteMaterial();
     afx_msg void OnMaterialSelectionChanged();

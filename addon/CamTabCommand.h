@@ -66,6 +66,7 @@ public:
     void OpenMachineDialog(int tab);
     void SelectToolByIndex(size_t index);
     const camcore::MaterialList& GetMaterials() const { return m_materials; }
+    const camcore::Machine& GetMachine() const { return m_machine; }
     const std::string& GetMaterialId() const { return m_job.materialId; }
     std::wstring GetMaterialName() const;       // "none" when the job has no material
     void ChooseMaterial(const std::string& id);

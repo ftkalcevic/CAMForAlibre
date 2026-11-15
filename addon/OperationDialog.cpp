@@ -4,6 +4,7 @@
 #include "CAMForAlibre.h"
 #include "OperationDialog.h"
 #include "ToolDialogs.h"
+#include "FeedsCalculatorDialog.h"
 #include "Help.h"
 #include "CamTabCommand.h"
 #include "ModelReader.h"
@@ -940,6 +941,7 @@ void CToolPage::OnToolChanged(NMHDR* pNotify, LRESULT* pResult)
 BEGIN_MESSAGE_MAP(CFeedsPage, COperationPage)
     ON_BN_CLICKED(IDC_FEEDS_FROM_TOOL, &CFeedsPage::OnFromTool)
     ON_BN_CLICKED(IDC_FEEDS_TO_TOOL, &CFeedsPage::OnToTool)
+    ON_BN_CLICKED(IDC_FEEDS_CALC, &CFeedsPage::OnCalculator)
     ON_BN_CLICKED(IDC_FEEDS_TRANSFER_RAPID, &CFeedsPage::OnTransferChanged)
     ON_BN_CLICKED(IDC_FEEDS_TRANSFER_SET, &CFeedsPage::OnTransferChanged)
 END_MESSAGE_MAP()
@@ -1009,7 +1011,37 @@ BOOL CFeedsPage::OnInitDialog()
         GetDlgItem(IDC_FEEDS_FROM_TOOL)->ShowWindow(SW_HIDE);
     if (m_pOwner == nullptr || m_pOwner->IsBulk())
         GetDlgItem(IDC_FEEDS_TO_TOOL)->ShowWindow(SW_HIDE);
+    // Operations in a bulk edit may have different tools.
+    if ((m_pOwner == nullptr && !m_calculatorSource) || (m_pOwner != nullptr && m_pOwner->IsBulk()))
+        GetDlgItem(IDC_FEEDS_CALC)->ShowWindow(SW_HIDE);
     return TRUE;
+}
+
+void CFeedsPage::OnCalculator()
+{
+    AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+    FeedsCalcSource source;
+    std::wstring problem;
+    const bool found = (m_pOwner != nullptr) ? m_pOwner->CalculatorSource(source, problem)
+                                             : (m_calculatorSource && m_calculatorSource(source, problem));
+    if (!found)
+    {
+        if (!problem.empty())
+            MessageBox(problem.c_str(), L"CAMForAlibre", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    // What's on the tab now, so Transfer is kept; boxes that aren't numbers keep the defaults.
+    SequenceStep step;
+    std::wstring ignored;
+    Save(step, ignored);
+
+    CFeedsCalcDlg dialog(source, step.feeds, this);
+    if (dialog.DoModal() != IDOK)
+        return;
+    step.feeds = dialog.GetFeeds();
+    Load(step);
 }
 
 void CFeedsPage::OnFromTool()
@@ -3792,6 +3824,28 @@ bool COperationDlg::FeedsFromTool(FeedSettings& feeds, std::wstring& problem) co
         return false;
     }
     feeds = pRow->feeds;
+    return true;
+}
+
+bool COperationDlg::CalculatorSource(FeedsCalcSource& source, std::wstring& problem) const
+{
+    if (m_pTab == nullptr || m_pToolPage == nullptr)
+    {
+        problem = L"The CAM tab has closed.";
+        return false;
+    }
+    const ToolLibrary library = m_pTab->GetToolLibrary();
+    const Tool* pTool = FindToolById(library, m_pToolPage->ChosenToolId());
+    if (pTool == nullptr)
+    {
+        problem = L"Choose a tool on the Tool tab first.";
+        return false;
+    }
+    source.tool = *pTool;
+    source.materials = m_pTab->GetMaterials();
+    source.materialId = m_pTab->GetMaterialId();
+    source.materialFixed = false;
+    source.maxSpindleRpm = m_pTab->GetMachine().maxSpindleRpm;
     return true;
 }
 

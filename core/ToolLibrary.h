@@ -54,6 +54,24 @@ namespace camcore
         Inches
     };
 
+    // What the cutter is made of, which sets the surface speed a material is cut at.
+    enum class ToolMaterial
+    {
+        Hss,
+        CobaltHss,
+        Carbide,
+        CoatedCarbide
+    };
+    constexpr int kToolMaterialCount = 4;
+
+    // Every tool material, in the order they're listed, and their names ("HSS" and so on).
+    const std::vector<ToolMaterial>& ToolMaterials();
+    std::string ToolMaterialTitle(ToolMaterial material);
+
+    // As saved in files: "hss", "cobalt", "carbide", "coatedCarbide". Parse returns false if unknown.
+    std::string ToolMaterialText(ToolMaterial material);
+    bool ParseToolMaterial(const std::string& text, ToolMaterial& material);
+
     // A tool's spindle speed and feeds for one material, which fill an
     // operation's Feeds & Speeds tab when asked.
     struct ToolFeeds
@@ -86,6 +104,11 @@ namespace camcore
 
         // Every type but drills
         int fluteCount = 2;
+
+        // For the feeds calculator: what it's made of, and its chip load in its own
+        // unit, per tooth (per revolution for drills). A chip load of 0 is not set.
+        ToolMaterial toolMaterial = ToolMaterial::Carbide;
+        double chipLoad = 0.0;
 
         // Drills only
         double pointAngle = 118.0;      // degrees

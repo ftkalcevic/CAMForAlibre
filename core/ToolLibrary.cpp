@@ -123,6 +123,9 @@ namespace camcore
                 item["neckLength"] = tool.neckLength;
                 item["shankDiameter"] = tool.shankDiameter;
             }
+            item["toolMaterial"] = ToolMaterialText(tool.toolMaterial);
+            if (tool.chipLoad > 0.0)
+                item["chipLoad"] = tool.chipLoad;
 
             json feeds = json::array();
             for (const ToolFeeds& row : tool.feeds)
@@ -195,6 +198,14 @@ namespace camcore
                 tool.shankDiameter = item.at("shankDiameter").get<double>();
             }
 
+            // Older tools are carbide, with no chip load.
+            const auto toolMaterial = item.find("toolMaterial");
+            if (toolMaterial != item.end() && !ParseToolMaterial(toolMaterial->get<std::string>(), tool.toolMaterial))
+                throw std::runtime_error("unknown tool material '" + toolMaterial->get<std::string>() + "'");
+            const auto chipLoad = item.find("chipLoad");
+            if (chipLoad != item.end())
+                tool.chipLoad = chipLoad->get<double>();
+
             // Version 1 libraries have no feeds.
             const auto feeds = item.find("feeds");
             if (feeds != item.end())
@@ -209,6 +220,52 @@ namespace camcore
             }
             return tool;
         }
+
+    const std::vector<ToolMaterial>& ToolMaterials()
+    {
+        static const std::vector<ToolMaterial> materials =
+        {
+            ToolMaterial::Hss, ToolMaterial::CobaltHss, ToolMaterial::Carbide, ToolMaterial::CoatedCarbide
+        };
+        return materials;
+    }
+
+    std::string ToolMaterialTitle(ToolMaterial material)
+    {
+        switch (material)
+        {
+        case ToolMaterial::Hss: return "HSS";
+        case ToolMaterial::CobaltHss: return "Cobalt HSS";
+        case ToolMaterial::Carbide: return "Carbide";
+        case ToolMaterial::CoatedCarbide: return "Coated carbide";
+        }
+        return "Carbide";
+    }
+
+    std::string ToolMaterialText(ToolMaterial material)
+    {
+        switch (material)
+        {
+        case ToolMaterial::Hss: return "hss";
+        case ToolMaterial::CobaltHss: return "cobalt";
+        case ToolMaterial::Carbide: return "carbide";
+        case ToolMaterial::CoatedCarbide: return "coatedCarbide";
+        }
+        return "carbide";
+    }
+
+    bool ParseToolMaterial(const std::string& text, ToolMaterial& material)
+    {
+        for (ToolMaterial candidate : ToolMaterials())
+        {
+            if (text == ToolMaterialText(candidate))
+            {
+                material = candidate;
+                return true;
+            }
+        }
+        return false;
+    }
 
     std::string ToolTypeTitle(ToolType type)
     {
@@ -269,6 +326,8 @@ namespace camcore
             problems.push_back("The flute length must be more than 0.");
         if (!(tool.overallLength >= tool.fluteLength))
             problems.push_back("The overall length can't be less than the flute length.");
+        if (!(tool.chipLoad >= 0.0))
+            problems.push_back("The chip load can't be negative.");
         if (tool.reducedNeck)
         {
             if (!(tool.neckLength >= tool.fluteLength && tool.neckLength <= tool.overallLength))
@@ -343,6 +402,7 @@ namespace camcore
         result.cornerRadius *= kMillimetresPerInch;
         result.tipDiameter *= kMillimetresPerInch;
         result.pitch *= kMillimetresPerInch;
+        result.chipLoad *= kMillimetresPerInch;
         return result;
     }
 

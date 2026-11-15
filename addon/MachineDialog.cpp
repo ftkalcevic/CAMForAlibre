@@ -83,7 +83,7 @@ namespace
     };
     const int kToolsTabControls[] = { IDC_LIB_LIST, IDC_LIB_ADD, IDC_LIB_EDIT, IDC_LIB_COPY, IDC_LIB_DELETE,
                                       IDC_LIB_IMPORT, IDC_LIB_EXPORT };
-    const int kMaterialsTabControls[] = { IDC_MATERIAL_LIST, IDC_MATERIAL_ADD, IDC_MATERIAL_RENAME,
+    const int kMaterialsTabControls[] = { IDC_MATERIAL_LIST, IDC_MATERIAL_ADD, IDC_MATERIAL_EDIT, IDC_MATERIAL_RENAME,
                                           IDC_MATERIAL_DELETE };
 }
 
@@ -188,10 +188,11 @@ BEGIN_MESSAGE_MAP(CMachineDlg, CDialog)
     ON_NOTIFY(NM_DBLCLK, IDC_LIB_LIST, &CMachineDlg::OnToolDoubleClick)
     ON_NOTIFY(LVN_ITEMCHANGED, IDC_LIB_LIST, &CMachineDlg::OnToolSelectionChanged)
     ON_BN_CLICKED(IDC_MATERIAL_ADD, &CMachineDlg::OnAddMaterial)
+    ON_BN_CLICKED(IDC_MATERIAL_EDIT, &CMachineDlg::OnEditMaterial)
     ON_BN_CLICKED(IDC_MATERIAL_RENAME, &CMachineDlg::OnRenameMaterial)
     ON_BN_CLICKED(IDC_MATERIAL_DELETE, &CMachineDlg::OnDeleteMaterial)
     ON_LBN_SELCHANGE(IDC_MATERIAL_LIST, &CMachineDlg::OnMaterialSelectionChanged)
-    ON_LBN_DBLCLK(IDC_MATERIAL_LIST, &CMachineDlg::OnRenameMaterial)
+    ON_LBN_DBLCLK(IDC_MATERIAL_LIST, &CMachineDlg::OnEditMaterial)
 END_MESSAGE_MAP()
 
 void CMachineDlg::OnHelpButton()
@@ -357,6 +358,7 @@ void CMachineDlg::UpdateButtons()
     GetDlgItem(IDC_LIB_COPY)->EnableWindow(tool);
     GetDlgItem(IDC_LIB_DELETE)->EnableWindow(tool);
     GetDlgItem(IDC_MATERIAL_ADD)->EnableWindow(m_materialsWritable ? TRUE : FALSE);
+    GetDlgItem(IDC_MATERIAL_EDIT)->EnableWindow(material);
     GetDlgItem(IDC_MATERIAL_RENAME)->EnableWindow(material);
     GetDlgItem(IDC_MATERIAL_DELETE)->EnableWindow(material);
 }
@@ -609,7 +611,7 @@ void CMachineDlg::OnToolSelectionChanged(NMHDR* /*pNotify*/, LRESULT* pResult)
 
 void CMachineDlg::AddTool(const Tool& tool)
 {
-    CToolEditDlg dialog(tool, m_machine.tools, m_materials, this);
+    CToolEditDlg dialog(tool, m_machine.tools, m_materials, m_machine.maxSpindleRpm, this);
     if (dialog.DoModal() != IDOK)
         return;
 
@@ -648,7 +650,7 @@ void CMachineDlg::OnEditTool()
         return;
 
     Tool& tool = m_machine.tools.tools[static_cast<size_t>(index)];
-    CToolEditDlg dialog(tool, m_machine.tools, m_materials, this);
+    CToolEditDlg dialog(tool, m_machine.tools, m_materials, m_machine.maxSpindleRpm, this);
     if (dialog.DoModal() != IDOK)
         return;
 
@@ -817,6 +819,22 @@ void CMachineDlg::OnAddMaterial()
     m_materials.materials.push_back(material);
     if (!SaveMaterialList())
         m_materials.materials.pop_back();
+    FillMaterials();
+}
+
+void CMachineDlg::OnEditMaterial()
+{
+    const int index = m_materialList.GetCurSel();
+    if (index < 0 || !m_materialsWritable)
+        return;
+    Material& material = m_materials.materials[static_cast<size_t>(index)];
+    CMaterialDlg dialog(material, m_materials, this);
+    if (dialog.DoModal() != IDOK)
+        return;
+    const Material before = material;
+    material = dialog.GetMaterial();
+    if (!SaveMaterialList())
+        material = before;
     FillMaterials();
 }
 

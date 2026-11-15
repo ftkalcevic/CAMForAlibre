@@ -8,6 +8,7 @@
 #include "Help.h"
 #include "ModelReader.h"
 #include "OperationDialog.h"
+#include "FeedsCalculatorDialog.h"
 #include "Log.h"
 
 #ifdef _DEBUG
@@ -119,6 +120,156 @@ void CChooseMaterialDlg::OnHelpButton()
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// CMaterialDlg
+
+BEGIN_MESSAGE_MAP(CMaterialDlg, CDialog)
+    ON_BN_CLICKED(IDC_HELP_BUTTON, &CMaterialDlg::OnHelpButton)
+    ON_BN_CLICKED(IDC_MATDLG_APPLY, &CMaterialDlg::OnApplyTypical)
+    ON_CONTROL_RANGE(BN_CLICKED, IDC_MATDLG_SET_0, IDC_MATDLG_SET_3, &CMaterialDlg::OnSetChanged)
+END_MESSAGE_MAP()
+
+CMaterialDlg::CMaterialDlg(const Material& material, const MaterialList& all, CWnd* pParent)
+    : CDialog(IDD_MATERIAL, pParent)
+    , m_material(material)
+    , m_all(all)
+{
+}
+
+void CMaterialDlg::OnHelpButton()
+{
+    ShowHelp(L"material");
+}
+
+BOOL CMaterialDlg::OnInitDialog()
+{
+    CDialog::OnInitDialog();
+    SetDlgItemText(IDC_MATDLG_NAME, FromUtf8(m_material.name).c_str());
+    for (ToolMaterial toolMaterial : ToolMaterials())
+    {
+        const int i = static_cast<int>(toolMaterial);
+        const MaterialCutting& cutting = m_material.CuttingFor(toolMaterial);
+        SetDlgItemText(IDC_MATDLG_SET_0 + i, FromUtf8(ToolMaterialTitle(toolMaterial)).c_str());
+        CheckDlgButton(IDC_MATDLG_SET_0 + i, cutting.set ? BST_CHECKED : BST_UNCHECKED);
+        if (cutting.set)
+        {
+            SetDlgItemText(IDC_MATDLG_SPEED_0 + i, FormatNumber(cutting.surfaceSpeed).c_str());
+            SetDlgItemText(IDC_MATDLG_FACTOR_0 + i, FormatNumber(cutting.chipLoadFactor).c_str());
+        }
+    }
+
+    m_typical.SubclassDlgItem(IDC_MATDLG_TYPICAL, this);
+    for (const TypicalMaterial& typical : TypicalMaterials())
+        m_typical.AddString(FromUtf8(typical.name).c_str());     // kept in order: no CBS_SORT
+    m_typical.SetCurSel(0);
+    UpdateFields();
+    return TRUE;
+}
+
+void CMaterialDlg::UpdateFields()
+{
+    for (int i = 0; i < kToolMaterialCount; ++i)
+    {
+        const BOOL set = IsDlgButtonChecked(IDC_MATDLG_SET_0 + i) == BST_CHECKED ? TRUE : FALSE;
+        GetDlgItem(IDC_MATDLG_SPEED_0 + i)->EnableWindow(set);
+        GetDlgItem(IDC_MATDLG_FACTOR_0 + i)->EnableWindow(set);
+    }
+}
+
+void CMaterialDlg::OnSetChanged(UINT id)
+{
+    // Ticked with nothing filled in: the factor starts at 100%.
+    const int i = static_cast<int>(id) - IDC_MATDLG_SET_0;
+    if (IsDlgButtonChecked(id) == BST_CHECKED)
+    {
+        CString text;
+        GetDlgItemText(IDC_MATDLG_FACTOR_0 + i, text);
+        text.Trim();
+        if (text.IsEmpty())
+            SetDlgItemText(IDC_MATDLG_FACTOR_0 + i, L"100");
+    }
+    UpdateFields();
+}
+
+void CMaterialDlg::OnApplyTypical()
+{
+    const int index = m_typical.GetCurSel();
+    if (index < 0 || static_cast<size_t>(index) >= TypicalMaterials().size())
+        return;
+    const TypicalMaterial& typical = TypicalMaterials()[static_cast<size_t>(index)];
+    for (int i = 0; i < kToolMaterialCount; ++i)
+    {
+        CheckDlgButton(IDC_MATDLG_SET_0 + i, BST_CHECKED);
+        SetDlgItemText(IDC_MATDLG_SPEED_0 + i, FormatNumber(typical.surfaceSpeed[i]).c_str());
+        SetDlgItemText(IDC_MATDLG_FACTOR_0 + i, FormatNumber(typical.chipLoadFactor).c_str());
+    }
+    UpdateFields();
+}
+
+void CMaterialDlg::OnOK()
+{
+    Material material = m_material;
+    std::wstring problems;
+
+    CString name;
+    GetDlgItemText(IDC_MATDLG_NAME, name);
+    name.Trim();
+    material.name = ToUtf8(static_cast<LPCWSTR>(name));
+
+    for (ToolMaterial toolMaterial : ToolMaterials())
+    {
+        const int i = static_cast<int>(toolMaterial);
+        MaterialCutting& cutting = material.CuttingFor(toolMaterial);
+        cutting.set = IsDlgButtonChecked(IDC_MATDLG_SET_0 + i) == BST_CHECKED;
+        if (!cutting.set)
+            continue;
+        const std::wstring title = FromUtf8(ToolMaterialTitle(toolMaterial));
+        const struct { int id; double* pValue; const wchar_t* what; } boxes[] = {
+            { IDC_MATDLG_SPEED_0 + i, &cutting.surfaceSpeed, L" surface speed" },
+            { IDC_MATDLG_FACTOR_0 + i, &cutting.chipLoadFactor, L" chip load factor" },
+        };
+        for (const auto& box : boxes)
+        {
+            CString text;
+            GetDlgItemText(box.id, text);
+            text.Trim();
+            wchar_t* pEnd = nullptr;
+            const double value = wcstod(text, &pEnd);
+            if (text.IsEmpty() || pEnd == nullptr || *pEnd != L'\0')
+                AppendProblem(problems, L"The " + title + box.what + L" must be a number.");
+            else
+                *box.pValue = value;
+        }
+    }
+
+    // The whole list's rules: a name, not another's, and sensible values.
+    if (problems.empty())
+    {
+        MaterialList list = m_all;
+        bool found = false;
+        for (Material& other : list.materials)
+        {
+            if (other.id == material.id)
+            {
+                other = material;
+                found = true;
+            }
+        }
+        if (!found)
+            list.materials.push_back(material);
+        for (const std::string& problem : ValidateMaterials(list))
+            AppendProblem(problems, FromUtf8(problem));
+    }
+
+    if (!problems.empty())
+    {
+        MessageBox(problems.c_str(), L"CAMForAlibre", MB_OK | MB_ICONWARNING);
+        return;
+    }
+    m_material = material;
+    CDialog::OnOK();
+}
+
+/////////////////////////////////////////////////////////////////////////////
 // CToolFeedsDlg
 
 BEGIN_MESSAGE_MAP(CToolFeedsDlg, CDialog)
@@ -131,11 +282,15 @@ void CToolFeedsDlg::OnHelpButton()
 }
 
 CToolFeedsDlg::CToolFeedsDlg(const ToolFeeds& row, const MaterialList& materials,
-                             const std::vector<std::string>& usedMaterialIds, CWnd* pParent)
+                             const std::vector<std::string>& usedMaterialIds, const Tool& tool,
+                             const std::wstring& toolProblem, double maxSpindleRpm, CWnd* pParent)
     : CDialog(IDD_TOOL_FEEDS, pParent)
     , m_row(row)
     , m_materials(materials)
     , m_used(usedMaterialIds)
+    , m_tool(tool)
+    , m_toolProblem(toolProblem)
+    , m_maxSpindleRpm(maxSpindleRpm)
 {
 }
 
@@ -167,6 +322,28 @@ BOOL CToolFeedsDlg::OnInitDialog()
 
     // The Feeds & Speeds tab's own fields and checks, over the placeholder.
     m_page = std::make_unique<CFeedsPage>(nullptr);
+
+    // The calculator works from the tool as typed and the row's material.
+    m_page->SetCalculatorSource([this](FeedsCalcSource& source, std::wstring& problem) {
+        if (!m_toolProblem.empty())
+        {
+            problem = L"Fix the tool's fields first:\n" + m_toolProblem;
+            return false;
+        }
+        const int index = m_material.GetCurSel();
+        if (index < 0 || static_cast<size_t>(index) >= m_offered.size())
+        {
+            problem = L"Choose a material first.";
+            return false;
+        }
+        source.tool = m_tool;
+        source.materials = m_materials;
+        source.materialId = m_offered[static_cast<size_t>(index)];
+        source.materialFixed = true;
+        source.maxSpindleRpm = m_maxSpindleRpm;
+        return true;
+    });
+
     if (m_page->CreateInTab(this))
     {
         CRect area;
@@ -228,6 +405,7 @@ void CToolDrawingCtrl::DrawItem(LPDRAWITEMSTRUCT pDraw)
 BEGIN_MESSAGE_MAP(CToolEditDlg, CDialog)
     ON_BN_CLICKED(IDC_HELP_BUTTON, &CToolEditDlg::OnHelpButton)
     ON_CBN_SELCHANGE(IDC_TOOL_TYPE, &CToolEditDlg::OnTypeChanged)
+    ON_CBN_SELCHANGE(IDC_TOOL_UNIT, &CToolEditDlg::OnUnitChanged)
     ON_BN_CLICKED(IDC_TOOL_REDUCED_NECK, &CToolEditDlg::OnReducedNeck)
     ON_BN_CLICKED(IDC_TOOL_FEEDS_ADD, &CToolEditDlg::OnAddFeeds)
     ON_BN_CLICKED(IDC_TOOL_FEEDS_EDIT, &CToolEditDlg::OnEditFeeds)
@@ -242,11 +420,12 @@ void CToolEditDlg::OnHelpButton()
 }
 
 CToolEditDlg::CToolEditDlg(const Tool& tool, const ToolLibrary& otherTools, const MaterialList& materials,
-                           CWnd* pParent)
+                           double maxSpindleRpm, CWnd* pParent)
     : CDialog(IDD_TOOL_EDIT, pParent)
     , m_tool(tool)
     , m_otherTools(otherTools)
     , m_materials(materials)
+    , m_maxSpindleRpm(maxSpindleRpm)
     , m_feeds(tool.feeds)
 {
 }
@@ -273,6 +452,13 @@ BOOL CToolEditDlg::OnInitDialog()
     m_unit.AddString(L"Millimetres");
     m_unit.AddString(L"Inches");
     m_unit.SetCurSel(m_tool.unit == ToolUnit::Inches ? 1 : 0);
+
+    m_toolMaterial.SubclassDlgItem(IDC_TOOL_MATERIAL, this);
+    for (ToolMaterial material : ToolMaterials())
+        m_toolMaterial.AddString(FromUtf8(ToolMaterialTitle(material)).c_str());    // in enum order: no CBS_SORT
+    m_toolMaterial.SetCurSel(static_cast<int>(m_tool.toolMaterial));
+    if (m_tool.chipLoad > 0.0)
+        SetNumber(IDC_TOOL_CHIP_LOAD, m_tool.chipLoad);
 
     SetNumber(IDC_TOOL_NUMBER, m_tool.number);
     SetDlgItemText(IDC_TOOL_NAME, FromUtf8(m_tool.name).c_str());
@@ -346,7 +532,10 @@ void CToolEditDlg::OnAddFeeds()
                    MB_OK | MB_ICONINFORMATION);
         return;
     }
-    CToolFeedsDlg dialog(ToolFeeds(), m_materials, UsedMaterials(-1), this);
+    Tool tool;
+    std::wstring problems;
+    ReadTool(tool, problems);
+    CToolFeedsDlg dialog(ToolFeeds(), m_materials, UsedMaterials(-1), tool, problems, m_maxSpindleRpm, this);
     if (dialog.DoModal() != IDOK)
         return;
     m_feeds.push_back(dialog.GetRow());
@@ -358,7 +547,11 @@ void CToolEditDlg::OnEditFeeds()
     const int row = SelectedFeedsRow();
     if (row < 0)
         return;
-    CToolFeedsDlg dialog(m_feeds[static_cast<size_t>(row)], m_materials, UsedMaterials(row), this);
+    Tool tool;
+    std::wstring problems;
+    ReadTool(tool, problems);
+    CToolFeedsDlg dialog(m_feeds[static_cast<size_t>(row)], m_materials, UsedMaterials(row), tool, problems,
+                         m_maxSpindleRpm, this);
     if (dialog.DoModal() != IDOK)
         return;
     m_feeds[static_cast<size_t>(row)] = dialog.GetRow();
@@ -412,6 +605,17 @@ void CToolEditDlg::UpdateFieldsForType()
     GetDlgItem(IDC_TOOL_SHANK_DIAMETER)->EnableWindow(neck);
 
     m_drawing.SetTool(SelectedType(), neck != FALSE);
+
+    // Drills' chip load is per revolution.
+    const bool inches = m_unit.GetCurSel() == 1;
+    const bool drill = SelectedType() == ToolType::Drill;
+    SetDlgItemText(IDC_TOOL_CHIP_LOAD_UNIT, drill ? (inches ? L"in/rev" : L"mm/rev")
+                                                  : (inches ? L"in/tooth" : L"mm/tooth"));
+}
+
+void CToolEditDlg::OnUnitChanged()
+{
+    UpdateFieldsForType();
 }
 
 void CToolEditDlg::OnReducedNeck()
@@ -481,8 +685,20 @@ bool CToolEditDlg::ReadInteger(int id, const wchar_t* label, int& value, std::ws
 
 void CToolEditDlg::OnOK()
 {
-    Tool tool = m_tool;
+    Tool tool;
     std::wstring problems;
+    if (!ReadTool(tool, problems))
+    {
+        MessageBox(problems.c_str(), L"CAMForAlibre", MB_OK | MB_ICONWARNING);
+        return;
+    }
+    m_tool = tool;
+    CDialog::OnOK();
+}
+
+bool CToolEditDlg::ReadTool(Tool& result, std::wstring& problems)
+{
+    Tool tool = m_tool;
 
     tool.type = SelectedType();
     tool.unit = (m_unit.GetCurSel() == 1) ? ToolUnit::Inches : ToolUnit::Millimetres;
@@ -522,6 +738,15 @@ void CToolEditDlg::OnOK()
         ReadNumber(IDC_TOOL_NECK_LENGTH, L"The neck length", tool.neckLength, problems);
         ReadNumber(IDC_TOOL_SHANK_DIAMETER, L"The shank diameter", tool.shankDiameter, problems);
     }
+    const int toolMaterial = m_toolMaterial.GetCurSel();
+    if (toolMaterial >= 0 && toolMaterial < kToolMaterialCount)
+        tool.toolMaterial = static_cast<ToolMaterial>(toolMaterial);
+    CString chipLoad;
+    GetDlgItemText(IDC_TOOL_CHIP_LOAD, chipLoad);
+    chipLoad.Trim();
+    tool.chipLoad = 0.0;    // blank is none
+    if (!chipLoad.IsEmpty())
+        ReadNumber(IDC_TOOL_CHIP_LOAD, L"The chip load", tool.chipLoad, problems);
 
     // Only check the values themselves once they've all been read as numbers.
     if (problems.empty())
@@ -537,12 +762,6 @@ void CToolEditDlg::OnOK()
         }
     }
 
-    if (!problems.empty())
-    {
-        MessageBox(problems.c_str(), L"CAMForAlibre", MB_OK | MB_ICONWARNING);
-        return;
-    }
-
-    m_tool = tool;
-    CDialog::OnOK();
+    result = tool;
+    return problems.empty();
 }

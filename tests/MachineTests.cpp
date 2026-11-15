@@ -390,6 +390,66 @@ TEST_CASE("materials save, load and are checked")
     CHECK(LoadMaterials(path).status == LoadStatus::NewerVersion);
 }
 
+TEST_CASE("materials keep their cutting values per tool material, and version 1 has none")
+{
+    Folder folder;
+    const fs::path path = folder.path / "materials.json";
+    MaterialList list;
+    Material alu{ "alu", "Aluminium" };
+    alu.CuttingFor(ToolMaterial::Carbide) = { true, 300.0, 100.0 };
+    alu.CuttingFor(ToolMaterial::Hss) = { true, 90.0, 80.0 };
+    list.materials.push_back(alu);
+    REQUIRE(SaveMaterials(list, path).ok);
+
+    const MaterialsLoadResult loaded = LoadMaterials(path);
+    REQUIRE(loaded.status == LoadStatus::Ok);
+    const Material& read = loaded.list.materials[0];
+    CHECK(read.CuttingFor(ToolMaterial::Carbide) == alu.CuttingFor(ToolMaterial::Carbide));
+    CHECK(read.CuttingFor(ToolMaterial::Hss) == alu.CuttingFor(ToolMaterial::Hss));
+    CHECK_FALSE(read.CuttingFor(ToolMaterial::CobaltHss).set);
+    CHECK_FALSE(read.CuttingFor(ToolMaterial::CoatedCarbide).set);
+
+    list.materials[0].CuttingFor(ToolMaterial::CobaltHss) = { true, 0.0, 100.0 };
+    CHECK_FALSE(ValidateMaterials(list).empty());
+    list.materials[0].CuttingFor(ToolMaterial::CobaltHss) = { true, 100.0, 0.5 };
+    CHECK_FALSE(ValidateMaterials(list).empty());
+
+    Write(path, R"({"format":"AlibreCAM materials","formatVersion":1,"materials":[{"id":"a","name":"Oak"}]})");
+    const MaterialsLoadResult old = LoadMaterials(path);
+    REQUIRE(old.status == LoadStatus::Ok);
+    for (ToolMaterial toolMaterial : ToolMaterials())
+        CHECK_FALSE(old.list.materials[0].CuttingFor(toolMaterial).set);
+}
+
+TEST_CASE("a tool keeps its tool material and chip load, and older tools are carbide with none")
+{
+    Folder folder;
+    const fs::path path = folder.path / "tools.json";
+    ToolLibrary library;
+    Tool tool = Mill("a", 1);
+    tool.toolMaterial = ToolMaterial::CobaltHss;
+    tool.chipLoad = 0.03;
+    library.tools.push_back(tool);
+    REQUIRE(SaveToolLibrary(library, path).ok);
+    const ToolLibraryLoadResult loaded = LoadToolLibrary(path);
+    REQUIRE(loaded.status == LoadStatus::Ok);
+    CHECK(loaded.library.tools[0].toolMaterial == ToolMaterial::CobaltHss);
+    CHECK(loaded.library.tools[0].chipLoad == doctest::Approx(0.03));
+
+    Write(path, R"({"format":"AlibreCAM tool library","formatVersion":3,"tools":[{"id":"a","number":1,"name":"Mill",)"
+                R"("type":"flatEndMill","unit":"mm","diameter":6,"fluteLength":20,"overallLength":50,"fluteCount":2}]})");
+    const ToolLibraryLoadResult old = LoadToolLibrary(path);
+    REQUIRE(old.status == LoadStatus::Ok);
+    CHECK(old.library.tools[0].toolMaterial == ToolMaterial::Carbide);
+    CHECK(old.library.tools[0].chipLoad == 0.0);
+
+    tool.unit = ToolUnit::Inches;
+    tool.chipLoad = 0.001;
+    CHECK(ToolInMillimetres(tool).chipLoad == doctest::Approx(0.0254));
+    tool.chipLoad = -1.0;
+    CHECK_FALSE(ValidateTool(tool).empty());
+}
+
 TEST_CASE("the settings remember the last machine")
 {
     Folder folder;
