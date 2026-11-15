@@ -20,7 +20,6 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
 - More stock alignment options
 - 4th axis: rotate and machine, etc.
 - Lathe support: machine type, rod stock, turning operations, tools, post and simulation (staged plan saved in `docs\LatheSupport.md`)
-- Tri-dexel simulation mode: smooth, exact stock as an option beside voxels (built and tested; plan in `docs\TriDexelSimulation.md`)
 - Exact solid (B-rep) in-process stock, probably through Alibre's own kernel (exploring; options in `docs\ExactSolidSimulation.md`)
 - Thread milling: external threads (internal threads built, and simulated with the tool's teeth; see the help's Thread Milling tab); perhaps a first tooth height on the tool, if the lowest crest isn't at the tip
 - 🔴 Show some summary information under each op, eg tool
@@ -29,7 +28,6 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
 - More posts (GRBL, Mach3/4, UCCNC, Masso)
 - Undo in the CAM tree
 - Inch display units
-- Fixtures (clamps, vices, screws): built as Fixtures steps and tested (see `docs\ClampsAndKeepOuts.md`)
 - Tool holder from a model: pick an Alibre part (or file) as the holder's shape, used in the simulation in place of the plain cylinder
 - Pictures on the dialog tabs showing what each parameter means, where it helps
 - Performance

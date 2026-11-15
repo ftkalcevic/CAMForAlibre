@@ -12643,6 +12643,65 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > All tests passed
 
+### 🤖 Claude
+
+> `CLAUDE.md` now records the proportional tool drawing and the thread mill teeth drawing as tested by you. Nothing is committed.
+
+### 🧑 Frank · 19:08
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> What's left to do?\
+
+### 🤖 Claude
+
+> This is what's left in [TODO.md](TODO.md).
+>
+> **High priority**
+> - **V-carve**
+> - **A summary under each operation in the tree**, for example its tool
+>
+> **Operations**
+> - 4th axis rotate, or just use Set Origin (still undecided)
+> - 3D:
+>   - Project finishing
+>   - 3D offset pocketing and profiling
+>   - Pencil tracing (the idea is in `docs\PencilMachining.md`)
+>   - Valley remachining
+>   - Plateau machining
+>   - Parallel hill machining
+>   - Radial machining
+>   - Spiral machining
+>   - Curve machining
+>   - Machining between 2 curves
+> - Thread milling: external threads, and perhaps a "first tooth height" field on the tool
+>
+> **Partly done**
+> - **Rest machining:** built for Waterline Roughing and Pocketing. Still to do are Facing and pencil passes for finishing.
+> - **Exact solid (B-rep) stock:** still exploring. The options are in `docs\ExactSolidSimulation.md`.
+>
+> **Other features**
+> - More ways to align the stock
+> - 4th axis: rotate and machine
+> - Lathe support (a staged plan is in `docs\LatheSupport.md`)
+> - New operations taking their speeds and feeds from the last one, or copy and paste
+> - More posts: GRBL, Mach3/4, UCCNC, Masso
+> - Undo in the CAM tree
+> - Inch display units
+> - A tool holder modelled from an Alibre part
+> - Pictures on the dialog tabs showing what each parameter means
+>
+> **Performance**
+> - A spline face that can't be read as NURBS still asks Alibre for one point at a time.
+>
+> **Already done but still listed:** tri-dexel simulation and fixtures are built and tested. I can remove those two lines if you'd like.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:10
+
+> Remove tri-dexel and fixture from the list
+
 ---
 
 # Side conversation
