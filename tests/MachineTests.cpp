@@ -4,7 +4,10 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+
+#include <nlohmann/json.hpp>
 
 #include "FileIO.h"
 #include "Machine.h"
@@ -268,11 +271,7 @@ TEST_CASE("every tool type saves and loads with its own fields")
         tool.threadAngle = 55;
         tool.pointAngle = 135;
         if (number == 2)
-        {
-            tool.reducedNeck = true;
-            tool.neckLength = tool.overallLength;
             tool.shankDiameter = 12;
-        }
         library.tools.push_back(tool);
         ++number;
     }
@@ -289,12 +288,9 @@ TEST_CASE("every tool type saves and loads with its own fields")
         const Tool& back = loaded.library.tools[i];
         const ToolFields fields = FieldsOf(back.type);
         CHECK(back.type == library.tools[i].type);
-        CHECK(back.reducedNeck == (i == 1));
+        CHECK(back.HasShank() == (i == 1));
         if (i == 1)
-        {
-            CHECK(back.neckLength == library.tools[i].neckLength);
             CHECK(back.shankDiameter == 12);
-        }
         if (fields.cornerRadius)
             CHECK(back.cornerRadius == 2);
         if (fields.includedAngle)
@@ -312,6 +308,28 @@ TEST_CASE("every tool type saves and loads with its own fields")
             CHECK(back.pointAngle == 135);
     }
     CHECK(ToolTypeTitle(ToolType::VMill) == "V-mill");
+
+    // A tool saved with a reduced neck (before shanks replaced it) loads with its
+    // shank diameter; an unticked one with none.
+    std::string text;
+    {
+        std::ifstream file(path, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    }
+    nlohmann::json root = nlohmann::json::parse(text);
+    nlohmann::json& old = root["tools"][1];
+    old["reducedNeck"] = true;
+    old["neckLength"] = 20.0;
+    nlohmann::json& unticked = root["tools"][2];
+    unticked["reducedNeck"] = false;
+    unticked["neckLength"] = 20.0;
+    unticked["shankDiameter"] = 9.0;
+    const fs::path oldPath = folder.path / "old-tools.json";
+    Write(oldPath, root.dump(2));
+    const ToolLibraryLoadResult oldLoaded = LoadToolLibrary(oldPath);
+    REQUIRE(oldLoaded.status == LoadStatus::Ok);
+    CHECK(oldLoaded.library.tools[1].shankDiameter == 12);
+    CHECK_FALSE(oldLoaded.library.tools[2].HasShank());
 }
 
 TEST_CASE("each tool type's own fields are checked")

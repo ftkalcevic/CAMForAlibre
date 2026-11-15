@@ -95,6 +95,7 @@
   <a href="#tab-engraving">Engraving</a>
   <a href="#tab-pocketing">Pocketing</a>
   <a href="#tab-hole-pocketing">Hole Pocketing</a>
+  <a href="#tab-thread-milling">Thread Milling</a>
   <a href="#tab-plunge-roughing">Plunge Roughing</a>
   <a href="#tab-waterline-roughing">Waterline Roughing</a>
   <a href="#tab-waterline-finishing">Waterline Finishing</a>
@@ -146,7 +147,7 @@
 </dl>
 
 <h3 id="cam-tree">Tree</h3>
-<p>The tree has a fixed <strong>Setup</strong> at the top and the <strong>Operations</strong> sequence below it. Operations run from top to bottom. Drag a step to reorder it. Each node has an image: a gear for Setup, a machine, tools, a block of material and a wireframe stock; axes for a Set Origin, a vice for a Fixtures step and a folder for a folder; each tool shows its type (flat end mill, ball mill, corner radius mill, V-mill, chamfer mill, taper mill, thread mill or drill); and each kind of operation has its own. The images grow with the CAM View Size setting. A red exclamation mark over a node's image means it has a problem: an operation with no toolpath (never generated, cleared, changed since, or Generate failed), a Set Origin that isn't complete, a Fixtures step whose parts can't be found or read, an operation whose last Generate came too close to a fixture, the machine when its file can't be found or read, the material when it's no longer in the list, or the stock when it can't be read. Folders are never marked, and suppressed operations aren't, as they aren't generated on purpose.</p>
+<p>The tree has a fixed <strong>Setup</strong> at the top and the <strong>Operations</strong> sequence below it. Operations run from top to bottom. Drag a step to reorder it. Each node has an image: a gear for Setup, a machine, tools, a block of material and a wireframe stock; axes for a Set Origin, a vice for a Fixtures step and a folder for a folder; each tool shows its type (flat end mill, ball mill, corner radius mill, V-mill, chamfer mill, taper mill, thread mill or drill); and each kind of operation has its own. The images grow with the CAM View Size setting. A red exclamation mark over a node's image means it has a problem: an operation with no toolpath (never generated, cleared, changed since, or Generate failed), a Set Origin that isn't complete, a Fixtures step whose parts can't be found or read, an operation whose last Generate came too close to a fixture (or, for Thread Milling, found a hole not drilled open or a tool whose teeth aren't the thread's pitch), the machine when its file can't be found or read, the material when it's no longer in the list, or the stock when it can't be read. Folders are never marked, and suppressed operations aren't, as they aren't generated on purpose.</p>
 <dl>
   <dt>Setup ▸ Machine</dt>
   <dd>The machine the job is cut on, shown as <em>Machine - name</em>. Double-click it, or right-click and Edit Machine, to open the <a href="#machine">Machine</a> dialog.</dd>
@@ -184,6 +185,8 @@
   <dd>Adds a Drill operation to a folder: drills holes at picked circles, hole faces and points.</dd>
   <dt>Add Holes ▸ Hole Pocketing</dt>
   <dd>Adds a Hole Pocketing operation: cuts round holes with an end mill on a helix and spiral.</dd>
+  <dt>Add Holes ▸ Thread Milling</dt>
+  <dd>Adds a Thread Milling operation: cuts internal threads in drilled holes with a thread mill on a helix. See the <a href="#tab-thread-milling">Thread Milling tab</a>.</dd>
   <dt>Add 2 1/2 Axis ▸ Facing</dt>
   <dd>Adds a Facing operation: cuts an area flat in levels.</dd>
   <dt>Add 2 1/2 Axis ▸ Profiling</dt>
@@ -236,7 +239,7 @@
 
 <section id="simulation">
 <h2>Simulation</h2>
-<p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's direction, so tilted origins cut along their tool axis. The shank (the tool above its flutes, up to its overall length; with a Reduced neck, the neck at the cutting diameter up to the neck length and the shank at the shank diameter above it) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. The tool (its own shape), neck, shank and holder are also checked against the parts of each operation's <a href="#fixtures">Fixtures</a> step, at their true size (without the clearance), wherever they are, even outside the stock. Nothing is checked against the parts themselves. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
+<p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's direction, so tilted origins cut along their tool axis. The shank (the tool above its flutes, up to its overall length; at its shank diameter with a shank of its own, when only the flutes cut) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. A thread mill cuts with its teeth (see the <a href="#tab-thread-milling">Thread Milling tab</a>), but is checked as a cylinder of its diameter. The tool (its own shape), shank and holder are also checked against the parts of each operation's <a href="#fixtures">Fixtures</a> step, at their true size (without the clearance), wherever they are, even outside the stock. Nothing is checked against the parts themselves. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
 <dl>
   <dt>Position</dt>
   <dd>The operation being cut, the move of all the moves (arcs are split into short straight moves), and the machining time so far of the whole: from the feeds, the machine's Rapid rate and dwells, with no allowance for acceleration.</dd>
@@ -267,15 +270,14 @@
   <dt>Resolution</dt>
   <dd>For voxels, only while Auto divide voxels is off: from Fine (small cells: sharper, slower, more memory) to Coarse (large cells: blockier, faster). For Tri-dexel, always: the spacing of the lines, from Fine (closer: finer detail, slower) to Coarse; the finest has at most 4 million lines in each direction. The choices depend on the stock's size, with Medium in the middle as the start; each model has its own stops. Letting go at a new stop starts the stock again and cuts back to the same move. Remembered until Alibre closes.</dd>
   <dt>Ignore collisions</dt>
-  <dd>Off at first. Ticked, none of the warnings below is checked: rapids that cut stock, the shank, neck or holder touching it, and fixtures, don't stop the simulation, which also runs a little faster. Ticking it clears a warning that's showing. It works from the next move cut; moves already cut aren't checked again. Remembered until Alibre closes.</dd>
+  <dd>Off at first. Ticked, none of the warnings below is checked: rapids that cut stock, the shank or holder touching it, and fixtures, don't stop the simulation, which also runs a little faster. Ticking it clears a warning that's showing. It works from the next move cut; moves already cut aren't checked again. Remembered until Alibre closes.</dd>
   <dt>Warning</dt>
   <dd>Unless Ignore collisions is ticked, the simulation stops after a move that does one of these, which is drawn in thick red, and the warning names the operation and its toolpath move:
     <ul>
       <li><strong>Rapid into stock</strong>: a rapid move cut stock.</li>
-      <li><strong>The tool's shank hits the stock</strong>: the tool above its flute length (or, with a Reduced neck, the wide shank above the neck length) touched stock. A tool with no flute length, or flutes as long as the tool, isn't checked.</li>
-      <li><strong>The tool's neck hits the stock</strong>: a Reduced neck tool's neck, between its flute length and its neck length, touched stock.</li>
+      <li><strong>The tool's shank hits the stock</strong>: the tool above its flute length (at its shank diameter, with a shank of its own) touched stock. A shank narrower than the cutting diameter is checked after each move is cut, so it can follow the flutes down the hole they make; any other is checked before. A tool with no flute length, or flutes as long as the tool, isn't checked.</li>
       <li><strong>The tool holder hits the stock</strong>: the holder touched stock.</li>
-      <li><strong>The tool hits fixture <em>name</em></strong>: the tool, its neck or its shank touched a fixture part.</li>
+      <li><strong>The tool hits fixture <em>name</em></strong>: the tool or its shank touched a fixture part.</li>
       <li><strong>The tool holder hits fixture <em>name</em></strong>: the holder touched a fixture part.</li>
     </ul>
     Play, Step or the other buttons carry on from there.</dd>
@@ -467,7 +469,7 @@
 
 <section id="tool-edit">
 <h2>Tool</h2>
-<p>One tool's number, name and size, and its speeds and feeds for each material. The drawing at the right shows the chosen type of tool, tip down, and what each measurement means: the letter on a measurement is the letter at the end of its field's label. It isn't to scale. It changes with the Type, and shows the neck and wider shank while Reduced neck is ticked.</p>
+<p>One tool's number, name and size, and its speeds and feeds for each material. The drawing at the right shows the chosen type of tool, tip down, and what each measurement means: the letter on a measurement is the letter at the end of its field's label. The tool is drawn to its own proportions as you type: its diameter, flute and overall lengths, shank, corner radius, tip diameter, angles, pitch and teeth, scaled to fit (as tall as the space allows, or narrower for a short, wide tool). A box that's empty or not a number yet keeps its last size. The dimensions, arrows and letters stay the same size; a dimension too short for its arrows has them pointing in from outside, with its letter past the end. It changes with the Type, and shows the shank while Shank of its own is ticked.</p>
 <dl>
   <dt>Number</dt>
   <dd>The tool number (T number) the machine knows the tool by. It's written at tool changes.</dd>
@@ -496,15 +498,17 @@
   <dt>Taper angle (deg) (i)</dt>
   <dd>Taper mills: each side's angle from the tool's axis, such as 5.</dd>
   <dt>Thread angle (deg) (l)</dt>
-  <dd>Thread mills: the thread form's angle, such as 60.</dd>
+  <dd>Thread mills: the thread form's angle, such as 60. Thread Milling works out the thread's depth from it.</dd>
+  <dt>Teeth</dt>
+  <dd>Thread mills: how many rows of teeth the tool has, a pitch apart, drawn from the tip in the drawing (up to 30; more are drawn as 30). 1 (the default) is a single point thread mill, which Thread Milling helixes along the whole thread; with more, each turn cuts that many pitches, so a short thread takes a single turn. The teeth must fit in the flute length.</dd>
   <dt>Point angle (deg) (j)</dt>
   <dd>The drill's included point angle, such as 118. Used by the Drilling tab's Add drill tip to depth.</dd>
-  <dt>Reduced neck</dt>
-  <dd>Any type. Tick it for a tool that keeps its cutting diameter only part of the way up, then widens to a thicker shank, such as a long reach end mill. Ticking it fills an empty Neck length and Shank diameter with the flute length and diameter, to be changed. Used by the simulation's collision checks and drawn in it; toolpaths don't use it yet. Off by default.</dd>
-  <dt>Neck length (d)</dt>
-  <dd>Only with Reduced neck. How far from the tip the tool keeps its cutting diameter, before it widens to the shank. From the flute length to the overall length.</dd>
+  <dt>Shank of its own</dt>
+  <dd>Any type. Tick it for a tool whose shank (from the top of the flutes up to the overall length, the part held in the collet) isn't the cutting diameter: narrower, as on most thread mills and long reach tools, or wider. Ticking it fills an empty Shank diameter with the diameter, to be changed. Off by default: the tool is the cutting diameter all the way up. Used by the simulation (only the flutes cut; the shank is checked for touching the stock and fixtures, and drawn) and by the fixture checks; toolpaths don't use it yet. Tools saved with the old Reduced neck load with its shank diameter, from the top of the flutes.</dd>
   <dt>Shank diameter (e)</dt>
-  <dd>Only with Reduced neck. The diameter of the wide part, from the neck length up to the overall length (the part held in the collet). No less than the diameter.</dd>
+  <dd>Only with Shank of its own. The shank's diameter, more than 0, smaller or larger than the diameter.</dd>
+  <dt>Shank length (d)</dt>
+  <dd>Shown, not typed: the overall length less the flute length.</dd>
   <dt>Tool material</dt>
   <dd>What the cutter is made of: HSS, Cobalt HSS, Carbide or Coated carbide. The <a href="#feeds-calculator">feeds calculator</a> takes the material's surface speed and chip load factor for it. New tools, and tools from older files, are Carbide.</dd>
   <dt>Chip load</dt>
@@ -659,6 +663,7 @@
 <ul>
   <li><strong>Drill</strong>: Drilling.</li>
   <li><strong>Hole Pocketing</strong>: Hole Pocketing.</li>
+  <li><strong>Thread Milling</strong>: Thread Milling.</li>
   <li><strong>Facing</strong>: Cut Levels, Entry/Exit, Facing.</li>
   <li><strong>Profiling</strong>: Cut Levels, Entry/Exit, Profiling.</li>
   <li><strong>Pocketing</strong>: Cut Levels, Entry/Exit, Pocketing.</li>
@@ -681,12 +686,12 @@
 
 <section id="tab-features">
 <h2>Features tab</h2>
-<p>The geometry the operation machines, in the order it's machined. Each operation takes its own kinds of geometry: Drill and Hole Pocketing take circles, arcs, hole faces and design points; Facing, Profiling and Pocketing take flat faces and edges, including spline curves; Plunge Roughing, Waterline Roughing, Waterline Finishing and Parallel Finishing take any faces, curved ones too, and edges. For the 2 1/2 axis operations only the geometry's position in the origin's XY plane matters: the heights come from the Cut Levels tab. Plunge Roughing and Waterline Roughing project their geometry onto the origin's XY plane to make the area they rough; their depths come from the parts. Each face is an area of its own, and edges whose ends meet are grouped into one.</p>
+<p>The geometry the operation machines, in the order it's machined. Each operation takes its own kinds of geometry: Drill, Hole Pocketing and Thread Milling take circles, arcs, hole faces and design points; Facing, Profiling and Pocketing take flat faces and edges, including spline curves; Plunge Roughing, Waterline Roughing, Waterline Finishing and Parallel Finishing take any faces, curved ones too, and edges. For the 2 1/2 axis operations only the geometry's position in the origin's XY plane matters: the heights come from the Cut Levels tab. Plunge Roughing and Waterline Roughing project their geometry onto the origin's XY plane to make the area they rough; their depths come from the parts. Each face is an area of its own, and edges whose ends meet are grouped into one.</p>
 <dl>
   <dt>Feature list</dt>
   <dd>Each feature's type, part, diameter, and X, Y and Z in the operation's origin. Drag rows to reorder them. Choosing rows selects them in the view. Press Delete to remove the chosen rows.</dd>
   <dt>Add the stock box's footprint</dt>
-  <dd>For area operations (Facing, Profiling, Pocketing, Chamfer, Engrave and Plunge Roughing; not Drill or Hole Pocketing). Adds the stock's box, seen from above along the origin's Z, to the area, as well as anything in the list, which can then be empty. It's a rectangle, or wider where the origin is tilted. For an imported stock part, it's the box round the part. Facing, Profiling, Pocketing, Chamfer and Engrave take it as an area of its own, after the listed ones, at the stock's top, so the cut geometry's level (where Cut Levels' At Top and At Bottom are measured from) is at least the stock's top. Plunge Roughing merges it with the rest of its area, and as nothing is beyond the stock's edges, its plunges reach them. Generate stops if there's no stock.</dd>
+  <dd>For area operations (Facing, Profiling, Pocketing, Chamfer, Engrave and Plunge Roughing; not Drill, Hole Pocketing or Thread Milling). Adds the stock's box, seen from above along the origin's Z, to the area, as well as anything in the list, which can then be empty. It's a rectangle, or wider where the origin is tilted. For an imported stock part, it's the box round the part. Facing, Profiling, Pocketing, Chamfer and Engrave take it as an area of its own, after the listed ones, at the stock's top, so the cut geometry's level (where Cut Levels' At Top and At Bottom are measured from) is at least the stock's top. Plunge Roughing merges it with the rest of its area, and as nothing is beyond the stock's edges, its plunges reach them. Generate stops if there's no stock.</dd>
   <dt>Select Features</dt>
   <dd>Turns the view's selection into the list. The listed features start out selected; click or Ctrl+click in the view to add or remove features, and press Done when finished. New features are added at the end.</dd>
   <dt>Delete</dt>
@@ -1100,6 +1105,37 @@
   <dd>When ticked, the cut goes down to this height (in the origin's coordinates) instead of the stock's bottom (or the parts' lowest point without a stock).</dd>
   <dt>Cut Levels: Clear Flats</dt>
   <dd>On (the default): each flat face of the parts facing up gets a level at its height plus the Stock to Leave, so flat floors are reached exactly, even when they're closer together than the stepdown, and each gap between those levels and the top and bottom is split evenly so no step is deeper than the stepdown. Flat faces at nearly the same height give levels close together. Off: even steps from the top to the bottom, no deeper than the stepdown, whatever the flats.</dd>
+</dl>
+</section>
+
+<section id="tab-thread-milling">
+<h2>Thread Milling tab</h2>
+<p>How Thread Milling cuts internal threads with a thread mill, at each picked circle, hole face or point (only its centre is used). The hole must be drilled first, to at least the thread's minor diameter and a little deeper than the thread. The tool's diameter is taken as its teeth's tips. Generate needs a thread mill.</p>
+<p>For each thread the tool comes across at the clearance plane, down at rapid to the approach distance above the top, and feeds down the hole's centre. Each turn starts with a half circle from the centre out to the wall, tangent to it, and ends with one back in (so there's no mark where it starts), each a quarter pitch along the thread; the thread is cut at the cut feed, the half circles at the engage feed. Between turns the tool moves along the centre, feeding down and at rapid up. A single point tool (Teeth 1 on the tool) helixes the whole length, a pitch a turn. A tool with more teeth cuts that many pitches a turn, in single turns moved whole pitches apart so they stay in step: the lowest with its bottom tooth at the thread's bottom, the highest no further up than it needs to be (its top tooth within a pitch above the thread's top). After the last turn it goes up to the clearance plane.</p>
+<p>After Generate, the operations before it are simulated, as for Rest Machining, to check each hole is open to the minor diameter down to the thread's bottom. A hole that isn't is a warning, given at the end of Generate, and the operation gets a red mark in the tree; the toolpath is still made. With no stock nothing is checked, and an earlier operation with no toolpath means the holes can't be checked (also a warning). The simulation cuts with a thread mill's teeth, so the thread shows: an ISO thread from the tool's pitch, thread angle and Teeth (crests an eighth of the pitch wide at the tool's diameter, the depth as above), with the lowest tooth's crest at the programmed point and its lower flank reaching about a third of a pitch below it. A thread is only a few tenths of a millimetre deep, so it shows clearly only at fine resolution (Auto divide voxels, or the finest tri-dexel step); the tool is still drawn as a plain cylinder.</p>
+<dl>
+  <dt>At Top / At Bottom</dt>
+  <dd>Whether each picked feature is at the thread's top (the default) or its bottom.</dd>
+  <dt>Pick Top</dt>
+  <dd>Every thread's top at the Z typed in the box (in the origin's coordinates, default 0). Its Pick button fills the box with a picked item's Z.</dd>
+  <dt>Thread Length</dt>
+  <dd>How far the thread goes down from its top, in mm. Default 10.</dd>
+  <dt>Major Diameter</dt>
+  <dd>The thread's nominal size, in mm: 6 for M6. Default 6. The model's hole size isn't used.</dd>
+  <dt>Pitch</dt>
+  <dd>The distance from one thread to the next, in mm. Default 1. Choosing a thread mill on the Tool tab fills it with the tool's pitch. A tool with more than one row of teeth whose pitch isn't this one still cuts, with a warning, as its teeth won't match the thread.</dd>
+  <dt>Minor diameter and thread depth</dt>
+  <dd>Shown under Pitch, worked out from the major diameter, pitch and the chosen thread mill's thread angle (60 degrees if no thread mill is chosen): the depth is 5/8 of the sharp V's height, pitch / (2 tan(angle / 2)), so 0.541 x pitch for 60 degrees, and the minor diameter is the major less twice the depth (4.917 for M6 x 1). The tool goes round where its tips reach the major diameter.</dd>
+  <dt>Cut Direction</dt>
+  <dd>Climb (the default) turns anticlockwise, Conventional clockwise, with a clockwise spindle. Together with the hand it decides whether the tool goes up or down the thread: a right-hand climb cut goes from the bottom up.</dd>
+  <dt>Thread Hand</dt>
+  <dd>Right Hand (the default) or Left Hand. A right-hand thread rises anticlockwise.</dd>
+  <dt>Number of Passes</dt>
+  <dd>Radial passes: the thread's depth in this many equal steps out, from the minor diameter to the major, each a whole pass along the thread. Default 1, a whole number of at least 1.</dd>
+  <dt>Spring Pass</dt>
+  <dd>Off by default. Ticked, the last pass is made again, at the same size, to take what the tool sprang away from.</dd>
+  <dt>Approach Distance</dt>
+  <dd>How far above each thread's top the rapid down stops, in mm. Default 1. The clearance plane must be above it.</dd>
 </dl>
 </section>
 

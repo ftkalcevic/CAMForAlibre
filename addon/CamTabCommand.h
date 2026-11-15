@@ -232,6 +232,9 @@ private:
     bool MakeSimOperation(const StepRef& ref, camcore::SimOperation& operation) const;
     // Rest Machining: cuts the stock with the operations before this one, and what's
     // left along the frame's Z.
+    // Thread Milling: warns of each thread whose hole the operations before it
+    // haven't opened to the minor diameter down to the thread's bottom.
+    void CheckThreadHoles(const StepRef& target, const camcore::Frame& frame);
     bool ComputeRemainingStock(const StepRef& target, const camcore::Frame& frame, double toolRadius,
                                camcore::RemainingStock& remaining, std::string& problem);
     void UpdateTreeWarnings();  // the red exclamation marks on nodes with a problem
@@ -342,10 +345,11 @@ private:
     size_t m_fixturesEditIndex = static_cast<size_t>(-1);  // the step the Fixtures dialog edits, or kNewStep
 
     // Fixtures, read for the run in progress, by Fixtures step index; and what
-    // Generate found: operations (by ID) that come too close to a fixture, Fixtures
-    // steps (by ID) whose parts can't be read, and the warnings to show.
+    // Generate found: operations (by ID) with a warning (too close to a fixture, a
+    // thread's hole not open), Fixtures steps (by ID) whose parts can't be read,
+    // and the warnings to show.
     std::map<size_t, FixtureRun> m_fixtureRuns;
-    std::set<std::string> m_fixtureHits;
+    std::set<std::string> m_warnedOperations;
     std::set<std::string> m_fixtureMissing;
     std::vector<std::wstring> m_generateWarnings;
     // The last clearance inputs GenerateOperationMoves worked out, for trimming.

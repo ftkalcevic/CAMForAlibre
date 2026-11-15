@@ -68,7 +68,7 @@ struct CamScene
     camcore::Vec3 simAxis{ 0.0, 0.0, 1.0 };
     camcore::ToolProfile simProfile;
     camcore::SimCylinder simHolder;                     // drawn if present
-    camcore::SimCylinder simShank;                      // drawn if wider than the tool (a reduced neck)
+    camcore::SimCylinder simShank;                      // drawn if it isn't the tool's diameter (a shank of its own)
     bool simWarning = false;
     camcore::Vec3 simWarningFrom;
     camcore::Vec3 simWarningTo;

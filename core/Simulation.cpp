@@ -11,6 +11,8 @@
 #include <intrin.h>
 #endif
 
+#include "ThreadMilling.h"
+
 namespace camcore
 {
     namespace
@@ -854,6 +856,28 @@ namespace camcore
         return highest;
     }
 
+    float RemainingStock::HighestInCircle(double x, double y, double radius) const
+    {
+        float highest = std::numeric_limits<float>::lowest();
+        if (!(radius >= 0.0) || nx <= 0 || ny <= 0)
+            return highest;
+        const int i0 = (std::max)(0, static_cast<int>(std::floor((x - radius - xLow) / cell)));
+        const int j0 = (std::max)(0, static_cast<int>(std::floor((y - radius - yLow) / cell)));
+        const int i1 = (std::min)(nx - 1, static_cast<int>(std::floor((x + radius - xLow) / cell)));
+        const int j1 = (std::min)(ny - 1, static_cast<int>(std::floor((y + radius - yLow) / cell)));
+        for (int j = j0; j <= j1; ++j)
+        {
+            const double dy = yLow + (j + 0.5) * cell - y;
+            for (int i = i0; i <= i1; ++i)
+            {
+                const double dx = xLow + (i + 0.5) * cell - x;
+                if (dx * dx + dy * dy <= radius * radius)
+                    highest = (std::max)(highest, top[static_cast<size_t>(j) * nx + i]);
+            }
+        }
+        return highest;
+    }
+
     RemainingStock RemainingStockHeights(const VoxelStock& stock, const Frame& frame)
     {
         RemainingStock map;
@@ -939,32 +963,69 @@ namespace camcore
         return map;
     }
 
-    SimCylinder NeckOf(const Tool& tool)
-    {
-        SimCylinder neck;
-        if (tool.reducedNeck && tool.fluteLength > 0.0 && tool.neckLength > tool.fluteLength && tool.diameter > 0.0)
-        {
-            neck.start = tool.fluteLength;
-            neck.radius = tool.diameter / 2.0;
-            neck.length = (std::min)(tool.neckLength, tool.overallLength) - tool.fluteLength;
-        }
-        return neck;
-    }
-
     SimCylinder ShankOf(const Tool& tool)
     {
         SimCylinder shank;
         if (!(tool.fluteLength > 0.0 && tool.diameter > 0.0))
             return shank;
-        const bool neck = tool.reducedNeck && tool.shankDiameter > 0.0;
-        const double start = neck ? (std::max)(tool.fluteLength, tool.neckLength) : tool.fluteLength;
-        if (tool.overallLength > start)
+        if (tool.overallLength > tool.fluteLength)
         {
-            shank.start = start;
-            shank.radius = (neck ? tool.shankDiameter : tool.diameter) / 2.0;
-            shank.length = tool.overallLength - start;
+            shank.start = tool.fluteLength;
+            shank.radius = (tool.HasShank() ? tool.shankDiameter : tool.diameter) / 2.0;
+            shank.length = tool.overallLength - tool.fluteLength;
         }
         return shank;
+    }
+
+    std::vector<ToolPart> CuttingPartsOf(const Tool& tool)
+    {
+        std::vector<ToolPart> parts;
+        const ToolProfile whole = CuttingProfileOf(tool);
+        const double p = tool.pitch;
+        const double half = tool.threadAngle / 2.0 * kPi / 180.0;
+        const double depth = ThreadDepth(p, tool.threadAngle);
+        const double tip = tool.diameter / 2.0;
+        if (tool.type != ToolType::ThreadMill || !(depth > 0.0) || !(depth < tip) || !(half > 0.0) ||
+            !(half < kPi / 2.0))
+        {
+            parts.push_back({ whole, 0.0, false });
+            return parts;
+        }
+
+        // The core, at the root diameter.
+        const double root = tip - depth;
+        ToolPart core;
+        core.profile = whole;
+        core.profile.type = ToolType::FlatEndMill;
+        core.profile.radius = root;
+        core.profile.slope = 0.0;
+        parts.push_back(core);
+
+        // Each tooth: flanks rising the depth over depth tan(angle / 2) along the
+        // axis, either side of a crest p/8 wide.
+        const double slope = 1.0 / std::tan(half);
+        ToolProfile flank;
+        flank.type = ToolType::VMill;
+        flank.radius = tip;
+        flank.tipRadius = root;
+        flank.slope = slope;
+        flank.length = depth / slope + p / 16.0;
+        const int teeth = (std::max)(1, tool.threadTeeth);
+        for (int k = 0; k < teeth; ++k)
+        {
+            const double crest = k * p;
+            parts.push_back({ flank, crest - flank.length, false });
+            parts.push_back({ flank, crest + flank.length, true });
+        }
+        return parts;
+    }
+
+    ToolProfile CuttingProfileOf(const Tool& tool)
+    {
+        ToolProfile profile = ProfileOf(tool);
+        if (tool.HasShank() && tool.fluteLength > 0.0)
+            profile.length = (std::min)(profile.length, tool.fluteLength);
+        return profile;
     }
 
     SimCylinder HolderOf(const Tool& tool, double holderDiameter, double holderDepth)
@@ -1580,14 +1641,16 @@ namespace camcore
                 return DexelsTouch(m_dexels, plain, a + w * cylinder.start, b + w * cylinder.start, w);
             return CountMove(m_stock, plain, a + w * cylinder.start, b + w * cylinder.start, w) > 0;
         };
+        // A shank narrower than the cutting diameter follows the teeth down the hole
+        // they cut in the same piece, so it's checked after the cut instead.
+        const bool narrowShank =
+            operation.shank.Present() && operation.shank.radius < operation.profile.radius - 1e-9;
         if (touches(operation.holder))
             warning = SimWarning::HolderHitsStock;
-        else if (touches(operation.shank))
+        else if (!narrowShank && touches(operation.shank))
             warning = SimWarning::ShankHitsStock;
-        else if (touches(operation.neck))
-            warning = SimWarning::NeckHitsStock;
 
-        // Fixtures: the tool's own shape, its neck and shank, then the holder.
+        // Fixtures: the tool's own shape, its shank, then the holder.
         if (warning == SimWarning::None && !m_ignoreCollisions && operation.fixtures)
         {
             Vec3 w;
@@ -1619,7 +1682,6 @@ namespace camcore
                 for (const FixtureGrid& fixture : *operation.fixtures)
                 {
                     if (hits(fixture, operation.profile, 0.0) ||
-                        (operation.neck.Present() && hits(fixture, plain(operation.neck), operation.neck.start)) ||
                         (operation.shank.Present() && hits(fixture, plain(operation.shank), operation.shank.start)))
                         warning = SimWarning::ToolHitsFixture;
                     else if (operation.holder.Present() && hits(fixture, plain(operation.holder), operation.holder.start))
@@ -1633,13 +1695,34 @@ namespace camcore
             }
         }
 
+        // Each part of the tool, from its own tip, up or back down the axis.
         bool cut = false;
-        if (m_model == StockModel::TriDexel)
-            cut = CutDexels(m_dexels, operation.profile, a, b, operation.frame.zAxis) > kDexelTouch;
+        const auto cutWith = [&](const ToolProfile& profile, const Vec3& pa, const Vec3& pb, const Vec3& axis) {
+            if (m_model == StockModel::TriDexel)
+                return CutDexels(m_dexels, profile, pa, pb, axis) > kDexelTouch;
+            return CutMove(m_stock, profile, pa, pb, axis) > 0;
+        };
+        if (operation.parts.empty())
+        {
+            cut = cutWith(operation.profile, a, b, operation.frame.zAxis);
+        }
         else
-            cut = CutMove(m_stock, operation.profile, a, b, operation.frame.zAxis) > 0;
+        {
+            Vec3 w;
+            if (Normalise(operation.frame.zAxis, w))
+            {
+                for (const ToolPart& part : operation.parts)
+                {
+                    const bool partCut = cutWith(part.profile, a + w * part.offset, b + w * part.offset,
+                                                 part.reversed ? w * -1.0 : w);
+                    cut = partCut || cut;
+                }
+            }
+        }
         if (warning == SimWarning::None && move.rapid && cut && !m_ignoreCollisions)
             warning = SimWarning::RapidIntoStock;
+        if (warning == SimWarning::None && narrowShank && touches(operation.shank))
+            warning = SimWarning::ShankHitsStock;
         return warning;
     }
 

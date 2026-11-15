@@ -259,8 +259,6 @@ void CSimulationDlg::ShowState()
             what = L"The tool holder hits the stock";
         else if (simulation.Warning() == camcore::SimWarning::ShankHitsStock)
             what = L"The tool's shank hits the stock";
-        else if (simulation.Warning() == camcore::SimWarning::NeckHitsStock)
-            what = L"The tool's neck hits the stock";
         std::wstring fixture;
         if (simulation.Warning() == camcore::SimWarning::ToolHitsFixture)
             fixture = L"The tool hits fixture " + FromUtf8(simulation.WarningFixture());

@@ -11,6 +11,9 @@
 #include "FeedsCalculatorDialog.h"
 #include "Log.h"
 
+#include <cmath>
+#include <cwchar>
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -390,23 +393,34 @@ void CToolFeedsDlg::OnOK()
 /////////////////////////////////////////////////////////////////////////////
 // CToolEditDlg
 
-void CToolDrawingCtrl::SetTool(ToolType type, bool reducedNeck)
+void CToolDrawingCtrl::SetTool(const Tool& tool)
 {
-    m_type = type;
-    m_reducedNeck = reducedNeck;
+    m_tool = tool;
     Invalidate(FALSE);
 }
 
 void CToolDrawingCtrl::DrawItem(LPDRAWITEMSTRUCT pDraw)
 {
-    DrawToolDiagram(pDraw->hDC, pDraw->rcItem, m_type, m_reducedNeck);
+    DrawToolDiagram(pDraw->hDC, pDraw->rcItem, m_tool);
 }
 
 BEGIN_MESSAGE_MAP(CToolEditDlg, CDialog)
     ON_BN_CLICKED(IDC_HELP_BUTTON, &CToolEditDlg::OnHelpButton)
     ON_CBN_SELCHANGE(IDC_TOOL_TYPE, &CToolEditDlg::OnTypeChanged)
     ON_CBN_SELCHANGE(IDC_TOOL_UNIT, &CToolEditDlg::OnUnitChanged)
-    ON_BN_CLICKED(IDC_TOOL_REDUCED_NECK, &CToolEditDlg::OnReducedNeck)
+    ON_BN_CLICKED(IDC_TOOL_OWN_SHANK, &CToolEditDlg::OnOwnShank)
+    ON_EN_CHANGE(IDC_TOOL_DIAMETER, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_FLUTE_LENGTH, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_OVERALL_LENGTH, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_SHANK_DIAMETER, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_THREAD_TEETH, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_CORNER_RADIUS, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_TIP_DIAMETER, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_INCLUDED_ANGLE, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_TAPER_ANGLE, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_POINT_ANGLE, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_PITCH, &CToolEditDlg::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TOOL_THREAD_ANGLE, &CToolEditDlg::OnSizeChanged)
     ON_BN_CLICKED(IDC_TOOL_FEEDS_ADD, &CToolEditDlg::OnAddFeeds)
     ON_BN_CLICKED(IDC_TOOL_FEEDS_EDIT, &CToolEditDlg::OnEditFeeds)
     ON_BN_CLICKED(IDC_TOOL_FEEDS_REMOVE, &CToolEditDlg::OnRemoveFeeds)
@@ -473,12 +487,10 @@ BOOL CToolEditDlg::OnInitDialog()
     SetNumber(IDC_TOOL_TAPER_ANGLE, m_tool.taperAngle);
     SetNumber(IDC_TOOL_PITCH, m_tool.pitch);
     SetNumber(IDC_TOOL_THREAD_ANGLE, m_tool.threadAngle);
-    CheckDlgButton(IDC_TOOL_REDUCED_NECK, m_tool.reducedNeck ? BST_CHECKED : BST_UNCHECKED);
-    if (m_tool.reducedNeck)
-    {
-        SetNumber(IDC_TOOL_NECK_LENGTH, m_tool.neckLength);
+    SetNumber(IDC_TOOL_THREAD_TEETH, m_tool.threadTeeth);
+    CheckDlgButton(IDC_TOOL_OWN_SHANK, m_tool.HasShank() ? BST_CHECKED : BST_UNCHECKED);
+    if (m_tool.HasShank())
         SetNumber(IDC_TOOL_SHANK_DIAMETER, m_tool.shankDiameter);
-    }
 
     m_drawing.SubclassDlgItem(IDC_TOOL_DRAWING, this);
 
@@ -599,12 +611,57 @@ void CToolEditDlg::UpdateFieldsForType()
     GetDlgItem(IDC_TOOL_TAPER_ANGLE)->EnableWindow(fields.taperAngle);
     GetDlgItem(IDC_TOOL_PITCH)->EnableWindow(fields.pitch);
     GetDlgItem(IDC_TOOL_THREAD_ANGLE)->EnableWindow(fields.threadAngle);
+    GetDlgItem(IDC_TOOL_THREAD_TEETH)->EnableWindow(fields.threadTeeth);
 
-    const BOOL neck = (IsDlgButtonChecked(IDC_TOOL_REDUCED_NECK) == BST_CHECKED) ? TRUE : FALSE;
-    GetDlgItem(IDC_TOOL_NECK_LENGTH)->EnableWindow(neck);
-    GetDlgItem(IDC_TOOL_SHANK_DIAMETER)->EnableWindow(neck);
-
-    m_drawing.SetTool(SelectedType(), neck != FALSE);
+    // A shank of its own: its diameter typed, its length what's above the flutes.
+    const BOOL shank = (IsDlgButtonChecked(IDC_TOOL_OWN_SHANK) == BST_CHECKED) ? TRUE : FALSE;
+    GetDlgItem(IDC_TOOL_SHANK_DIAMETER)->EnableWindow(shank);
+    GetDlgItem(IDC_TOOL_SHANK_LENGTH)->EnableWindow(shank);
+    const auto value = [this](int id, double& number) {
+        CString text;
+        GetDlgItemText(id, text);
+        text.Trim();
+        wchar_t* pEnd = nullptr;
+        number = std::wcstod(text, &pEnd);
+        return !text.IsEmpty() && pEnd != nullptr && *pEnd == L'\0' && std::isfinite(number);
+    };
+    double diameter = 0.0, flute = 0.0, overall = 0.0, shankDiameter = 0.0;
+    std::wstring length;
+    if (value(IDC_TOOL_FLUTE_LENGTH, flute) && value(IDC_TOOL_OVERALL_LENGTH, overall) && overall >= flute)
+    {
+        wchar_t text[64] = {};
+        _snwprintf_s(text, _countof(text), _TRUNCATE, L"%.10g", overall - flute);
+        length = text;
+    }
+    SetDlgItemText(IDC_TOOL_SHANK_LENGTH, length.c_str());
+    // The drawing: the tool as typed so far, each size kept from the tool until
+    // its box holds a usable number.
+    Tool shown = m_tool;
+    shown.type = SelectedType();
+    const auto take = [&](int id, double& field, bool zeroToo) {
+        double number = 0.0;
+        if (value(id, number) && (number > 0.0 || (zeroToo && number == 0.0)))
+            field = number;
+    };
+    take(IDC_TOOL_DIAMETER, shown.diameter, false);
+    take(IDC_TOOL_FLUTE_LENGTH, shown.fluteLength, false);
+    take(IDC_TOOL_OVERALL_LENGTH, shown.overallLength, false);
+    take(IDC_TOOL_CORNER_RADIUS, shown.cornerRadius, false);
+    take(IDC_TOOL_TIP_DIAMETER, shown.tipDiameter, true);
+    take(IDC_TOOL_INCLUDED_ANGLE, shown.includedAngle, false);
+    take(IDC_TOOL_TAPER_ANGLE, shown.taperAngle, false);
+    take(IDC_TOOL_POINT_ANGLE, shown.pointAngle, false);
+    take(IDC_TOOL_PITCH, shown.pitch, false);
+    take(IDC_TOOL_THREAD_ANGLE, shown.threadAngle, false);
+    shown.shankDiameter = 0.0;
+    if (shank && value(IDC_TOOL_SHANK_DIAMETER, shankDiameter) && shankDiameter > 0.0)
+        shown.shankDiameter = shankDiameter;
+    // A thread mill shows its teeth as typed, or 1 until a whole number is.
+    double teeth = 1.0;
+    if (!value(IDC_TOOL_THREAD_TEETH, teeth) || teeth < 1.0 || teeth != std::floor(teeth))
+        teeth = 1.0;
+    shown.threadTeeth = static_cast<int>((std::min)(teeth, 1000.0));
+    m_drawing.SetTool(shown);
 
     // Drills' chip load is per revolution.
     const bool inches = m_unit.GetCurSel() == 1;
@@ -618,30 +675,28 @@ void CToolEditDlg::OnUnitChanged()
     UpdateFieldsForType();
 }
 
-void CToolEditDlg::OnReducedNeck()
+void CToolEditDlg::OnOwnShank()
 {
-    // Ticked with nothing filled in yet: start from the flute length and the
-    // diameter, to be changed.
-    if (IsDlgButtonChecked(IDC_TOOL_REDUCED_NECK) == BST_CHECKED)
+    // Ticked with nothing filled in yet: start from the diameter, to be changed.
+    if (IsDlgButtonChecked(IDC_TOOL_OWN_SHANK) == BST_CHECKED)
     {
-        const struct { int box; int from; } starts[] = {
-            { IDC_TOOL_NECK_LENGTH, IDC_TOOL_FLUTE_LENGTH },
-            { IDC_TOOL_SHANK_DIAMETER, IDC_TOOL_DIAMETER },
-        };
-        for (const auto& start : starts)
+        CString text;
+        GetDlgItemText(IDC_TOOL_SHANK_DIAMETER, text);
+        text.Trim();
+        if (text.IsEmpty())
         {
-            CString text;
-            GetDlgItemText(start.box, text);
-            text.Trim();
-            if (text.IsEmpty())
-            {
-                CString from;
-                GetDlgItemText(start.from, from);
-                SetDlgItemText(start.box, from);
-            }
+            CString from;
+            GetDlgItemText(IDC_TOOL_DIAMETER, from);
+            SetDlgItemText(IDC_TOOL_SHANK_DIAMETER, from);
         }
     }
     UpdateFieldsForType();
+}
+
+void CToolEditDlg::OnSizeChanged()
+{
+    if (m_drawing.GetSafeHwnd() != nullptr)
+        UpdateFieldsForType();
 }
 
 void CToolEditDlg::OnTypeChanged()
@@ -732,11 +787,14 @@ bool CToolEditDlg::ReadTool(Tool& result, std::wstring& problems)
         ReadNumber(IDC_TOOL_PITCH, L"The pitch", tool.pitch, problems);
     if (fields.threadAngle)
         ReadNumber(IDC_TOOL_THREAD_ANGLE, L"The thread angle", tool.threadAngle, problems);
-    tool.reducedNeck = IsDlgButtonChecked(IDC_TOOL_REDUCED_NECK) == BST_CHECKED;
-    if (tool.reducedNeck)
+    if (fields.threadTeeth)
+        ReadInteger(IDC_TOOL_THREAD_TEETH, L"The number of teeth", tool.threadTeeth, problems);
+    tool.shankDiameter = 0.0;
+    if (IsDlgButtonChecked(IDC_TOOL_OWN_SHANK) == BST_CHECKED)
     {
-        ReadNumber(IDC_TOOL_NECK_LENGTH, L"The neck length", tool.neckLength, problems);
         ReadNumber(IDC_TOOL_SHANK_DIAMETER, L"The shank diameter", tool.shankDiameter, problems);
+        if (!(tool.shankDiameter > 0.0))
+            AppendProblem(problems, L"The shank diameter must be more than 0.");
     }
     const int toolMaterial = m_toolMaterial.GetCurSel();
     if (toolMaterial >= 0 && toolMaterial < kToolMaterialCount)

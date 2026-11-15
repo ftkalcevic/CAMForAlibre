@@ -131,9 +131,10 @@ namespace
         const Vec3 v = camcore::Cross(w, u);
 
         const camcore::ToolProfile& profile = scene.simProfile;
-        // The whole tool, up to the holder, or up to a reduced neck's wider shank.
-        const bool wideShank = scene.simShank.Present() && scene.simShank.radius > profile.radius + 1e-6;
-        const double top = wideShank ? (std::min)(scene.simShank.start, profile.length) : profile.length;
+        // The whole tool, up to the holder, or up to a shank of its own diameter.
+        const bool ownShank =
+            scene.simShank.Present() && std::fabs(scene.simShank.radius - profile.radius) > 1e-6;
+        const double top = ownShank ? (std::min)(scene.simShank.start, profile.length) : profile.length;
         const int samples = 24;
         const __int64 segment = AddSegment(pCanvas, L"Simulated tool", kSimToolColour, kSimToolLineWeight, true);
         for (int side = 0; side < 4; ++side)
@@ -162,7 +163,7 @@ namespace
             }
             DrawPolyline(pCanvas, segment, ring);
         }
-        if (wideShank)
+        if (ownShank)
             DrawCylinder(pCanvas, segment, scene.simTip + w * scene.simShank.start, w, u, v, scene.simShank.radius,
                          scene.simShank.length, unit);
 

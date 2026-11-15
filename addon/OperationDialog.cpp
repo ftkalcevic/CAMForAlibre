@@ -35,6 +35,7 @@ namespace
         case StepType::Chamfer: return L"Chamfer";
         case StepType::Engrave: return L"Engrave";
         case StepType::HolePocketing: return L"Hole Pocketing";
+        case StepType::ThreadMilling: return L"Thread Milling";
         case StepType::PlungeRoughing: return L"Plunge Roughing";
         case StepType::WaterlineRoughing: return L"Waterline Roughing";
         case StepType::WaterlineFinishing: return L"Waterline Finishing";
@@ -898,10 +899,10 @@ void CToolPage::ShowDetails(const Tool* pTool)
     add(L"Diameter", Length(pTool->diameter, pTool->unit));
     add(L"Flute length", Length(pTool->fluteLength, pTool->unit));
     add(L"Overall length", Length(pTool->overallLength, pTool->unit));
-    if (pTool->reducedNeck)
+    if (pTool->HasShank())
     {
-        add(L"Neck length", Length(pTool->neckLength, pTool->unit));
         add(L"Shank diameter", Length(pTool->shankDiameter, pTool->unit));
+        add(L"Shank length", Length((std::max)(0.0, pTool->overallLength - pTool->fluteLength), pTool->unit));
     }
     const ToolFields fields = FieldsOf(pTool->type);
     const std::wstring degrees = L"\u00B0";
@@ -921,6 +922,8 @@ void CToolPage::ShowDetails(const Tool* pTool)
         add(L"Pitch", Length(pTool->pitch, pTool->unit));
     if (fields.threadAngle)
         add(L"Thread angle", FormatNumber(pTool->threadAngle) + degrees);
+    if (fields.threadTeeth)
+        add(L"Teeth", std::to_wstring(pTool->threadTeeth));
 }
 
 void CToolPage::OnToolChanged(NMHDR* pNotify, LRESULT* pResult)
@@ -932,6 +935,9 @@ void CToolPage::OnToolChanged(NMHDR* pNotify, LRESULT* pResult)
         ShowDetails(ChosenTool());
         if (ChosenTool() != nullptr)
             SetDlgItemText(IDC_TOOL_NOTE, L"");
+        // Only the user's choice: a hidden tab is being loaded, or is a bulk edit's twin.
+        if (m_pOwner != nullptr && IsWindowVisible())
+            m_pOwner->OnToolChosen();
     }
 }
 
@@ -3186,6 +3192,160 @@ void CHolePocketingPage::SetDepthToHeight(double z)
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// CThreadMillingPage
+
+BEGIN_MESSAGE_MAP(CThreadMillingPage, COperationPage)
+    ON_BN_CLICKED(IDC_TM_AT_TOP, &CThreadMillingPage::OnChoiceChanged)
+    ON_BN_CLICKED(IDC_TM_AT_BOTTOM, &CThreadMillingPage::OnChoiceChanged)
+    ON_BN_CLICKED(IDC_TM_PICK_TOP, &CThreadMillingPage::OnChoiceChanged)
+    ON_EN_CHANGE(IDC_TM_MAJOR, &CThreadMillingPage::OnSizeChanged)
+    ON_EN_CHANGE(IDC_TM_PITCH, &CThreadMillingPage::OnSizeChanged)
+    ON_BN_CLICKED(IDC_TM_PICK_TOP_BUTTON, &CThreadMillingPage::OnPickTop)
+END_MESSAGE_MAP()
+
+CThreadMillingPage::CThreadMillingPage(COperationDlg* pOwner)
+    : COperationPage(IDD_OP_THREAD_MILLING, pOwner)
+{
+}
+
+void CThreadMillingPage::Load(const SequenceStep& step)
+{
+    const ThreadMillingSettings& thread = step.threadMilling;
+    const int location = (thread.location == CutGeometryLocation::AtBottom)  ? IDC_TM_AT_BOTTOM
+                         : (thread.location == CutGeometryLocation::PickTop) ? IDC_TM_PICK_TOP
+                                                                             : IDC_TM_AT_TOP;
+    CheckRadioButton(IDC_TM_AT_TOP, IDC_TM_PICK_TOP, location);
+    SetNumber(IDC_TM_TOP_Z, thread.topZ);
+    SetNumber(IDC_TM_LENGTH, thread.length);
+    SetNumber(IDC_TM_MAJOR, thread.majorDiameter);
+    SetNumber(IDC_TM_PITCH, thread.pitch);
+    CheckRadioButton(IDC_TM_RIGHT, IDC_TM_LEFT, thread.hand == ThreadHand::Left ? IDC_TM_LEFT : IDC_TM_RIGHT);
+    CheckRadioButton(IDC_TM_CLIMB, IDC_TM_CONVENTIONAL,
+                     thread.direction == CutDirection::Conventional ? IDC_TM_CONVENTIONAL : IDC_TM_CLIMB);
+    SetNumber(IDC_TM_PASSES, thread.radialPasses);
+    CheckDlgButton(IDC_TM_SPRING, thread.springPass ? BST_CHECKED : BST_UNCHECKED);
+    SetNumber(IDC_TM_APPROACH, thread.approachDistance);
+
+    UpdateFields();
+    UpdateSizes();
+    ShowLocating(LocateTarget::HoleTop, false);
+}
+
+bool CThreadMillingPage::Save(SequenceStep& step, std::wstring& problems)
+{
+    ThreadMillingSettings thread = step.threadMilling;
+    std::wstring found;
+
+    switch (GetCheckedRadioButton(IDC_TM_AT_TOP, IDC_TM_PICK_TOP))
+    {
+    case IDC_TM_AT_BOTTOM: thread.location = CutGeometryLocation::AtBottom; break;
+    case IDC_TM_PICK_TOP:  thread.location = CutGeometryLocation::PickTop; break;
+    default:               thread.location = CutGeometryLocation::AtTop; break;
+    }
+    if (thread.location == CutGeometryLocation::PickTop)
+        ReadNumber(IDC_TM_TOP_Z, L"The top Z", thread.topZ, found);
+
+    ReadNumber(IDC_TM_LENGTH, L"The thread length", thread.length, found);
+    ReadNumber(IDC_TM_MAJOR, L"The major diameter", thread.majorDiameter, found);
+    ReadNumber(IDC_TM_PITCH, L"The pitch", thread.pitch, found);
+    thread.hand = (IsDlgButtonChecked(IDC_TM_LEFT) == BST_CHECKED) ? ThreadHand::Left : ThreadHand::Right;
+    thread.direction = (IsDlgButtonChecked(IDC_TM_CONVENTIONAL) == BST_CHECKED) ? CutDirection::Conventional
+                                                                               : CutDirection::Climb;
+    double passes = 0.0;
+    if (ReadNumber(IDC_TM_PASSES, L"The number of radial passes", passes, found))
+    {
+        if (passes != std::floor(passes) || passes > 1000.0)
+            AppendProblem(found, L"The number of radial passes must be a whole number.");
+        else
+            thread.radialPasses = static_cast<int>(passes);
+    }
+    thread.springPass = IsDlgButtonChecked(IDC_TM_SPRING) == BST_CHECKED;
+    ReadNumber(IDC_TM_APPROACH, L"The approach distance", thread.approachDistance, found);
+
+    if (found.empty())
+    {
+        for (const std::string& problem : ValidateThreadMilling(thread))
+            AppendProblem(found, FromUtf8(problem));
+    }
+    if (!found.empty())
+    {
+        AppendProblem(problems, found);
+        return false;
+    }
+
+    step.threadMilling = thread;
+    return true;
+}
+
+void CThreadMillingPage::UpdateFields()
+{
+    const BOOL pickTop = GetCheckedRadioButton(IDC_TM_AT_TOP, IDC_TM_PICK_TOP) == IDC_TM_PICK_TOP;
+    GetDlgItem(IDC_TM_TOP_Z)->EnableWindow(pickTop);
+    GetDlgItem(IDC_TM_PICK_TOP_BUTTON)->EnableWindow(pickTop);
+}
+
+void CThreadMillingPage::UpdateSizes()
+{
+    // The thread angle is the chosen thread mill's, or 60 degrees.
+    double angle = 60.0;
+    camcore::Tool tool;
+    const bool threadMill = m_pOwner != nullptr && m_pOwner->ChosenTool(tool) && tool.type == ToolType::ThreadMill;
+    if (threadMill)
+        angle = tool.threadAngle;
+
+    ThreadMillingSettings thread;
+    if (!ReadValue(IDC_TM_MAJOR, thread.majorDiameter) || !ReadValue(IDC_TM_PITCH, thread.pitch) ||
+        !(thread.majorDiameter > 0.0) || !(thread.pitch > 0.0))
+    {
+        SetDlgItemText(IDC_TM_SIZES, L"");
+        return;
+    }
+    wchar_t text[200] = {};
+    _snwprintf_s(text, _countof(text), _TRUNCATE, L"Minor diameter %.3f mm, thread depth %.3f mm, for a %s\u00B0 thread%s.",
+                 ThreadMinorDiameter(thread, angle), ThreadDepth(thread.pitch, angle), FormatNumber(angle).c_str(),
+                 threadMill ? L"" : L" (choose a thread mill)");
+    SetDlgItemText(IDC_TM_SIZES, text);
+}
+
+void CThreadMillingPage::ToolChosen()
+{
+    camcore::Tool tool;
+    if (m_pOwner != nullptr && m_pOwner->ChosenTool(tool) && tool.type == ToolType::ThreadMill && tool.pitch > 0.0)
+        SetNumber(IDC_TM_PITCH, tool.pitch);
+    UpdateSizes();
+}
+
+void CThreadMillingPage::OnChoiceChanged()
+{
+    UpdateFields();
+}
+
+void CThreadMillingPage::OnSizeChanged()
+{
+    UpdateSizes();
+}
+
+void CThreadMillingPage::OnPickTop()
+{
+    if (m_pOwner->IsLocating())
+        m_pOwner->StopLocating();
+    else
+        m_pOwner->StartLocating(LocateTarget::HoleTop);
+}
+
+void CThreadMillingPage::ShowLocating(LocateTarget target, bool locating)
+{
+    SetDlgItemText(IDC_TM_PICK_TOP_BUTTON, (locating && target == LocateTarget::HoleTop) ? L"Stop" : L"Pick");
+}
+
+void CThreadMillingPage::SetTopZ(double z)
+{
+    SetNumber(IDC_TM_TOP_Z, z);
+    CheckRadioButton(IDC_TM_AT_TOP, IDC_TM_PICK_TOP, IDC_TM_PICK_TOP);
+    UpdateFields();
+}
+
+/////////////////////////////////////////////////////////////////////////////
 // CDrillingPage
 
 BEGIN_MESSAGE_MAP(CDrillingPage, COperationPage)
@@ -3352,6 +3512,7 @@ void COperationDlg::OnHelpButton()
                              : (page == IDD_OP_ENGRAVING)      ? L"tab-engraving"
                              : (page == IDD_OP_POCKETING)      ? L"tab-pocketing"
                              : (page == IDD_OP_HOLE_POCKETING) ? L"tab-hole-pocketing"
+                             : (page == IDD_OP_THREAD_MILLING) ? L"tab-thread-milling"
                              : (page == IDD_OP_PLUNGE_ROUGHING) ? L"tab-plunge-roughing"
                              : (page == IDD_OP_WATERLINE_ROUGHING) ? L"tab-waterline-roughing"
                              : (page == IDD_OP_WATERLINE_LEVELS) ? L"tab-waterline-levels"
@@ -3370,6 +3531,7 @@ COperationDlg::COperationDlg(CCamTabCommand* pTab, const SequenceStep& step)
     , m_pDrilling(nullptr)
     , m_pCutLevels(nullptr)
     , m_pHolePocketing(nullptr)
+    , m_pThreadMilling(nullptr)
     , m_pToolPage(nullptr)
     , m_locating(false)
     , m_locateTarget(LocateTarget::DrillDepth)
@@ -3400,6 +3562,7 @@ std::unique_ptr<COperationPage> COperationDlg::MakePage(UINT templateId)
     case IDD_OP_POCKETING:      return std::make_unique<CPocketingPage>(this);
     case IDD_OP_DRILLING:       return std::make_unique<CDrillingPage>(this);
     case IDD_OP_HOLE_POCKETING: return std::make_unique<CHolePocketingPage>(this);
+    case IDD_OP_THREAD_MILLING: return std::make_unique<CThreadMillingPage>(this);
     case IDD_OP_PLUNGE_ROUGHING: return std::make_unique<CPlungeRoughingPage>(this);
     case IDD_OP_WATERLINE_ROUGHING: return std::make_unique<CWaterlineRoughingPage>(this);
     case IDD_OP_WATERLINE_LEVELS: return std::make_unique<CWaterlineLevelsPage>(this);
@@ -3483,7 +3646,7 @@ BOOL COperationDlg::OnInitDialog()
         m_step.type != StepType::Engrave && m_step.type != StepType::PlungeRoughing &&
         m_step.type != StepType::WaterlineRoughing && m_step.type != StepType::WaterlineFinishing &&
         m_step.type != StepType::ParallelFinishing &&
-        m_step.type != StepType::HolePocketing)
+        m_step.type != StepType::HolePocketing && m_step.type != StepType::ThreadMilling)
         AddPage(L"Sorting", std::make_unique<COperationPage>(IDD_OP_PAGE, this));
 
     // Then its own.
@@ -3552,6 +3715,14 @@ BOOL COperationDlg::OnInitDialog()
         AddPage(L"Hole Pocketing", std::move(hole));
         if (pHole->GetSafeHwnd() != nullptr)
             m_pHolePocketing = pHole;
+    }
+    else if (m_step.type == StepType::ThreadMilling)
+    {
+        auto thread = std::make_unique<CThreadMillingPage>(this);
+        CThreadMillingPage* pThread = thread.get();
+        AddPage(L"Thread Milling", std::move(thread));
+        if (pThread->GetSafeHwnd() != nullptr)
+            m_pThreadMilling = pThread;
     }
 
     if (!bulk)
@@ -3630,7 +3801,7 @@ void COperationDlg::StartLocating(LocateTarget target)
     const bool forDrilling = (target == LocateTarget::DrillDepth);
     const bool forHole = (target == LocateTarget::HoleTop || target == LocateTarget::HoleDepth);
     const bool havePage = forDrilling ? m_pDrilling != nullptr
-                          : forHole   ? m_pHolePocketing != nullptr
+                          : forHole   ? (m_pHolePocketing != nullptr || m_pThreadMilling != nullptr)
                                       : m_pCutLevels != nullptr;
     if (!havePage || m_pTab == nullptr)
         return;
@@ -3641,8 +3812,10 @@ void COperationDlg::StartLocating(LocateTarget target)
     m_locateTarget = target;
     if (forDrilling)
         m_pDrilling->ShowLocating(true);
-    else if (forHole)
+    else if (forHole && m_pHolePocketing != nullptr)
         m_pHolePocketing->ShowLocating(target, true);
+    else if (forHole)
+        m_pThreadMilling->ShowLocating(target, true);
     else
         m_pCutLevels->ShowLocating(target, true);
     m_pTab->BeginLocate();
@@ -3660,6 +3833,8 @@ void COperationDlg::StopLocating()
         m_pCutLevels->ShowLocating(m_locateTarget, false);
     if (m_pHolePocketing != nullptr)
         m_pHolePocketing->ShowLocating(m_locateTarget, false);
+    if (m_pThreadMilling != nullptr)
+        m_pThreadMilling->ShowLocating(m_locateTarget, false);
     if (m_pTab != nullptr)
         m_pTab->EndLocate();
 }
@@ -3689,6 +3864,11 @@ void COperationDlg::SetLocatedHeight(bool found, double height)
         return;
     }
 
+    if (target == LocateTarget::HoleTop && m_pThreadMilling != nullptr)
+    {
+        m_pThreadMilling->SetTopZ(height);
+        return;
+    }
     if (target == LocateTarget::HoleTop || target == LocateTarget::HoleDepth)
     {
         if (m_pHolePocketing == nullptr)
@@ -3825,6 +4005,24 @@ bool COperationDlg::FeedsFromTool(FeedSettings& feeds, std::wstring& problem) co
     }
     feeds = pRow->feeds;
     return true;
+}
+
+bool COperationDlg::ChosenTool(Tool& tool) const
+{
+    if (m_pTab == nullptr || m_pToolPage == nullptr)
+        return false;
+    const ToolLibrary library = m_pTab->GetToolLibrary();
+    const Tool* pTool = FindToolById(library, m_pToolPage->ChosenToolId());
+    if (pTool == nullptr)
+        return false;
+    tool = ToolInMillimetres(*pTool);
+    return true;
+}
+
+void COperationDlg::OnToolChosen()
+{
+    if (m_pThreadMilling != nullptr)
+        m_pThreadMilling->ToolChosen();
 }
 
 bool COperationDlg::CalculatorSource(FeedsCalcSource& source, std::wstring& problem) const

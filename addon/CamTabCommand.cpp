@@ -8,6 +8,7 @@
 #include "DrillToolpath.h"
 #include "FacingToolpath.h"
 #include "HolePocketToolpath.h"
+#include "ThreadMillToolpath.h"
 #include "PocketToolpath.h"
 #include "EngraveToolpath.h"
 #include "PlungeRoughToolpath.h"
@@ -78,6 +79,7 @@ namespace
         ID_CAM_ADD_FOLDER,
         ID_CAM_ADD_DRILL,
         ID_CAM_ADD_HOLE_POCKETING,
+        ID_CAM_ADD_THREAD_MILLING,
         ID_CAM_ADD_FACING,
         ID_CAM_ADD_PROFILING,
         ID_CAM_ADD_POCKETING,
@@ -1442,6 +1444,7 @@ void CCamTabCommand::AddOperation(size_t folder, camcore::StepType type)
                                              : type == camcore::StepType::Chamfer ? "Chamfer"
                                              : type == camcore::StepType::Engrave ? "Engrave"
                                              : type == camcore::StepType::HolePocketing ? "Hole Pocketing"
+                                             : type == camcore::StepType::ThreadMilling ? "Thread Milling"
                                              : type == camcore::StepType::PlungeRoughing ? "Plunge Roughing"
                                              : type == camcore::StepType::WaterlineRoughing ? "Waterline Roughing"
                                              : type == camcore::StepType::WaterlineFinishing ? "Waterline Finishing"
@@ -1769,8 +1772,8 @@ bool CCamTabCommand::MakeSimOperation(const StepRef& ref, camcore::SimOperation&
     std::snprintf(diameter, sizeof(diameter), "%g", std::round(tool.diameter * 1000.0) / 1000.0);
     operation.tool = "T" + std::to_string(pTool->number) + " " + pTool->name + " (" +
                      camcore::ToolTypeTitle(tool.type) + ", " + diameter + " mm)";
-    operation.profile = camcore::ProfileOf(tool);
-    operation.neck = camcore::NeckOf(tool);
+    operation.profile = camcore::CuttingProfileOf(tool);
+    operation.parts = camcore::CuttingPartsOf(tool);
     operation.shank = camcore::ShankOf(tool);
     operation.holder = camcore::HolderOf(tool, m_machine.holderDiameter, m_machine.holderDepth);
     operation.frame = frame.frame;
@@ -2259,7 +2262,8 @@ void CCamTabCommand::GenerateTargets(const std::vector<StepRef>& targets)
                            (targets.size() == 1 ? L" operation" : L" operations");
     summary += m_generateWarnings.empty()
                    ? L"."
-                   : L", " + std::to_wstring(m_generateWarnings.size()) + L" with fixture warnings.";
+                   : L", with " + std::to_wstring(m_generateWarnings.size()) +
+                         (m_generateWarnings.size() == 1 ? L" warning." : L" warnings.");
     m_sequenceStatus = summary;
     ShowStatus();
     std::wstring warnings;
@@ -2446,7 +2450,7 @@ void CCamTabCommand::Post(const StepRef& scope)
 bool CCamTabCommand::GenerateOperation(const StepRef& target, std::string& problem)
 {
     camcore::SequenceStep& operation = m_job.sequence[target.step].children[target.child];
-    m_fixtureHits.erase(operation.id);
+    m_warnedOperations.erase(operation.id);
     if (!GenerateOperationMoves(target, problem))
         return false;
 
@@ -2506,7 +2510,7 @@ bool CCamTabCommand::GenerateOperation(const StepRef& target, std::string& probl
             camcore::CheckFixtures(operation.toolpath, frame, fixtureTool, *fixtures.grids);
         if (!hits.empty())
         {
-            m_fixtureHits.insert(operation.id);
+            m_warnedOperations.insert(operation.id);
             for (const camcore::FixtureHit& hit : hits)
             {
                 const std::wstring text =
@@ -2516,7 +2520,63 @@ bool CCamTabCommand::GenerateOperation(const StepRef& target, std::string& probl
             }
         }
     }
+
+    // A thread needs its hole drilled first.
+    if (operation.type == camcore::StepType::ThreadMilling)
+    {
+        if (!haveFixtures)
+        {
+            const size_t active = camcore::ActiveOriginIndex(m_job, target.step);
+            frame = camcore::BuildFrame(m_job.sequence[active].origin).frame;
+        }
+        CheckThreadHoles(target, frame);
+    }
     return true;
+}
+
+void CCamTabCommand::CheckThreadHoles(const StepRef& target, const camcore::Frame& frame)
+{
+    const camcore::SequenceStep& operation = m_job.sequence[target.step].children[target.child];
+    const std::wstring name = FromUtf8(operation.name);
+    if (!HasStock())
+    {
+        m_generateWarnings.push_back(name + L": the holes weren't checked, as there's no stock to simulate.");
+        return;
+    }
+    const camcore::Tool* pTool = camcore::FindToolById(m_library, operation.toolId);
+    if (pTool == nullptr)
+        return;
+    const camcore::Tool tool = camcore::ToolInMillimetres(*pTool);
+
+    if (m_pProgress != nullptr)
+        m_pProgress->Update(-1.0, L"Checking the holes are drilled");
+    camcore::RemainingStock remaining;
+    std::string problem;
+    if (!ComputeRemainingStock(target, frame, tool.diameter / 2.0, remaining, problem))
+    {
+        m_warnedOperations.insert(operation.id);
+        m_generateWarnings.push_back(name + L": the holes couldn't be checked. " + FromUtf8(problem));
+        return;
+    }
+
+    // Inside the minor diameter, less a cell and a half, as the map's cells hold stock cells anywhere in them.
+    const double minor = camcore::ThreadMinorDiameter(operation.threadMilling, tool.threadAngle);
+    const double inside = minor / 2.0 - 1.5 * remaining.cell;
+    std::string ignored;
+    const std::vector<camcore::ThreadHole> holes = camcore::ThreadHoles(operation, frame, ignored);
+    for (size_t n = 0; n < holes.size(); ++n)
+    {
+        const camcore::ThreadHole& hole = holes[n];
+        const float highest = remaining.HighestInCircle(hole.centre.x, hole.centre.y, (std::max)(0.0, inside));
+        if (!(highest > hole.bottom + remaining.cell))
+            continue;
+        wchar_t text[200];
+        swprintf_s(text, L": thread %zu's hole isn't open to %.3f mm down to %.3f mm (stock is left at %.3f mm).", n + 1,
+                   minor, hole.bottom, static_cast<double>(highest));
+        m_warnedOperations.insert(operation.id);
+        m_generateWarnings.push_back(name + text);
+        Log(L"[generate] %s%s", name.c_str(), text);
+    }
 }
 
 bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& problem)
@@ -2526,6 +2586,7 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         operation.type != camcore::StepType::Profiling && operation.type != camcore::StepType::Pocketing &&
         operation.type != camcore::StepType::Chamfer && operation.type != camcore::StepType::Engrave &&
         operation.type != camcore::StepType::HolePocketing && operation.type != camcore::StepType::PlungeRoughing &&
+        operation.type != camcore::StepType::ThreadMilling &&
         operation.type != camcore::StepType::WaterlineRoughing &&
         operation.type != camcore::StepType::WaterlineFinishing &&
         operation.type != camcore::StepType::ParallelFinishing)
@@ -3173,6 +3234,34 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         return true;
     }
 
+    // Thread milling works from each feature's centre too.
+    if (operation.type == camcore::StepType::ThreadMilling)
+    {
+        camcore::ThreadMillToolpathInput threadInput;
+        threadInput.operation = &operation;
+        threadInput.frame = frame.frame;
+        threadInput.tool = (pTool != nullptr) ? &tool : nullptr;
+        threadInput.havePartMaxZ = havePartMaxZ;
+        threadInput.partMaxZ = partMaxZ;
+        threadInput.haveStockMaxZ = haveStockMaxZ;
+        threadInput.stockMaxZ = stockMaxZ;
+        threadInput.haveFixtureMaxZ = haveFixtureMaxZ;
+        threadInput.fixtureMaxZ = fixtureMaxZ;
+        const camcore::ToolpathResult threadResult = camcore::GenerateThreadMillToolpath(threadInput);
+        if (!threadResult.ok)
+        {
+            problem = threadResult.problem;
+            return false;
+        }
+        operation.toolpath = threadResult.toolpath;
+        for (const std::string& warning : threadResult.warnings)
+        {
+            m_warnedOperations.insert(operation.id);
+            m_generateWarnings.push_back(FromUtf8(operation.name) + L": " + FromUtf8(warning));
+        }
+        return true;
+    }
+
     camcore::DrillToolpathInput input;
     input.operation = &operation;
     input.frame = frame.frame;
@@ -3519,7 +3608,7 @@ void CCamTabCommand::OnOperationDialogGenerate(COperationDlg* pDialog)
     MarkJobChanged();
     ShowSequence();
     RebuildScene();
-    m_sequenceStatus = ok ? L"Generated " + name + (m_generateWarnings.empty() ? L"." : L", with a fixture warning.")
+    m_sequenceStatus = ok ? L"Generated " + name + (m_generateWarnings.empty() ? L"." : L", with a warning.")
                           : L"Couldn't generate " + name + L".";
     ShowStatus();
     if (!ok)
@@ -3688,7 +3777,7 @@ void CCamTabCommand::UpdateTreeWarnings()
         return;
     const bool machine = m_machine.id.empty();
     const bool material = !m_job.materialId.empty() && camcore::FindMaterial(m_materials, m_job.materialId) == nullptr;
-    std::set<std::string> warnIds = m_fixtureHits;
+    std::set<std::string> warnIds = m_warnedOperations;
     warnIds.insert(m_fixtureMissing.begin(), m_fixtureMissing.end());
     m_pWnd->ShowWarnings(m_job, machine, material, HasStock() && m_stockUnreadable, warnIds);
 }
@@ -4287,6 +4376,7 @@ namespace
         kImageWaterlineFinishing,
         kImageParallelFinishing,
         kImageFixtures,
+        kImageThreadMilling,
         kImageWarning       // drawn over another image, as overlay 1
     };
 
@@ -4315,6 +4405,7 @@ namespace
         case camcore::StepType::Group:         return kImageFolder;
         case camcore::StepType::Drill:         return kImageDrillOperation;
         case camcore::StepType::HolePocketing: return kImageHolePocketing;
+        case camcore::StepType::ThreadMilling: return kImageThreadMilling;
         case camcore::StepType::Facing:        return kImageFacing;
         case camcore::StepType::Profiling:     return kImageProfiling;
         case camcore::StepType::Pocketing:     return kImagePocketing;
@@ -5041,6 +5132,7 @@ void CCamTabWnd::OnTreeRightClick(NMHDR* /*pNotify*/, LRESULT* pResult)
         holes.CreatePopupMenu();
         holes.AppendMenu(MF_STRING | editable, ID_CAM_ADD_DRILL, L"Drill...");
         holes.AppendMenu(MF_STRING | editable, ID_CAM_ADD_HOLE_POCKETING, L"Hole Pocketing...");
+        holes.AppendMenu(MF_STRING | editable, ID_CAM_ADD_THREAD_MILLING, L"Thread Milling...");
         menu.AppendMenu(MF_POPUP | editable, reinterpret_cast<UINT_PTR>(holes.GetSafeHmenu()), L"Add Holes");
 
         twoAndAHalfAxis.CreatePopupMenu();
@@ -5117,6 +5209,7 @@ void CCamTabWnd::OnTreeRightClick(NMHDR* /*pNotify*/, LRESULT* pResult)
     case ID_CAM_ADD_FOLDER:  m_pTab->AddFolder(); break;
     case ID_CAM_ADD_DRILL:   m_pTab->AddOperation(ref.step, camcore::StepType::Drill); break;
     case ID_CAM_ADD_HOLE_POCKETING: m_pTab->AddOperation(ref.step, camcore::StepType::HolePocketing); break;
+    case ID_CAM_ADD_THREAD_MILLING: m_pTab->AddOperation(ref.step, camcore::StepType::ThreadMilling); break;
     case ID_CAM_ADD_FACING:  m_pTab->AddOperation(ref.step, camcore::StepType::Facing); break;
     case ID_CAM_ADD_PROFILING: m_pTab->AddOperation(ref.step, camcore::StepType::Profiling); break;
     case ID_CAM_ADD_POCKETING: m_pTab->AddOperation(ref.step, camcore::StepType::Pocketing); break;

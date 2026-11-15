@@ -213,18 +213,41 @@ namespace camcore
 
         // The highest stock over a rectangle of the frame's XY.
         float HighestIn(double x0, double y0, double x1, double y1) const;
+
+        // The highest stock over the cells whose centres are within radius of
+        // (x, y) in the frame's XY: a drilled hole's inside.
+        float HighestInCircle(double x, double y, double radius) const;
     };
     RemainingStock RemainingStockHeights(const VoxelStock& stock, const Frame& frame);
 
-    // The neck (a reduced neck tool's cutting diameter from its flute length up
-    // to its neck length; none without a reduced neck), the shank (from the neck
-    // length, or the flute length, up to the overall length, at the shank
-    // diameter, or the cutting diameter without a reduced neck) and the holder
-    // (from the overall length up), from a tool in mm and the machine's holder
-    // size. A tool with no flute length, or flutes as long as the tool, has no
-    // shank to check.
-    SimCylinder NeckOf(const Tool& tool);
+    // The shank (from the flute length up to the overall length, at the shank
+    // diameter, or the cutting diameter without one) and the holder (from the
+    // overall length up), from a tool in mm and the machine's holder size. A tool
+    // with no flute length, or flutes as long as the tool, has no shank to check.
     SimCylinder ShankOf(const Tool& tool);
+
+    // The tool's shape as the simulation cuts with it: ProfileOf, but with a
+    // shank of its own only up to the flute length, as the shank above is checked
+    // for touching instead of cutting.
+    ToolProfile CuttingProfileOf(const Tool& tool);
+
+    // A piece of a tool the simulation cuts with: a shape that only widens from
+    // its own tip, which is offset along the tool's axis above the tool's tip, and
+    // reversed points back down the axis (the upper flank of a thread mill's tooth).
+    struct ToolPart
+    {
+        ToolProfile profile;
+        double offset = 0.0;
+        bool reversed = false;
+    };
+
+    // What the simulation cuts with, from a tool in mm: CuttingProfileOf as one
+    // part, except a thread mill, which is its core at the root diameter and each
+    // tooth as two V parts (up from the root to the crest, and back down), leaving
+    // an ISO thread from its pitch, thread angle and Teeth: crests p/8 wide at the
+    // tool's diameter, the depth ThreadDepth, the lowest crest at the tip, the
+    // others a pitch apart above it.
+    std::vector<ToolPart> CuttingPartsOf(const Tool& tool);
     SimCylinder HolderOf(const Tool& tool, double holderDiameter, double holderDepth);
 
     // What stopped the simulation.
@@ -232,10 +255,9 @@ namespace camcore
     {
         None,
         RapidIntoStock,     // a rapid move cut stock
-        ShankHitsStock,     // the shank above the flutes (or above the neck) touched stock
-        NeckHitsStock,      // a reduced neck touched stock
+        ShankHitsStock,     // the shank above the flutes touched stock
         HolderHitsStock,    // the tool holder touched stock
-        ToolHitsFixture,    // the tool, its neck or its shank touched a fixture
+        ToolHitsFixture,    // the tool or its shank touched a fixture
         HolderHitsFixture,  // the tool holder touched a fixture
     };
 
@@ -310,10 +332,10 @@ namespace camcore
     {
         std::string name;
         std::string tool;       // what the Simulation dialog shows, such as "T3 6 mm end mill (Flat end mill, 6 mm)"
-        ToolProfile profile;
+        ToolProfile profile;    // the tool's outline, for the collision checks
+        std::vector<ToolPart> parts;    // what cuts; empty is profile alone
         Frame frame;
         Toolpath toolpath;
-        SimCylinder neck;       // checked for touching stock, if present
         SimCylinder shank;
         SimCylinder holder;
 
@@ -405,7 +427,7 @@ namespace camcore
         void ClearWarning() { m_warning = SimWarning::None; }
 
         // With collisions ignored, nothing is checked: a rapid cutting stock, the
-        // shank, neck or holder touching it, and fixtures, don't stop it. Kept when started again.
+        // shank or holder touching it, and fixtures, don't stop it. Kept when started again.
         void SetIgnoreCollisions(bool ignore) { m_ignoreCollisions = ignore; }
         bool IgnoreCollisions() const { return m_ignoreCollisions; }
 

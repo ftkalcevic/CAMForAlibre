@@ -4,7 +4,6 @@ Work still to do, beyond the build order in `CLAUDE.md`. Decisions about any of
 these belong in the spec (`docs\SPEC.md`) once they're made.
 
 - Operations
-  - Thread milling
   - 🔴 V-carve
   - 4th axis rotate(?), or do we just set the origin
   - 3D
@@ -22,6 +21,8 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
 - 4th axis: rotate and machine, etc.
 - Lathe support: machine type, rod stock, turning operations, tools, post and simulation (staged plan saved in `docs\LatheSupport.md`)
 - Tri-dexel simulation mode: smooth, exact stock as an option beside voxels (built and tested; plan in `docs\TriDexelSimulation.md`)
+- Exact solid (B-rep) in-process stock, probably through Alibre's own kernel (exploring; options in `docs\ExactSolidSimulation.md`)
+- Thread milling: external threads (internal threads built, and simulated with the tool's teeth; see the help's Thread Milling tab); perhaps a first tooth height on the tool, if the lowest crest isn't at the tip
 - 🔴 Show some summary information under each op, eg tool
 - New dialogs should inherit speed/feeds for the last (?)  copy/paste(?)
 - Rest machining: built for Waterline Roughing and Pocketing. Still to do: Facing, and pencil passes for finishing

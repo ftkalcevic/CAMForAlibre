@@ -231,6 +231,7 @@
 #define IDD_FEEDS_CALC                  13049
 #define IDD_MATERIAL                    13050
 #define IDD_FIXTURES                    13051
+#define IDD_OP_THREAD_MILLING           13052
 #define IDC_VIEW_SMALL                  13296
 #define IDC_VIEW_MEDIUM                 13297
 #define IDC_VIEW_LARGE                  13298
@@ -413,8 +414,8 @@
 #define IDC_SIM_TOOL                    13481
 #define IDC_WL_SLOPE_FROM               13482
 #define IDC_WL_SLOPE_TO                 13483
-#define IDC_TOOL_REDUCED_NECK           13484
-#define IDC_TOOL_NECK_LENGTH            13485
+#define IDC_TOOL_OWN_SHANK              13484
+#define IDC_TOOL_SHANK_LENGTH           13485
 #define IDC_TOOL_SHANK_DIAMETER         13486
 #define IDC_TOOL_DRAWING                13487
 #define IDC_FEEDS_TO_TOOL               13488
@@ -457,6 +458,23 @@
 #define IDC_FIX_PROMPT                  13534
 #define IDC_FIX_RESULT                  13535
 #define IDC_SIM_SHOW_FIXTURES           13536
+#define IDC_TOOL_THREAD_TEETH           13537
+#define IDC_TM_AT_TOP                   13538
+#define IDC_TM_AT_BOTTOM                13539
+#define IDC_TM_PICK_TOP                 13540
+#define IDC_TM_TOP_Z                    13541
+#define IDC_TM_PICK_TOP_BUTTON          13542
+#define IDC_TM_LENGTH                   13543
+#define IDC_TM_MAJOR                    13544
+#define IDC_TM_PITCH                    13545
+#define IDC_TM_RIGHT                    13546
+#define IDC_TM_LEFT                     13547
+#define IDC_TM_CLIMB                    13548
+#define IDC_TM_CONVENTIONAL             13549
+#define IDC_TM_PASSES                   13550
+#define IDC_TM_SPRING                   13551
+#define IDC_TM_APPROACH                 13552
+#define IDC_TM_SIZES                    13553
 #define IDC_MATDLG_TYPICAL              13524
 #define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
@@ -507,9 +525,9 @@
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        13052
+#define _APS_NEXT_RESOURCE_VALUE        13053
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13537
+#define _APS_NEXT_CONTROL_VALUE         13554
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

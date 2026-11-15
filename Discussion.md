@@ -11890,6 +11890,759 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Tri-dexel tested.
 
+### 🤖 Claude
+
+> Thanks. I've updated `CLAUDE.md` and `TODO.md` to say tri-dexel simulation is built and tested by you, and rebuilt `Discussion.md`. Nothing is committed.
+>
+> Tri-dexel and Fixtures both still have lines in `TODO.md`, now marked tested. I can take them off the list if you'd like.
+
+### 🧑 Frank · 16:33
+
+> Can full geometric simulation be done without an 3rd party library?
+
+### 🤖 Claude
+
+> Yes, it can be done without a library, but there are several ways to read "full geometric", and they cost very different amounts.
+>
+> **What we have now.** The tri-dexel stock is already exact along each ray: every crossing is worked out from the tool's true swept shape. It is only approximate *between* rays. The mesh is a surface net over those crossings, so sharp edges get softened to about one ray spacing, and the error is set by the resolution.
+>
+> **Ways to go further, all without a third-party library:**
+>
+> 1. **Exact solid (B-rep) cutting.** Keep the stock as faces bounded by edges, and subtract the swept volume of every move.
+>    - The swept volumes themselves are manageable. A line move of a flat, ball or corner radius tool sweeps planes, cylinders, spheres and tori. Arcs sweep tori and more general surfaces.
+>    - The hard part is a robust boolean kernel: intersecting those surfaces, building the topology, and coping with near-tangent and degenerate cases. This is what Parasolid, ACIS and Open CASCADE spend decades on.
+>    - The stock would also grow by millions of tiny faces over a finishing pass. Commercial verifiers (Vericut, for example) don't do this for that reason; they use dexels or voxels plus exact reconstruction.
+>    - My view: doable in principle, months of work, and fragile and slow on real toolpaths. I wouldn't recommend it.
+>
+> 2. **Exact mesh booleans.** Keep the stock as a closed triangle mesh, and subtract a tessellated sweep for each move.
+>    - This is simpler than B-rep, but robust booleans still need exact or adaptive-precision arithmetic to avoid cracks. That's the core of what libraries like Manifold or CGAL provide.
+>    - It's faster than B-rep but still struggles with 100,000+ moves, and accuracy is limited by how finely the tool is tessellated.
+>
+> 3. **Tri-dexel with exact reconstruction.** This is what I'd recommend.
+>    - Each dexel endpoint would also record which move cut it and the surface normal at that point. We know that exactly from the tool's envelope, and `CutDexels` already finds it.
+>    - The mesh would then be built by dual contouring with those normals instead of surface nets. Sharp edges and corners come out sharp, and flat and cylindrical walls come out true.
+>    - It would build on `core\TriDexel` and stay fully in-house. It would also give exact numbers for measuring the remaining stock and gouges against the part.
+>    - Accuracy would be near exact at the surface, with only slivers thinner than the ray spacing still approximate.
+>
+> 4. **Using Alibre's own kernel.** We could add the cut solids as part features through the API. It isn't third-party, but each feature takes seconds, so it's only usable for a few dozen merged cuts, not a toolpath.
+>
+> So: a fully exact solid is possible from scratch but a poor investment, and option 3 gets almost all of the benefit at a fraction of the cost.
+
+> Questions:
+> - Which kind of "full geometric" simulation do you want to pursue? (Option 3 adds exact normals at each dexel end and sharp-edged reconstruction to the existing tri-dexel stock, all in-house.)
+>   - Exact tri-dexel (Recommended): Record the cutting move and exact normal at each dexel end; rebuild the mesh with dual contouring so edges and walls are sharp and true. Builds on core\TriDexel, no library.
+>   - Exact B-rep solid: Write our own solid kernel and subtract every move's swept volume exactly. Months of work, fragile, slow on long finishing passes.
+>   - Just answering, not now: No work for now; maybe add it to TODO.md.
+
+### 🧑 Frank · 16:34
+
+> Answers:
+> - simulation do you want to pursue? (Option 3 adds exact normals at each dexel end and sharp-edged reconstruction to the existing tri-dexel stock, all in-house.)
+>   **Exact B-rep solid.  What options are there?**
+
+### 🤖 Claude
+
+> Here are the realistic ways to get an exact solid. I checked what Alibre 27.0.1's API offers in the generated headers.
+>
+> ### A. Write our own kernel, narrowed to what milling needs
+> A general kernel isn't needed. For 3-axis moves with our tool types, every swept surface is one of a short list:
+>
+> | Move | Flat | Ball | Corner radius / bull |
+> |---|---|---|---|
+> | Plunge or level line | planes, cylinders | cylinders, spheres | planes, cylinders, tori |
+> | Sloped line | planes, elliptic cylinders | cylinders, spheres | adds a swept torus (not a standard surface) |
+> | Level arc | planes, cylinders | tori, spheres | tori |
+> | Helix | helical sweeps (spline approximation) | same | same |
+>
+> - **2.5D only** (flat mill, level moves): the cut at each level is a 2D region (lines and arcs) pushed straight down. That needs only exact 2D booleans of lines and arcs plus planar and cylindrical faces, so it's very doable in-house. I'd estimate weeks, not months.
+> - **3D finishing** (ball mill, sloped moves): this needs surface–surface intersection for spheres, cylinders and tori, plus spline surfaces for the general cases, and topology that holds up with near-tangent cuts. Every finishing pass leaves thousands of thin scallop faces. Months of work, and slow: a 20,000-move pass means 20,000 booleans on an ever-growing solid. Combining each operation's sweeps first and subtracting once helps, but doesn't remove the problem.
+>
+> ### B. Use Alibre's own kernel through its API
+> It's in-process and not a third-party library we'd ship.
+> - **What's there:** `AddSweptCutout` (sweep a sketch profile along a path), `IADDesignBooleanFeature` / `ADBooleanOperator_AD_SUBTRACTION` (body booleans), `AddMeshBooleanFeature`, and `ImportSTEPFile`.
+> - **How it would work:** the stock as a part, with each operation's cuts added as cutout or boolean features.
+> - **Pros:** an exact, real Alibre solid the user can measure, section, carry on modelling, or export as STEP.
+> - **Cons:**
+>   - Each feature takes roughly 0.1 to several seconds and the part history grows. It only works with moves combined: per level or per pass, not per move.
+>   - It runs on Alibre's thread, so it can't run in the background.
+>   - It's all unproven in 27.0.1.
+> - **Where it fits:** a "make in-process stock part" command run after an operation, not live playback.
+>
+> ### C. Third-party kernels (for comparison only)
+> - **Open CASCADE:** LGPL, free, has booleans and pipe sweeps. Large (tens of MB of DLLs) and slow for many booleans.
+> - **Parasolid, ACIS, C3D, SMLib:** commercial licences with royalties.
+> - **Manifold:** Apache licence, fast and robust, but only exact as a mesh, not a true B-rep.
+>
+> ### D. Hybrid: exact where it's cheap, dexels elsewhere
+> Use A's 2.5D in-house solid for flat-mill operations and keep tri-dexel for 3D finishing. Or use the dexel result, then build B-rep faces only where a single move's envelope cut a whole region. That's far harder to make watertight.
+>
+> My take: **A, limited to 2.5D**, is achievable and exact. **B** gives a true solid for 3D work at the cost of speed. Full 3D in-house (A, all of it) is the big, risky one.
+
+> Questions:
+> - What should the exact B-rep solid be used for? The answer decides between our own kernel (fast enough for playback) and Alibre's kernel (a real Alibre part, but slow).
+>   - Exact view while playing: Replace the voxel/dexel display during simulation with the exact solid. Needs our own kernel (option A) to be fast enough.
+>   - In-process stock part: Make an Alibre part of the stock after an operation, to measure, section, export STEP or model on. Fits Alibre's kernel (option B).
+>   - Exact gouge/remaining checks: Exact distances between the cut stock and the part, rather than to a cell's accuracy.
+>   - Exploring for now: No work yet; record the options in TODO.md or a docs page.
+> - If we write our own kernel (option A), how far should it go?
+>   - 2.5D first (Recommended): Flat mills and level moves: exact 2D line/arc booleans pushed straight down. Weeks of work; 3D left to dexels for now.
+>   - Full 3D: Ball, corner radius and sloped moves too: sphere, cylinder, torus and spline intersections. Months, and slow on finishing passes.
+>   - Not our own kernel: Use Alibre's kernel (option B) instead.
+
+### 🧑 Frank · 16:36
+
+> Answers:
+> - What should the exact B-rep solid be used for? The answer decides between our own kernel (fast enough for playback) and Alibre's kernel (a real Alibre part, but slow).
+>   **Exploring for now**
+> - If we write our own kernel (option A), how far should it go?
+>   **Not our own kernel**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Record the exact solid (B-rep) simulation options
+>
+> ## Context
+>
+> Frank asked whether full geometric (exact B-rep) simulation can be done without a third-party library. He chose "Exploring for now", and doesn't want our own kernel. So nothing gets built: the options go on record so the idea can be picked up later, leaning to Alibre's own kernel.
+>
+> ## Changes
+>
+> 1. **New `docs\ExactSolidSimulation.md`** (CRLF line endings, no BOM, like the other docs pages). It records:
+>    - **Where things stand:** tri-dexel is exact along each ray, but its mesh is softened to about one ray spacing between rays.
+>    - **The options considered:**
+>      - **A, our own kernel:**
+>        - The swept surface table: plane, cylinder, sphere, torus, elliptic cylinder, swept torus, helical sweep.
+>        - 2.5D (weeks) against full 3D (months, slow).
+>        - Frank declined it.
+>      - **B, Alibre's kernel through the 27.0.1 API:**
+>        - `AddSweptCutout`, `IADDesignBooleanFeature` with `ADBooleanOperator_AD_SUBTRACTION`, `AddMeshBooleanFeature`, `ImportSTEPFile`.
+>        - Its likely use is an "in-process stock part" made after an operation, with moves combined per level or pass.
+>        - It's slow (about 0.1 s to several seconds a feature), runs on Alibre's thread, and is all unproven.
+>        - Frank's preferred direction, if this is pursued.
+>      - **C, third-party kernels:** Open CASCADE (LGPL), Parasolid, ACIS, C3D, SMLib (commercial), Manifold (Apache, mesh only). Not wanted.
+>      - **D, a hybrid:** the in-house 2.5D solid alongside dexels.
+>      - **The alternative that isn't a B-rep:** exact tri-dexel reconstruction, with each dexel end's cutting move and normal and dual contouring for sharp edges.
+>    - **Open questions, if it's picked up:**
+>      - What the solid is for: a stock part, exact gouge checks, or the view.
+>      - How to combine moves into features.
+>      - Whether `AddSweptCutout` accepts a 3D path.
+>      - The time Alibre takes per feature.
+> 2. **`TODO.md`:** one line under the simulation items. "Exact solid (B-rep) in-process stock, probably through Alibre's own kernel (exploring; options in `docs\ExactSolidSimulation.md`)."
+> 3. **Then** run `python tools\BuildDiscussion.py`.
+>
+> No code, spec or help changes are needed, because nothing in the product changes.
+>
+> ## Verification
+>
+> - Both files exist with CRLF line endings, checked with `file`.
+> - `TODO.md` links to the new page.
+> - `Discussion.md` is rebuilt.
+
+*(Frank turned the plan down.)*
+
+### 🧑 Frank · 16:37
+
+> Accept, but record the plan for future changes.
+
+### 🤖 Claude
+
+> Plan mode is still on, because rejecting the approval left it active, so I haven't written anything yet. The options are saved in the plan file, ready to go: a new `docs\ExactSolidSimulation.md` setting out the four options, with Alibre's own kernel as the preferred direction and the open questions to settle first, plus a `TODO.md` line pointing to it.
+>
+> Turn plan mode off and I'll write both files and rebuild `Discussion.md`.
+
+### 🧑 Frank · 16:38
+
+> Add threadmill operation.
+
+### 🤖 Claude
+
+> Questions:
+> - Which threads should the Thread Milling operation cut?
+>   - Internal and external (Recommended): Tapped holes, and threads on bosses or pins, chosen per operation. The tool goes round inside the hole or outside the boss.
+>   - Internal only: Tapped holes only, for now; external later.
+> - How should the thread's size come from the model? (A hole in Alibre is usually modelled at the tap drill (minor) size, a boss at the major size.)
+>   - Picked circle + thread depth (Recommended): Pick circles, hole faces or points like Hole Pocketing. The picked diameter is the drill size (internal) or major size (external), and the thread depth comes from the pitch and thread angle (ISO: 0.6134 x pitch for 60 degrees), with a box to override it.
+>   - Typed major diameter: Pick centres; type the thread's nominal (major) diameter in the operation, like M6 = 6. The model's hole size is ignored.
+>   - Both, a check box: Use Arc Dia as in Hole Pocketing: ticked, the picked size; unticked, a typed major diameter.
+> - How should the operation treat the tool's teeth? A single-point thread mill has one tooth row; a multi-form one has teeth over its flute length and cuts several threads per turn.
+>   - Setting on the operation (Recommended): Single point: helix the whole thread length, one pitch a turn. Multi-form: one turn per pass covering the flute length, stepping up by whole pitches if the thread is longer.
+>   - Single point only: Always helix the whole length, one pitch a turn. Works with any tool, slower with a multi-form one.
+>   - New tool field: Add 'Thread form length' (or teeth count) to the thread mill tool; the operation picks single or multi-form from it.
+> - Which pitch should be used?
+>   - Operation, from tool (Recommended): The operation has its own pitch, filled from the tool's pitch when it's chosen; a multi-form tool must match its own pitch (warned otherwise).
+>   - Tool's pitch only: Always the tool's pitch; one tool per pitch.
+
+### 🧑 Frank · 16:44
+
+> Answers:
+> - Which threads should the Thread Milling operation cut?
+>   **Internal only**
+> - How should the thread's size come from the model? (A hole in Alibre is usually modelled at the tap drill (minor) size, a boss at the major size.)
+>   **#2.  Use REST machining to ensure the hole is large enough.**
+> - How should the operation treat the tool's teeth? A single-point thread mill has one tooth row; a multi-form one has teeth over its flute length and cuts several threads per turn.
+>   **#3 tooth count on the tool**
+> - Which pitch should be used?
+>   **Operation, from tool (Recommended)**
+
+### 🤖 Claude
+
+> Questions:
+> - For the check that earlier operations have opened each hole to the thread's minor diameter (from the simulated stock, like rest machining), what should happen when a hole isn't open enough?
+>   - Warn, mark the op (Recommended): Generate still makes the toolpath, then warns 'Hole 3 isn't open to 4.92 mm down to 12 mm' and puts the red mark on the operation, like fixture warnings.
+>   - Stop Generate: Refuse to generate until earlier operations open every hole.
+>   - Option on the tab: A 'Check the hole is drilled' check box; off, no check (and no simulation run).
+> - How should depth be cut in to the full thread (the tool going out to the major diameter)?
+>   - Radial passes + spring (Recommended): 'Radial passes' (default 1) splits the thread depth into equal steps out, each a full helix; a 'Spring pass' check box repeats the last one.
+>   - One pass only: Always full depth in one helix.
+> - Hand and cut direction?
+>   - Hand + Climb/Conv (Recommended): Right or left hand, and Climb or Conventional (default Climb). The helix goes up or down to suit: a right-hand climb cut goes bottom up with a clockwise spindle.
+>   - Hand + Top down/Bottom up: Right or left hand, and choose the vertical direction directly; climb or conventional follows.
+> - How should the tool enter and leave the thread?
+>   - Arc lead in/out (Recommended): From the hole's centre, a straight move then a tangent arc that rises or falls by its share of the pitch, and the same out, so there's no witness mark. The usual way.
+>   - Straight in/out: Straight from the centre to the wall and back.
+
+### 🧑 Frank · 16:55
+
+> Answers:
+> - For the check that earlier operations have opened each hole to the thread's minor diameter (from the simulated stock, like rest machining), what should happen when a hole isn't open enough?
+>   **Warn, mark the op (Recommended)**
+> - How should depth be cut in to the full thread (the tool going out to the major diameter)?
+>   **Radial passes + spring (Recommended)**
+> - Hand and cut direction?
+>   **Hand + Climb/Conv (Recommended)**
+> - How should the tool enter and leave the thread?
+>   **Arc lead in/out (Recommended)**
+
+### 🤖 Claude
+
+> Writing the plan now, using your answers.
+
+> Plan:
+>
+> # Thread Milling operation (internal threads)
+>
+> ## Context
+>
+> `TODO.md` lists Thread milling. The tool library already has a Thread mill type, with `pitch` and `threadAngle` in `core\ToolLibrary.h`, but no operation uses it.
+>
+> Frank's choices:
+> - **Threads:** internal only.
+> - **Size:** a typed major diameter, at picked centres. The model's hole size is ignored, and the simulated stock checks the hole has been opened enough.
+> - **Tool:** a new tooth count field on the thread mill tool.
+> - **Pitch:** the operation's own, filled in from the tool.
+> - **Hole check:** warn and mark the operation when the hole isn't opened enough.
+> - **Radial passes:** a number of passes, plus a spring pass.
+> - **Direction:** the thread's hand plus Climb or Conventional.
+> - **Entry:** arc lead in and out.
+>
+> Also, from the last turn (approved by Frank): record the exact solid options in `docs\ExactSolidSimulation.md` and `TODO.md`.
+>
+> ## The operation
+>
+> **The step:**
+> - `StepType::ThreadMilling`, saved as `threadMilling` with `ThreadMillingSettings` under `threadMilling`. The `.cam` format goes to version 17.
+> - Added from a folder's Add Holes ▸ Thread Milling (`ID_CAM_ADD_THREAD_MILLING`), with the tree image `kImageThreadMilling` added to `CamTree16/24/32.bmp` by a scratch script, like `fixtureicon.py`.
+> - Its tabs:
+>   - Features (Drill's `FeatureFilter::Points`: circles, hole faces, points; only the centre is used)
+>   - Tool
+>   - Feeds & Speeds
+>   - Clearance
+>   - Thread Milling
+>
+> **`core\ThreadMilling.h/.cpp`: `ThreadMillingSettings`, `ValidateThreadMilling`.** Defaults are Claude's.
+>
+> | Setting | Meaning | Default |
+> |---|---|---|
+> | `location`, `topZ` | Cut geometry: At Top, At Bottom or Pick Top, as Hole Pocketing (`CutGeometryLocation`) | At Top |
+> | `length` | Thread length, down from the top | 10 |
+> | `majorDiameter` | Nominal size (M6 = 6) | 6 |
+> | `pitch` | Filled from the tool when the tool is chosen on the Tool tab | 1.0 |
+> | `hand` | Right or Left (`ThreadHand`) | Right |
+> | `direction` | Climb or Conventional (`CutDirection`) | Climb |
+> | `radialPasses` | 1 or more | 1 |
+> | `springPass` | Repeats the last pass | off |
+> | `approachDistance` | | 1 |
+>
+> - The tab shows the minor diameter and thread depth as read-only text.
+> - The thread depth is 5/8 H, where H = pitch / (2 tan(angle / 2)) and the angle is the tool's `threadAngle`. For 60 degrees that's 0.5413 x pitch.
+> - The minor diameter is major − 2 x depth (for M6x1, 4.917).
+>
+> **The tool:**
+> - `Tool::threadTeeth` (int, default 1; 1 is single point), thread mills only.
+> - Saved as `threadTeeth` when it isn't 1 and optional on read, so the library and machine files stay version 3. It goes in `FieldsOf`, and `ValidateTool` requires 1 or more, with teeth x pitch no more than the flute length.
+> - Tool dialog: `IDC_TOOL_THREAD_TEETH` with its label, plus a letter on the drawing (`m`, the next free one) in `addon\ToolDrawing`.
+>
+> ## The toolpath: `core\ThreadMillToolpath.h/.cpp`, `GenerateThreadMillToolpath`
+>
+> It follows `HolePocketToolpath`'s structure, its `HoleBuilder` arcs and helixes, and `FeaturePoint`/`WorldToFrame`. The shared helpers move into `core\HelixPath.h` if needed.
+>
+> - **Checks:** there's a thread mill tool (Claude's choice: any other type stops Generate), there are features, the settings are valid, and the tool is narrower than the minor diameter.
+> - **Radii:** the final radius is R = major / 2 − tool radius (the tool's diameter is its tooth tip diameter). Radial passes step out evenly from (minor / 2 − tool radius) to R. The spring pass repeats R.
+> - **The way the helix turns:**
+>   - Climb is anticlockwise (G3) and Conventional is clockwise (G2), with a clockwise spindle as elsewhere.
+>   - Right hand: anticlockwise goes up, clockwise goes down.
+>   - Left hand: the other way round.
+>   - So a right-hand climb cut goes bottom up.
+> - **Teeth:**
+>   - Each turn drops or rises one pitch.
+>   - Single point (teeth 1): a continuous helix along the whole length.
+>   - Multi-form (n teeth): the form covers n x pitch. The cut is ceil(length / (n x pitch)) single turns, each moved n pitches (whole pitches, so they stay in phase). The lowest has its bottom tooth at the thread's bottom.
+> - **Each pass:**
+>   - Rapid at the clearance plane to above the hole's centre, then down to the approach distance above the top.
+>   - Feed down the centre to the start height, which is the bottom for bottom-up cuts. The hole is meant to be drilled already.
+>   - Arc lead in: a half circle of radius R / 2 from the centre to the wall, tangent there, changing Z by its share of the pitch.
+>   - The helix turn or turns.
+>   - The same arc out to the centre, then the next pass, and up to the clearance plane at the end.
+>   - Lead moves at the engage feed, helixes at the cut feed (the feed at the tool's centre, as everywhere; Claude's choice).
+> - **Pitch warning:** a multi-form tool whose pitch isn't the operation's gives a Generate warning, "The tool's teeth are 1.5 apart but the thread's pitch is 1.25", and the toolpath is still made.
+>
+> ## The hole check (warn, from the simulated stock)
+>
+> - Runs in `CCamTabCommand::GenerateOperation` after the toolpath, for Thread Milling only.
+> - It uses `ComputeRemainingStock` (`addon\CamTabCommand.cpp:1781`) with `RemainingStockHeights` (`core\Simulation.h:217`).
+> - New `RemainingStock::HighestInCircle(cx, cy, r)` in `core\Simulation`.
+> - For each hole: if any stock is left above the thread's bottom inside (minor / 2 − one simulation cell), warn: "Thread 2: the hole isn't open to 4.92 mm down to 12 mm."
+> - The warnings go to `m_generateWarnings`, and the operation is marked in the tree through the same `warnIds` route as `m_fixtureHits`. That gets a general name, `m_warnedOperations`.
+> - No stock means no check, with one note in the warnings. An earlier operation without a toolpath means a warning that the hole couldn't be checked, rather than stopping Generate as rest machining does.
+> - The check is Claude's addition: the simulation draws a thread mill as a plain cylinder of its diameter, so the thread form itself isn't simulated, just a bore to the major diameter over the teeth.
+>
+> ## Add-on
+>
+> - **`addon\OperationDialog`:** `CThreadMillingPage` (`IDD_OP_THREAD_MILLING`, with a ? button through `TemplateId`, help `#thread-milling`), wired like `CHolePocketingPage`. Its Pick Top button uses `LocateTarget::HoleTop`.
+> - **Pitch from the tool:** the Tool tab's change fills the pitch from a thread mill's `pitch`, through `COperationDlg`.
+> - **IDs:** resources from 13052 and controls from 13537 in `resource.h`.
+> - **`CamTabCommand.cpp`:** the menu, `StepImage`, the type name at line 1444, the generator branch beside Hole Pocketing (line 3154), and the "no area features" list at line 2528.
+> - **`core\CamJob`:** the type, saving and reading, `SameSettings`, `DuplicateStep`, templates and version 17.
+>
+> ## Tests: new `tests\ThreadMillToolpathTests.cpp`
+>
+> - A save round trip, and a version 16 job loading.
+> - An M6x1 single point, right hand, climb cut: the helix rises 1 per turn with anticlockwise arcs at radius R, and starts and ends at the centre.
+> - Conventional and left-hand cuts turn and move the other ways.
+> - A multi-form tool with 5 teeth on a 12 long thread makes 3 turns, n pitches apart.
+> - Radial passes 3 plus a spring pass gives 4 passes at the expected radii.
+> - Validation of the settings and the tool's teeth.
+> - `HighestInCircle` against a simulated drilled hole, both open and too small.
+> - The tool's teeth survive a save round trip.
+>
+> ## Docs (same change)
+>
+> - **`help\CAMForAlibre.html`:** a Thread Milling section covering every field, the tree, the menus and the Tool dialog's Teeth field.
+> - **`docs\SPEC.md`:** a "Thread Milling (decided)" entry. Tell Frank it now differs from the Claude doc.
+> - **`CLAUDE.md`:** the current state line for Thread Milling.
+> - **`TODO.md`:** take Thread milling off, and add the exact solid line.
+> - **New `docs\ExactSolidSimulation.md`:** the options from the last turn (Alibre kernel preferred, own kernel declined, third-party kernels not wanted, the tri-dexel reconstruction alternative, open questions).
+>
+> ## Verification
+>
+> 1. Build Release x64 (a full Rebuild, since `SequenceStep` and `Tool` grow) and run `CamCoreTests.exe`.
+> 2. Close Alibre, install, then run `python tools\BuildDiscussion.py`.
+> 3. Frank's tests in Alibre:
+>    1. Add a thread mill tool with teeth.
+>    2. Add Thread Milling on a drilled hole, and check the pitch fills in from the tool.
+>    3. Generate a right-hand climb cut and check the toolpath rises anticlockwise, with arc leads.
+>    4. Try radial passes and a spring pass.
+>    5. Try a multi-form tool on a long thread.
+>    6. Check the warning on an undrilled hole.
+>    7. Simulate.
+>    8. Post, and check G2/G3 helixes with Z.
+>    9. Check the help.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Writing the core thread milling settings now.
+
+> Editing CamJob and the tool library for the new step and tool teeth field.
+
+> Writing the thread mill toolpath generator.
+
+> Core done; writing the tests now.
+
+> Building the core library and tests.
+
+> Reading the operation dialog's setup code to wire the new tab in.
+
+> All 371 core tests pass. Now the add-on: the Tool dialog's Teeth field first.
+
+> Writing the Thread Milling tab, its resources, and the tool dialog changes.
+
+> Now the CAM tab: menu, tree image, Generate branch and the hole check.
+
+> Tree icon added. Now the CAM tab code edits.
+
+> Building the whole solution.
+
+> Writing the help, spec, CLAUDE.md, TODO and the exact solid page.
+
+> Alibre is closed, so I'm installing.
+
+> I've built Thread Milling for internal threads. The Release build has no new warnings and all 371 core tests pass, including 9 new ones. **It isn't installed:** the administrator prompt was cancelled, so nothing has been run in Alibre yet. Nothing is committed.
+>
+> **What's in it:**
+> - **Adding it:** Add Holes ▸ Thread Milling on a folder.
+> - **Picking holes:** circles, hole faces or points, as Drill does. Only each one's centre is used.
+> - **Thread Milling tab:**
+>   - the top (At Top, At Bottom or Pick Top), thread length, major diameter and pitch;
+>   - right or left hand, and Climb or Conventional;
+>   - number of radial passes, and a spring pass;
+>   - approach distance.
+>   - Under the pitch it shows the minor diameter and thread depth, worked out from the tool's thread angle.
+> - **Pitch from the tool:** choosing a thread mill on the Tool tab fills in its pitch.
+> - **Tool dialog:** a new Teeth field for thread mills, where 1 means single point. The rows below it moved down to make room.
+> - **Toolpath:**
+>   - A right-hand climb cut goes from the bottom up, anticlockwise.
+>   - A single point tool helixes the whole length. A tool with n teeth cuts single turns, moved whole pitches apart so they stay in step.
+>   - Each turn starts and ends with a half-circle arc between the hole's centre and the wall.
+> - **Hole check:** after Generate, the earlier operations are simulated, as Rest Machining does. If a hole isn't open to the minor diameter down to the thread's bottom, Generate warns and puts a red mark on the operation; the toolpath is still made. A multi-tooth tool whose pitch differs from the thread's also gets a warning.
+> - **File format:** `.cam` files are now version 17.
+>
+> **Decisions I made that you didn't:**
+> - Generate refuses any tool that isn't a thread mill.
+> - The lead arcs run at the engage feed and the helix at the cut feed.
+> - The tool feeds down the hole's centre and goes up it at rapid.
+> - With no stock, the holes aren't checked, and you get a note saying so.
+> - An earlier operation with no toolpath gives a warning that the holes couldn't be checked, instead of stopping Generate.
+> - The lead-in starts a quarter pitch beyond the thread's end, so a bottom-up cut goes a quarter pitch below the thread's bottom. The hole needs to be drilled at least that deep.
+>
+> **Limits:**
+> - The simulation draws a thread mill as a plain cylinder, so a thread shows as a bore to the major diameter.
+> - The tool drawing has no letter for Teeth, the same as Flute count.
+>
+> The help, `docs\SPEC.md`, `CLAUDE.md` and `TODO.md` are updated. `docs\SPEC.md` now differs from the Claude doc. The exact-solid notes from earlier are in a new page, [docs/ExactSolidSimulation.md](docs/ExactSolidSimulation.md), with a line in `TODO.md`. I also changed the Generate summary to say "with N warnings" instead of "fixture warnings", since warnings now come from thread milling as well as fixtures.
+>
+> **To test once it's installed:**
+> 1. Edit a thread mill and set Teeth (try 1, then 5). Check the Teeth field is greyed for other tool types.
+> 2. Add Holes ▸ Thread Milling on a drilled hole. On the Tool tab, choose the thread mill and check the pitch fills in and the minor diameter text updates.
+> 3. Generate an M6x1 right-hand climb cut. The helix should rise anticlockwise from the bottom, with half-circle leads from the centre.
+> 4. Try Left Hand and Conventional, and check the direction of travel changes.
+> 5. Try 3 radial passes plus a spring pass.
+> 6. Try a 5-tooth tool on a 12 mm thread. You should get 3 single turns. Then change the pitch to one the tool doesn't have and check the warning.
+> 7. Put it on a hole that isn't drilled, or is drilled too small. Check the warning and the red mark. Also try it with no stock.
+> 8. Use Pick Top, then save and reload the job.
+> 9. Simulate it, then post with LinuxCNC and check you get G2/G3 helixes with Z.
+> 10. Check the new tree icon and the help: the Thread Milling tab section, the menu entry and the Teeth field.
+
+### 🧑 Frank · 17:38
+
+> Install again
+
+### 🤖 Claude
+
+> The install worked this time. The installed `CAMForAlibre.dll` matches the Release build, and the installed help has the Thread Milling section. Start Alibre and work through the 10 Thread Milling tests from my last message. Nothing is committed.
+
+### 🧑 Frank · 18:06
+
+> A thread mill usually has a shank diameter that is less than the thread cutting diameter.  In fact any tool can have different diameters.  We already support "reduced shank" tools.  We need to make that more generic - an optional shank diameter, and shank length - the part before the flutes or cutters.
+
+### 🤖 Claude
+
+> Questions:
+> - How should a tool's shank be described, replacing the Reduced neck tick box? (Today: the cutting diameter carries on from the flutes up to Neck length, then Shank diameter (no smaller than the cutting diameter) up to the overall length.)
+>   - Shank dia + length: Optional Shank diameter (any size, smaller or larger than the cutting diameter) and Shank length, measured from the top of the flutes up. Above the shank, to the overall length, the tool is the cutting diameter again... or the shank diameter (next question decides).
+>   - Shank from flutes to top: Optional Shank diameter only: from the top of the flutes all the way to the overall length. Shank length is then overall less flute length, shown but not typed.
+>   - Neck + shank: Three parts: flutes (cutting dia), an optional neck (Neck dia, Neck length, e.g. a thread mill's thin neck), then the shank (Shank dia) to the overall length. Most general.
+> - With 'Shank dia + length', what is the tool above the shank, up to the overall length?
+>   - Not applicable: I picked another model in the first question.
+>   - Shank dia to the top: Shank length is where the shank starts being that diameter... i.e. treat the shank as running to the overall length; shank length only sets where it starts above the flutes, with the cutting diameter between.
+>   - Cutting dia again: The tool goes back to the cutting diameter above the shank (rare).
+
+### 🧑 Frank · 18:09
+
+> Answers:
+> - How should a tool's shank be described, replacing the Reduced neck tick box? (Today: the cutting diameter carries on from the flutes up to Neck length, then Shank diameter (no smaller than the cutting diameter) up to the overall length.)
+>   **Shank from flutes to top**
+> - With 'Shank dia + length', what is the tool above the shank, up to the overall length?
+>   **Not applicable**
+
+### 🤖 Claude
+
+> Working on the tool shank change: core first, then the Tool dialog and drawing.
+
+> Updating the old reduced-neck tests to the shank model.
+
+> Building and running the tests.
+
+> All 371 tests pass. Doing a full rebuild to rule out stale objects, since `Tool` changed size, and updating the docs meanwhile.
+
+> Docs updated; waiting on the full rebuild and test run.
+
+> Alibre is closed. The rebuild is still running; I'll install once it finishes.
+
+> The full rebuild and test run is still going. I'll install as soon as it finishes.
+
+### 🧑 Frank · 18:19
+
+> <task-notification>
+> <task-id>bn4muhodq</task-id>
+> <tool-use-id>toolu_01HNEPm8aLn7d5d8DHQ1fsEZ</tool-use-id>
+> <output-file>C:\Users\FRANKT~1\AppData\Local\Temp\claude\af67b47206b29857\3929cb7f-8be9-474a-b824-50f2445f44e3\tasks\bn4muhodq.output</output-file>
+> <status>completed</status>
+> <summary>Background command "Full rebuild and run all tests" completed (exit code 0)</summary>
+> </task-notification>
+
+### 🤖 Claude
+
+> Any tool can now have a shank of its own, replacing Reduced neck. The diameter can be smaller or larger than the cutting diameter and runs from the top of the flutes to the overall length. It's built, and all 371 tests pass after a full Release rebuild. It's installed, but you haven't tried it in Alibre yet. Nothing is committed.
+>
+> **What changed:**
+> - **Tool dialog:**
+>   - A "Shank of its own" tick box with Shank diameter (e).
+>   - Shank length (d) is shown as the overall length less the flute length, not typed, as you chose.
+>   - Neck length is gone.
+>   - The drawing shows the shank narrower or wider, and redraws as you type sizes.
+> - **Simulation:**
+>   - With its own shank, only the flutes cut. The shank above them is checked against the stock and fixtures, and drawn.
+>   - A shank narrower than the cutting diameter is checked after each move is cut, so it can follow the teeth down the hole they plunge. Any other shank is checked before, as now. Without that, every plunge with a thread mill would report a shank hit.
+>   - The separate neck check, "The tool's neck hits the stock", is gone.
+>   - Fixture checks also stop the tool's cutting part at the flute length when the shank is its own.
+> - **Old tools:** a tool saved with Reduced neck ticked loads with its shank diameter, starting from the top of the flutes. Its old neck length is ignored. That neck was the cutting diameter, which the old rules kept no wider than the shank, so the checks only get stricter. That was my choice. An unticked one loads with no shank.
+> - **Toolpaths still don't use the shank**, as before.
+> - The help, `docs\SPEC.md` (which now differs further from the Claude doc) and `CLAUDE.md` are updated.
+>
+> **To test:**
+> 1. Open an old tool that had Reduced neck. It should now show "Shank of its own" ticked, with the same shank diameter.
+> 2. On a thread mill, tick "Shank of its own" and set a diameter smaller than the cutting diameter. Check the drawing shows a narrower shank and Shank length updates as you change the flute and overall lengths. Try a wider one too, and untick it.
+> 3. Check the Tool tab's details list Shank diameter and Shank length.
+> 4. Simulate Thread Milling with that tool in a drilled hole. Only the teeth's length should cut, and the narrow shank should be drawn above them with no shank warning.
+> 5. Simulate a slot deeper than the flutes with a narrow shank tool, and check you get "The tool's shank hits the stock". A plain tool should still warn there as before.
+> 6. Check the help's Tool dialog section, under Shank of its own.
+
+### 🧑 Frank · 18:27
+
+> Simulate doesn't appear to show the threads cut.
+
+### 🤖 Claude
+
+> That's expected for now. The simulation cuts with a thread mill as a plain cylinder at its teeth's tip diameter, so the thread mill sweeps out a smooth bore at the major diameter. The help and my earlier summary list this as a limit.
+>
+> **Why it isn't a small fix:** both stock models cut on the assumption that a tool gets no narrower going up from its tip. That holds for end mills, ball mills, V-bits and drills. For each column of cells (voxels) or each ray (tri-dexel), the cut finds the lowest point the tool reaches and removes everything above it, up to the tool's length. A thread mill breaks that: its teeth go wide, narrow, wide again. Cutting that way would wipe out the gaps between the teeth, which are what leave the thread standing.
+>
+> **What showing it would take:**
+> - Cut each tooth separately: its V-shaped profile, plus the core at the root diameter. Then it becomes an interval along each column or ray instead of "everything above".
+> - Do that in both the voxel and tri-dexel cutting code, along with the touching checks.
+> - The thread for each tooth would come from the tool's pitch, thread angle and Teeth. The tooth depth is the 5/8 H used for the minor diameter.
+> - It would only be visible at fine resolution. An M6×1 thread is about 0.54 mm deep, so roughly 10 cells at 0.05 mm, and only about 5 rays at the tri-dexel's usual 0.1 mm.
+>
+> It's a real piece of work in the simulation core. If you'd like it, I'll plan it properly first.
+
+### 🧑 Frank · 18:34
+
+> Yes, plan it
+
+### 🤖 Claude
+
+> Reading the tri-dexel cutting code to check it handles tools pointing either way.
+
+> Plan:
+>
+> # Simulate thread mills with their teeth
+>
+> ## Context
+>
+> The simulation cuts with a thread mill as a plain cylinder at its tooth tip diameter, so Thread Milling shows a smooth bore at the major diameter instead of a thread. Frank asked for the threads to show.
+>
+> Both stock models assume the tool never gets narrower going up from its tip:
+> - **Voxels:** `SweepTool` in `core\Simulation.cpp` clears each column from `HeightForRadius` up to the tool's length.
+> - **Tri-dexel:** `AlongAxis`, `AcrossAxis` and `Slanted` in `core\TriDexel.cpp` find the lowest point and cut to the top.
+>
+> A thread mill's teeth go wide, narrow, wide again, so one profile can't describe it. Both models already cut a tool pointing either way along any axis (`SweepTool` uses `sign`, `Sweep::w` is any unit vector). So a thread mill can be cut as several parts, each of which only widens from its own tip:
+> - an upward V for the lower flank of each tooth;
+> - a downward V (the same profile, axis reversed) for the upper flank;
+> - a core cylinder at the root diameter.
+>
+> That needs no new cutting code.
+>
+> ## Tool parts (core\Simulation)
+>
+> **New `struct ToolPart { ToolProfile profile; double offset; bool reversed; }`:**
+> - `offset` is where the part's tip is along the tool's axis, above the tool's tip.
+> - `reversed` points the part back down the axis.
+>
+> **New `std::vector<ToolPart> CuttingPartsOf(const Tool& tool)`, taking a tool in millimetres:**
+> - **Any tool but a thread mill:** a single part, `CuttingProfileOf(tool)`, at 0, not reversed. Nothing changes for other tools.
+> - **A thread mill with pitch p, thread angle θ, n teeth and tip radius R:**
+>   - Depth d = `ThreadDepth(p, θ)` (`core\ThreadMilling`), root radius r = R − d, flank slope s = 1 / tan(θ/2) (radius gained per unit along the axis).
+>   - This is the ISO internal thread's space, so it leaves the ISO thread: crest flat p/8 at R, flanks 0.3125p along the axis each, and gaps of 0.25p at the root, where the thread's crest is.
+>   - **Core:** a flat part of radius r, from 0 to the flute length. Left out if r ≤ 0.
+>   - **Tooth k (0 to n−1)** has its crest at k·p, centred, with half-width p/16. Each tooth is two `VMill` parts with `tipRadius` r, `slope` s, `radius` R and `length` d/s + p/16:
+>     - upward, tip at k·p − p/16 − d/s;
+>     - reversed, tip at k·p + p/16 + d/s.
+>
+> **Where the lowest crest goes:** at the tip. The toolpath already puts the lowest tooth at the programmed point (Thread Milling's thread bottom is where it runs). So the lower flank of tooth 0 reaches about 0.36p below the programmed point. That's an assumption to note in the help. If real tools need it, a "first tooth height" tool field could come later.
+>
+> ## Cutting with parts
+>
+> - **`SimOperation`:** gains `std::vector<ToolPart> parts`. Empty means `profile` alone, so tests and old callers are unchanged.
+>   - `profile` stays as the envelope at the tip radius, for the rapid, shank, holder and fixture checks. Those need no tooth detail, and a cylinder is the conservative choice.
+> - **`Simulation::CutPiece`:** cuts each part with `CutMove` or `CutDexels`. The tips are `a + w·offset` and `b + w·offset`, and the axis is `w` or `−w`. Any part cutting counts for the rapid warning.
+>   - The narrow-shank check after the cut still compares the shank with `profile.radius`.
+> - **`CCamTabCommand::MakeSimOperation`** (`addon\CamTabCommand.cpp`, near line 1775): sets `operation.parts = CuttingPartsOf(tool)`. That covers Simulate, and also rest machining and Thread Milling's hole check, which go through `ComputeRemainingStock`.
+> - **Unchanged:**
+>   - Toolpaths keep `ProfileOf`.
+>   - The simulated tool is still drawn as its envelope. Drawing teeth is possible later but not needed.
+>
+> ## Speed
+>
+> - A single point tool is three parts per move, and a 5-tooth tool eleven.
+> - Each tooth part spans only about 0.36p, so its box is tiny. `SweepTool`'s per-step boxes come from `profile.length` and `RadiusAt`, so most of the cost is the core.
+> - Helixes are already cut in short chords, the arc tolerance in `Simulation::Start` near line 1518.
+> - I'll time a skipped test, "thread mill simulation timing": an M6×1 single point 10 mm thread and a 5-tooth one, voxels at 0.05 and tri-dexel at 0.05 and 0.1. The times go in `CLAUDE.md`.
+>
+> ## Tests (tests\SimulationTests.cpp, or ThreadMillToolpathTests.cpp)
+>
+> 1. **The parts:** for an M6×1 single point tool, a core of radius 2 − 0.541, and two V parts with the right offsets, slope and length. A plain end mill gives one part equal to `CuttingProfileOf`.
+> 2. **Voxels (0.05 mm):** generate an M6×1 thread in a 20×20×10 stock with a 4.9 mm hole pre-cut, then simulate.
+>    - Measured round a radius halfway into the thread (between minor/2 and major/2), the stock alternates filled and empty along Z with period ≈ 1 mm, about 0.25 mm filled per pitch.
+>    - At the major radius it's empty only at the crest flats.
+>    - At a radius below minor/2 it's all empty.
+>    - The thread rises one pitch per turn: the filled band shifts by p/4 a quarter turn round.
+> 3. **Tri-dexel:** the same thread, the same checks through `Inside`.
+> 4. **Sanity:** a 5-tooth tool on a 12 mm thread leaves the same thread as the single point tool, within a cell.
+> 5. **Envelope checks unchanged:** a holder or shank hit with a thread mill still warns.
+>
+> ## Docs
+>
+> - **`help\CAMForAlibre.html`:**
+>   - Simulation section: thread mills are cut with their teeth, as ISO threads from the pitch, thread angle and Teeth, with the lowest crest at the tip.
+>   - Thread Milling tab: remove the line saying the thread shows as a bore.
+>   - Note that threads only show clearly at fine resolution.
+> - **`docs\SPEC.md`:** add to the Thread Milling entry. `docs\SPEC.md` still differs from the Claude doc.
+> - **`CLAUDE.md`:** the current state line: `ToolPart`, `CuttingPartsOf`, `SimOperation::parts`, and the timing.
+> - **`TODO.md`:** the thread milling line keeps "external threads" and drops "the thread form in the simulation".
+>
+> ## Verification
+>
+> 1. Full Release Rebuild, then `CamCoreTests.exe`, all tests.
+> 2. Run the timing test with `--no-skip`.
+> 3. Close Alibre, install, then `python tools\BuildDiscussion.py`.
+> 4. Frank, in Alibre:
+>    1. Simulate Thread Milling, M6×1 single point, Auto divide (0.05 mm). Threads should be visible in the hole, and Save STL shows them.
+>    2. Try a multi-tooth tool.
+>    3. Try tri-dexel at its finest step.
+>    4. Check other tools simulate exactly as before.
+>    5. Check the help.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Core done; writing the thread simulation tests.
+
+> The thread simulation tests pass in both models. Running the timing test and the full suite.
+
+> Docs done. Running the full rebuild and tests, then installing.
+
+> The simulation now cuts thread mills with their teeth, so Thread Milling leaves a real thread instead of a smooth bore. All 375 tests pass after a full Release rebuild, and it's installed. It hasn't been run in Alibre yet, and nothing is committed.
+>
+> **How it works:** a thread mill is cut as several pieces: a core at the root diameter, plus two V-shaped pieces per tooth, one rising to the crest and one pointing back down. Each piece only widens from its own tip, so the existing voxel and tri-dexel cutting handles them unchanged. The teeth make an ISO thread from the tool's pitch, thread angle and Teeth: crests an eighth of the pitch wide at the tool's diameter, and 0.541 × pitch deep for 60°. Other tools are cut exactly as before. The rapid, shank, holder and fixture checks still treat the thread mill as a plain cylinder, and it's still drawn as one.
+>
+> **One assumption to check against your tools:** the lowest tooth's crest sits at the point the toolpath programs. That matches how Thread Milling already places the thread. As a result, the lower flank of that tooth reaches about a third of a pitch below the programmed point. If your tools have the first tooth noticeably above the tip, a "first tooth height" field on the tool would fix it. I've noted that in `TODO.md`.
+>
+> **Tests:** for an M6×1 thread cut after a 4.9 mm drill, in both voxels and tri-dexel at 0.05 mm, a 6 mm thread showed:
+> - metal and gaps alternating a pitch apart, halfway into the thread;
+> - a quarter-pitch rise for a quarter turn;
+> - the hole open inside the minor diameter, and solid outside the major.
+>
+> A 5-tooth tool leaves the same thread as a single-point one, at least 95% the same in the test. Simulating that thread took 0.18 s with voxels at 0.05 mm, 0.27 s with tri-dexel at 0.05 mm, and about twice as long with 5 teeth.
+>
+> **The thread only shows at fine resolution:** it's about half a millimetre deep, so use Auto divide voxels or the finest tri-dexel step.
+>
+> The help, `docs\SPEC.md` (still different from the Claude doc), `CLAUDE.md` and `TODO.md` are updated.
+>
+> **To test:**
+> 1. Simulate an M6×1 thread milling operation with a single-point thread mill, using Auto divide voxels. You should see threads in the hole. Save the STL and check them there too.
+> 2. Repeat with a multi-tooth tool (Teeth 5).
+> 3. Switch to tri-dexel at its finest step and check again.
+> 4. Simulate a job with other tools and check it looks the same as before.
+> 5. Check the Thread Milling tab section of the help.
+
+### 🧑 Frank · 18:50
+
+> tests passed.
+
+### 🤖 Claude
+
+> Thanks. `CLAUDE.md` now says Thread Milling, and the simulation cutting with the thread mill's teeth, are tested by you. I haven't changed the tool shank status ("Shank of its own" in place of Reduced neck) because you didn't say whether you tested that. Nothing is committed.
+
+### 🧑 Frank · 18:51
+
+> Yes, shanks passed
+
+### 🤖 Claude
+
+> I've marked tool shanks as tested by you in `CLAUDE.md`, so Thread Milling, its simulated teeth and tool shanks now all show as tested. Nothing is committed.
+
+### 🧑 Frank · 18:51
+
+> Next, update the drawing of the threadmill on the tool dialog to show the number of teeth.
+
+### 🤖 Claude
+
+> Building the add-on.
+
+> The thread mill drawing in the Tool dialog now shows the number of teeth in the Teeth box, starting from the tip. It redraws as you type. The add-on is rebuilt and installed, but this hasn't been run in Alibre yet. Nothing is committed.
+>
+> **How it's drawn:**
+> - **Teeth:** up to 5 teeth are drawn at the same spacing as before, so 1 to 4 teeth sit at the bottom with the head carrying on at the root diameter up to the flute length. More than 5 are packed closer to fit in the flutes. Above 30, only 30 are drawn.
+> - **Pitch (k):** for a single-point tool, k spans the one tooth from root to root. Otherwise it runs crest to crest between the first two teeth.
+> - **Thread angle (l):** marked on one of the lower teeth.
+> - **Shank:** with "Shank of its own" ticked, the head goes straight into the narrower or wider shank, with no step out to the cutting diameter first.
+> - **Blank or invalid Teeth:** a blank box or one that isn't a whole number draws a single tooth.
+>
+> I updated the help's Teeth entry and `CLAUDE.md`.
+>
+> **To test:**
+> 1. Edit a thread mill and set Teeth to 1, 3, 5, 12 and 40, checking the drawing each time.
+> 2. With 1 tooth, check k spans the tooth.
+> 3. Tick "Shank of its own", set a narrower and then a wider shank diameter, and check the drawing.
+
+### 🧑 Frank · 18:57
+
+> Tests passed.  Next, update the drawing of all tools, so each dimension is displayed proportionally to all the other dimensions.
+
+### 🤖 Claude
+
+> Drawing every tool to its own typed sizes means rewriting how the diagram computes its shape. Writing it now.
+
+> The add-on builds. I'll render the drawings to images in a scratch harness to check the proportions before installing.
+
+> The sed didn't apply; rewriting the build script.
+
+> The Tool dialog's drawing now shows every tool to its own proportions, updating as you type. It's built and installed, but you haven't tried it in Alibre yet. Nothing is committed.
+>
+> **How it draws:**
+> - **What's to scale:** diameter, flute and overall lengths, shank diameter, corner radius, tip diameter, the included, point and taper angles, and a thread mill's pitch and teeth. They're drawn to one scale, sized so the tool fills the height, or narrower for a short wide tool like a face mill.
+> - **Thread mill teeth:** sharp V's at the real pitch, with their depth set by the thread angle.
+> - **Shank:** drawn from the top of the flutes, or the top of the teeth if they're higher.
+> - **Dimensions, arrows and letters** stay the same size. When a dimension is too short for its arrows (a 1 mm end mill's diameter, a small pitch), the arrows point in from outside and the letter sits past the end.
+> - **A box that's empty or not a number** keeps its last size, so the drawing doesn't jump while you type. The drawing now also redraws as you type a corner radius, tip diameter, any of the angles or the pitch.
+>
+> **How I checked it:** I compiled the drawing code into a small scratch program and rendered twelve tools, including extremes:
+> - a 1 × 38 mm end mill;
+> - a 3° taper mill whose taper runs past its flutes;
+> - single-point and 8-tooth thread mills with their own shanks;
+> - a 50 mm face mill on a 20 mm shank;
+> - a 2 mm end mill on a 6 mm shank.
+>
+> All drew correctly. On tiny features the angle labels can crowd: a single-point thread mill's tooth, a 0.2 mm V tip. That's what proportional means there.
+>
+> The help, `docs\SPEC.md` and `CLAUDE.md` are updated.
+>
+> **To test:**
+> 1. Open a few of your tools of different types and check the drawings look like the real tools.
+> 2. Change the diameter, lengths and angles one at a time and watch the drawing follow.
+> 3. Try a very long thin tool and a short wide one.
+> 4. Tick "Shank of its own" with a narrower and then a wider shank.
+> 5. Set a thread mill's pitch and teeth and check the teeth.
+
+### 🧑 Frank · 19:06
+
+> All tests passed
+
 ---
 
 # Side conversation

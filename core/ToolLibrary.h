@@ -45,6 +45,7 @@ namespace camcore
         bool taperAngle = false;
         bool pitch = false;
         bool threadAngle = false;
+        bool threadTeeth = false;
     };
     ToolFields FieldsOf(ToolType type);
 
@@ -94,13 +95,12 @@ namespace camcore
         double fluteLength = 0.0;
         double overallLength = 0.0;
 
-        // Any type: a reduced neck. The tool keeps its cutting diameter from the
-        // tip up to the neck length, then widens to the shank diameter up to the
-        // overall length (the part held in the collet). Without it, the shank is
-        // the cutting diameter all the way up.
-        bool reducedNeck = false;
-        double neckLength = 0.0;
+        // Any type: the shank, from the top of the flutes up to the overall length
+        // (the part held in the collet), at its own diameter, smaller or larger than
+        // the cutting diameter (a thread mill's is often smaller). 0 means the
+        // cutting diameter all the way up.
         double shankDiameter = 0.0;
+        bool HasShank() const { return shankDiameter > 0.0; }
 
         // Every type but drills
         int fluteCount = 2;
@@ -127,6 +127,7 @@ namespace camcore
         // Thread mills only
         double pitch = 1.0;
         double threadAngle = 60.0;      // degrees
+        int threadTeeth = 1;            // rows of teeth a pitch apart: 1 is single point
 
         // At most one for each material.
         std::vector<ToolFeeds> feeds;

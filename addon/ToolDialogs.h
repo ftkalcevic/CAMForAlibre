@@ -121,14 +121,14 @@ private:
 class CToolDrawingCtrl : public CStatic
 {
 public:
-    void SetTool(camcore::ToolType type, bool reducedNeck);
+    // The tool as typed so far, drawn to its own proportions.
+    void SetTool(const camcore::Tool& tool);
 
 protected:
     void DrawItem(LPDRAWITEMSTRUCT pDraw) override;
 
 private:
-    camcore::ToolType m_type = camcore::ToolType::FlatEndMill;
-    bool m_reducedNeck = false;
+    camcore::Tool m_tool;
 };
 
 class CToolEditDlg : public CDialog
@@ -148,7 +148,8 @@ protected:
     void OnOK() override;
     afx_msg void OnTypeChanged();
     afx_msg void OnUnitChanged();
-    afx_msg void OnReducedNeck();
+    afx_msg void OnOwnShank();
+    afx_msg void OnSizeChanged();
     afx_msg void OnHelpButton();
     afx_msg void OnAddFeeds();
     afx_msg void OnEditFeeds();

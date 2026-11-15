@@ -24,6 +24,7 @@
 #include "Pocketing.h"
 #include "Profiling.h"
 #include "Stock.h"
+#include "ThreadMilling.h"
 #include "Toolpath.h"
 
 namespace camcore
@@ -33,7 +34,8 @@ namespace camcore
     // Version 13 added arc moves in the ZX and YZ planes.
     // Version 14 added helix entries (Entry/Exit's Helix, Waterline Roughing's entry).
     // Version 16 added Fixtures steps.
-    constexpr int kCamFormatVersion = 16;
+    // Version 17 added Thread Milling operations.
+    constexpr int kCamFormatVersion = 17;
 
     // Which assembly a job belongs to. The GUID comes from the assembly file,
     // and is empty if it couldn't be read.
@@ -58,7 +60,8 @@ namespace camcore
         WaterlineRoughing,  // an operation, 3 axis: pockets level by level down round the parts
         WaterlineFinishing, // an operation, 3 axis: one lap round the parts at each level
         ParallelFinishing,  // an operation, 3 axis: straight rows following the parts' surface
-        Fixtures            // the work holding the operations below it keep clear of
+        Fixtures,           // the work holding the operations below it keep clear of
+        ThreadMilling       // an operation: internal threads cut with a thread mill on a helix
     };
 
     bool IsOperation(StepType type);
@@ -127,6 +130,9 @@ namespace camcore
 
         // Hole Pocketing operations only.
         HolePocketingSettings holePocketing;
+
+        // Thread Milling operations only.
+        ThreadMillingSettings threadMilling;
 
         // Plunge Roughing operations only.
         PlungeRoughingSettings plungeRoughing;

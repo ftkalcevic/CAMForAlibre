@@ -73,6 +73,7 @@ namespace camcore
         bool ok = false;
         Toolpath toolpath;
         std::string problem;    // why it couldn't be made. Empty when ok.
+        std::vector<std::string> warnings;  // made, but something to look at (Thread Milling's tool pitch)
 
         // Parallel Finishing with a ball mill: how many points were moved onto the
         // true surface, of how many tried, with how many closest point calls.

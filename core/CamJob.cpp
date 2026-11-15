@@ -1451,6 +1451,70 @@ namespace camcore
             return true;
         }
 
+        json WriteThreadMilling(const ThreadMillingSettings& thread)
+        {
+            return
+            {
+                { "location", CutLocationName(thread.location) },
+                { "topZ", thread.topZ },
+                { "length", thread.length },
+                { "majorDiameter", thread.majorDiameter },
+                { "pitch", thread.pitch },
+                { "hand", thread.hand == ThreadHand::Left ? "left" : "right" },
+                { "direction", CutDirectionName(thread.direction) },
+                { "radialPasses", thread.radialPasses },
+                { "springPass", thread.springPass },
+                { "approach", thread.approachDistance }
+            };
+        }
+
+        bool ReadThreadMilling(const json& step, ThreadMillingSettings& thread)
+        {
+            thread = ThreadMillingSettings();
+            const auto item = step.find("threadMilling");
+            if (item == step.end())
+                return true;
+            if (!item->is_object())
+                return false;
+
+            const auto location = item->find("location");
+            if (location != item->end())
+            {
+                if (!location->is_string())
+                    return false;
+                bool known = false;
+                for (const CutGeometryLocation candidate :
+                     { CutGeometryLocation::AtTop, CutGeometryLocation::AtBottom, CutGeometryLocation::PickTop })
+                {
+                    if (location->get<std::string>() == CutLocationName(candidate))
+                    {
+                        thread.location = candidate;
+                        known = true;
+                    }
+                }
+                if (!known)
+                    return false;
+            }
+
+            const auto passes = item->find("radialPasses");
+            if (passes != item->end())
+            {
+                if (!passes->is_number_integer())
+                    return false;
+                thread.radialPasses = passes->get<int>();
+            }
+
+            return ReadChoice(*item, "hand", "right", ThreadHand::Right, "left", ThreadHand::Left, thread.hand) &&
+                   ReadChoice(*item, "direction", CutDirectionName(CutDirection::Climb), CutDirection::Climb,
+                              CutDirectionName(CutDirection::Conventional), CutDirection::Conventional,
+                              thread.direction) &&
+                   ReadOptionalNumber(*item, "topZ", thread.topZ) && ReadOptionalNumber(*item, "length", thread.length) &&
+                   ReadOptionalNumber(*item, "majorDiameter", thread.majorDiameter) &&
+                   ReadOptionalNumber(*item, "pitch", thread.pitch) &&
+                   ReadOptionalBool(*item, "springPass", thread.springPass) &&
+                   ReadOptionalNumber(*item, "approach", thread.approachDistance);
+        }
+
         // Facings saved before the Facing tab existed have the defaults.
         bool ReadFacing(const json& step, FacingSettings& facing)
         {
@@ -1651,6 +1715,12 @@ namespace camcore
                          { "features", WriteFeatures(step.features) }, { "clearance", WriteClearance(step.clearance) },
                          { "holePocketing", WriteHolePocketing(step.holePocketing) } };
 
+            if (step.type == StepType::ThreadMilling)
+                return { { "type", "threadMilling" }, { "id", step.id }, { "name", step.name }, { "tool", step.toolId },
+                         { "feeds", WriteFeeds(step.feeds) }, { "toolpath", WriteToolpath(step.toolpath) },
+                         { "features", WriteFeatures(step.features) }, { "clearance", WriteClearance(step.clearance) },
+                         { "threadMilling", WriteThreadMilling(step.threadMilling) } };
+
             if (step.type == StepType::ParallelFinishing)
                 return { { "type", "parallelFinishing" }, { "id", step.id }, { "name", step.name }, { "tool", step.toolId },
                          { "feeds", WriteFeeds(step.feeds) }, { "toolpath", WriteToolpath(step.toolpath) },
@@ -1797,6 +1867,14 @@ namespace camcore
                        ReadClearance(item, step.clearance);
             }
 
+            if (type == "threadMilling")
+            {
+                step.type = StepType::ThreadMilling;
+                return ReadTool(item, step.toolId) && ReadFeeds(item, step.feeds) && ReadToolpath(item, step.toolpath) &&
+                       ReadFeatures(item, step.features) && ReadThreadMilling(item, step.threadMilling) &&
+                       ReadClearance(item, step.clearance);
+            }
+
             if (type == "parallelFinishing")
             {
                 step.type = StepType::ParallelFinishing;
@@ -1928,7 +2006,8 @@ namespace camcore
         return type == StepType::Drill || type == StepType::Facing || type == StepType::Profiling ||
                type == StepType::Pocketing || type == StepType::HolePocketing || type == StepType::Chamfer ||
                type == StepType::Engrave || type == StepType::PlungeRoughing || type == StepType::WaterlineRoughing ||
-               type == StepType::WaterlineFinishing || type == StepType::ParallelFinishing;
+               type == StepType::WaterlineFinishing || type == StepType::ParallelFinishing ||
+               type == StepType::ThreadMilling;
     }
 
     WaterlineRoughingSettings& WaterlineSettingsOf(SequenceStep& step)

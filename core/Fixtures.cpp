@@ -111,6 +111,8 @@ namespace camcore
         tool.radius = toolMm.diameter / 2.0;
         tool.cornerRadius = toolMm.cornerRadius;
         tool.length = (toolMm.overallLength > 0.0) ? toolMm.overallLength : (std::max)(toolMm.fluteLength, 50.0);
+        if (toolMm.HasShank() && toolMm.fluteLength > 0.0)
+            tool.length = (std::min)(tool.length, toolMm.fluteLength);     // the shank is checked on its own
         tool.shank = ShankOf(toolMm);
         tool.holder = HolderOf(toolMm, holderDiameter, holderDepth);
         return tool;

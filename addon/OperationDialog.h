@@ -573,6 +573,35 @@ private:
     double ReferenceZ();
 };
 
+// The Thread Milling operation's own tab.
+class CThreadMillingPage : public COperationPage
+{
+public:
+    explicit CThreadMillingPage(COperationDlg* pOwner);
+
+    void Load(const camcore::SequenceStep& step) override;
+    bool Save(camcore::SequenceStep& step, std::wstring& problems) override;
+
+    void ShowLocating(LocateTarget target, bool locating);
+    void SetTopZ(double z);
+
+    // The Tool tab chose another tool: a thread mill's pitch becomes the thread's.
+    void ToolChosen();
+
+    enum { IDD = IDD_OP_THREAD_MILLING };
+
+protected:
+    afx_msg void OnChoiceChanged();
+    afx_msg void OnSizeChanged();
+    afx_msg void OnPickTop();
+
+    DECLARE_MESSAGE_MAP()
+
+private:
+    void UpdateFields();
+    void UpdateSizes();     // the minor diameter and thread depth from the major, pitch and tool
+};
+
 // The Drill operation's own tab.
 class CDrillingPage : public COperationPage
 {
@@ -651,6 +680,12 @@ public:
     // The Feeds & Speeds tab's Calculator: the chosen tool, the job's material and the machine's limit.
     bool CalculatorSource(FeedsCalcSource& source, std::wstring& problem) const;
 
+    // The tool chosen on the Tool tab, in millimetres. False if there's none.
+    bool ChosenTool(camcore::Tool& tool) const;
+
+    // The Tool tab's choice changed.
+    void OnToolChosen();
+
     enum { IDD = IDD_OPERATION };
 
 protected:
@@ -682,6 +717,7 @@ private:
     CDrillingPage* m_pDrilling;     // owned by m_pages. Null for other operations.
     CCutLevelsPage* m_pCutLevels;   // owned by m_pages. Null for operations without one.
     CHolePocketingPage* m_pHolePocketing;   // owned by m_pages. Null for other operations.
+    CThreadMillingPage* m_pThreadMilling;   // owned by m_pages. Null for other operations.
     CToolPage* m_pToolPage;     // owned by m_pages
 
     // Bulk editing: the operations, each tab's state as first shown, and a

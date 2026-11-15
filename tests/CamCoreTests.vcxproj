@@ -74,6 +74,7 @@
     <ClCompile Include="CamCoreTests.cpp" />
     <ClCompile Include="FacingToolpathTests.cpp" />
     <ClCompile Include="HolePocketToolpathTests.cpp" />
+    <ClCompile Include="ThreadMillToolpathTests.cpp" />
     <ClCompile Include="PocketToolpathTests.cpp" />
     <ClCompile Include="ProfileToolpathTests.cpp" />
     <ClCompile Include="ScriptedPostTests.cpp" />

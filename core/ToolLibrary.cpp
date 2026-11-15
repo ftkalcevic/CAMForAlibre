@@ -117,12 +117,10 @@ namespace camcore
                 item["pitch"] = tool.pitch;
             if (fields.threadAngle)
                 item["threadAngle"] = tool.threadAngle;
-            if (tool.reducedNeck)
-            {
-                item["reducedNeck"] = true;
-                item["neckLength"] = tool.neckLength;
+            if (fields.threadTeeth && tool.threadTeeth != 1)
+                item["threadTeeth"] = tool.threadTeeth;
+            if (tool.HasShank())
                 item["shankDiameter"] = tool.shankDiameter;
-            }
             item["toolMaterial"] = ToolMaterialText(tool.toolMaterial);
             if (tool.chipLoad > 0.0)
                 item["chipLoad"] = tool.chipLoad;
@@ -188,15 +186,19 @@ namespace camcore
                 tool.pitch = item.at("pitch").get<double>();
             if (fields.threadAngle)
                 tool.threadAngle = item.at("threadAngle").get<double>();
+            // Older thread mills have one row of teeth.
+            const auto teeth = item.find("threadTeeth");
+            if (fields.threadTeeth && teeth != item.end())
+                tool.threadTeeth = teeth->get<int>();
 
-            // Older tools have no reduced neck.
+            // Older tools have no shank of their own. A reduced neck (before shanks
+            // replaced it) becomes its shank diameter from the top of the flutes: the
+            // neck was the cutting diameter, no wider than the shank, so it stays clear.
+            const auto shank = item.find("shankDiameter");
             const auto neck = item.find("reducedNeck");
-            if (neck != item.end() && neck->get<bool>())
-            {
-                tool.reducedNeck = true;
-                tool.neckLength = item.at("neckLength").get<double>();
-                tool.shankDiameter = item.at("shankDiameter").get<double>();
-            }
+            const bool oldNeck = neck != item.end();
+            if (shank != item.end() && (!oldNeck || neck->get<bool>()))
+                tool.shankDiameter = shank->get<double>();
 
             // Older tools are carbide, with no chip load.
             const auto toolMaterial = item.find("toolMaterial");
@@ -302,6 +304,7 @@ namespace camcore
         fields.taperAngle = type == ToolType::TaperMill;
         fields.pitch = type == ToolType::ThreadMill;
         fields.threadAngle = type == ToolType::ThreadMill;
+        fields.threadTeeth = type == ToolType::ThreadMill;
         return fields;
     }
 
@@ -328,13 +331,8 @@ namespace camcore
             problems.push_back("The overall length can't be less than the flute length.");
         if (!(tool.chipLoad >= 0.0))
             problems.push_back("The chip load can't be negative.");
-        if (tool.reducedNeck)
-        {
-            if (!(tool.neckLength >= tool.fluteLength && tool.neckLength <= tool.overallLength))
-                problems.push_back("The neck length must be from the flute length to the overall length.");
-            if (!(tool.shankDiameter >= tool.diameter))
-                problems.push_back("The shank diameter can't be less than the diameter.");
-        }
+        if (!(tool.shankDiameter >= 0.0))
+            problems.push_back("The shank diameter can't be negative.");
 
         const ToolFields fields = FieldsOf(tool.type);
         if (fields.pointAngle && !(tool.pointAngle > 0.0 && tool.pointAngle <= 180.0))
@@ -353,6 +351,11 @@ namespace camcore
             problems.push_back("The pitch must be more than 0.");
         if (fields.threadAngle && !(tool.threadAngle > 0.0 && tool.threadAngle < 180.0))
             problems.push_back("The thread angle must be more than 0 and less than 180 degrees.");
+        if (fields.threadTeeth && tool.threadTeeth < 1)
+            problems.push_back("The number of teeth must be 1 or more.");
+        else if (fields.threadTeeth && fields.pitch && tool.pitch > 0.0 &&
+                 !((tool.threadTeeth - 1) * tool.pitch < tool.fluteLength))
+            problems.push_back("The teeth, a pitch apart, don't fit in the flute length.");
 
         std::set<std::string> materials;
         for (const ToolFeeds& row : tool.feeds)
@@ -397,7 +400,6 @@ namespace camcore
         result.diameter *= kMillimetresPerInch;
         result.fluteLength *= kMillimetresPerInch;
         result.overallLength *= kMillimetresPerInch;
-        result.neckLength *= kMillimetresPerInch;
         result.shankDiameter *= kMillimetresPerInch;
         result.cornerRadius *= kMillimetresPerInch;
         result.tipDiameter *= kMillimetresPerInch;
