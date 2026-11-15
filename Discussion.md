@@ -11845,6 +11845,51 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Tests passed
 
+### 🤖 Claude
+
+> Thanks. `CLAUDE.md` now says Show Fixtures in the simulation is tested by you. Nothing is committed.
+
+### 🧑 Frank · 16:31
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> What's still in the todo list?
+
+### 🤖 Claude
+
+> Here's what's still open in [TODO.md](TODO.md):
+>
+> **High priority (🔴)**
+> - V-carve
+> - Summary information under each operation in the tree, such as the tool
+>
+> **Operations**
+> - Thread milling
+> - 4th axis rotate, or just set the origin (still undecided)
+> - 3D: Project finishing, 3D offset pocketing and profiling, Pencil tracing (idea in `docs\PencilMachining.md`), Valley remachining, Plateau machining, Parallel hill machining, Radial, Spiral, Curve machining, and Between 2 curves
+>
+> **Partly done**
+> - Rest machining is built for Waterline Roughing and Pocketing. Still to do: Facing, and pencil passes for finishing.
+> - Tri-dexel simulation is built but still waiting for your test in Alibre.
+>
+> **Not prioritised**
+> - More stock alignment options
+> - 4th axis: rotate and machine
+> - Lathe support (staged plan in `docs\LatheSupport.md`)
+> - New dialogs inheriting speeds and feeds from the last one, or copy and paste
+> - More posts: GRBL, Mach3/4, UCCNC, Masso
+> - Undo in the CAM tree
+> - Inch display units
+> - A tool holder taken from an Alibre part, to replace the plain cylinder in the simulation
+> - Pictures on the dialog tabs showing what each parameter means
+> - Performance: a spline face that can't be read as NURBS still asks Alibre for one point at a time
+>
+> The Fixtures line now just says it's built and tested, so it could come off the list. I haven't removed it.
+
+### 🧑 Frank · 16:32
+
+> Tri-dexel tested.
+
 ---
 
 # Side conversation
