@@ -75,7 +75,11 @@ namespace
         machine.maxSpindleRpm = 18000;
         machine.holderDiameter = 25;
         machine.holderDepth = 40;
-        machine.rapidRate = 8000;
+        machine.motion.x = { 130, 400 };
+        machine.motion.z = { 50, 250 };
+        machine.motion.rotaryVelocity = 90;
+        machine.motion.rotaryAcceleration = 360;
+        machine.motion.blendTolerance = 0.05;
         machine.arcs.zx = false;
         machine.arcs.tolerance = 0.02;
         Tool tool = Mill("t1", 1);
@@ -105,7 +109,8 @@ TEST_CASE("a machine saves and loads with its tools and their feeds")
     CHECK(loaded.machine.maxSpindleRpm == 18000);
     CHECK(loaded.machine.holderDiameter == 25);
     CHECK(loaded.machine.holderDepth == 40);
-    CHECK(loaded.machine.rapidRate == 8000);
+    CHECK(loaded.machine.motion == machine.motion);
+    CHECK(loaded.machine.motion.z.acceleration == 250);
     CHECK(loaded.machine.arcs.enabled);
     CHECK_FALSE(loaded.machine.arcs.zx);
     CHECK(loaded.machine.arcs.yz);
@@ -163,8 +168,42 @@ TEST_CASE("a version 1 machine, without travel or spindle speed, loads with the 
     CHECK(loaded.machine.maxSpindleRpm == defaults.maxSpindleRpm);
     CHECK(loaded.machine.holderDiameter == 20.0);
     CHECK(loaded.machine.holderDepth == 30.0);
-    CHECK(loaded.machine.rapidRate == 5000.0);
+    CHECK(loaded.machine.motion == MotionLimits());
     CHECK(loaded.machine.arcs == ArcFitting());
+}
+
+TEST_CASE("an old machine's rapid rate becomes each linear axis's velocity, and bad limits are refused")
+{
+    Folder folder;
+    const fs::path path = folder.path / "m.json";
+    Write(path, R"({"format":"AlibreCAM machine","formatVersion":3,"id":"m","name":"M","axes":3,"rotaryAxis":"+Y","rapidRate":7000,"tools":[]})");
+    const MachineLoadResult loaded = LoadMachine(path);
+    REQUIRE(loaded.status == LoadStatus::Ok);
+    CHECK(loaded.machine.motion.x.velocity == doctest::Approx(7000.0 / 60.0));     // mm/min to mm/s
+    CHECK(loaded.machine.motion.y.velocity == doctest::Approx(7000.0 / 60.0));
+    CHECK(loaded.machine.motion.z.velocity == doctest::Approx(7000.0 / 60.0));
+
+    // Motion limits saved in mm/min, before they were mm/s.
+    Write(path, R"({"format":"AlibreCAM machine","formatVersion":3,"id":"m","name":"M","axes":3,"rotaryAxis":"+Y","motion":{"x":{"velocity":6000,"acceleration":300}},"tools":[]})");
+    const MachineLoadResult older = LoadMachine(path);
+    REQUIRE(older.status == LoadStatus::Ok);
+    CHECK(older.machine.motion.x.velocity == doctest::Approx(100.0));
+    CHECK(older.machine.motion.x.acceleration == 300);
+    CHECK(loaded.machine.motion.x.acceleration == MotionLimits().x.acceleration);
+    CHECK(loaded.machine.motion.rotaryVelocity == MotionLimits().rotaryVelocity);
+
+    MotionLimits bad;
+    CHECK(ValidateMotion(bad).empty());
+    bad.y.acceleration = 0;
+    CHECK(ValidateMotion(bad).size() == 1);
+    bad = MotionLimits();
+    bad.rotaryVelocity = -1;
+    CHECK(ValidateMotion(bad).size() == 1);
+    bad = MotionLimits();
+    bad.blendTolerance = 0;
+    CHECK(ValidateMotion(bad).empty());
+    bad.blendTolerance = -0.1;
+    CHECK(ValidateMotion(bad).size() == 1);
 }
 
 TEST_CASE("damaged, newer and missing machine files")

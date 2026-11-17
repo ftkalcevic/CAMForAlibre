@@ -8,6 +8,7 @@
 #include "ModelReader.h"
 #include "ProgramSettings.h"
 #include "SettingsDialog.h"
+#include "SimOptionsDialog.h"
 #include "ToolDialogs.h"
 #include "Log.h"
 
@@ -56,8 +57,7 @@ namespace
                                         IDC_MACHINE_TRAVEL_LABEL, IDC_MACHINE_TRAVEL_X_LABEL, IDC_MACHINE_TRAVEL_X,
                                         IDC_MACHINE_TRAVEL_Y_LABEL, IDC_MACHINE_TRAVEL_Y, IDC_MACHINE_TRAVEL_Z_LABEL,
                                         IDC_MACHINE_TRAVEL_Z, IDC_MACHINE_SPINDLE_LABEL, IDC_MACHINE_SPINDLE,
-                                        IDC_MACHINE_SPINDLE_UNIT, IDC_MACHINE_RAPID_LABEL, IDC_MACHINE_RAPID,
-                                        IDC_MACHINE_RAPID_UNIT, IDC_MACHINE_HOLDER_LABEL,
+                                        IDC_MACHINE_SPINDLE_UNIT, IDC_MACHINE_SIM_OPTIONS, IDC_MACHINE_HOLDER_LABEL,
                                         IDC_MACHINE_HOLDER_DIA_LABEL, IDC_MACHINE_HOLDER_DIA,
                                         IDC_MACHINE_HOLDER_DEPTH_LABEL, IDC_MACHINE_HOLDER_DEPTH,
                                         IDC_MACHINE_HOLDER_UNIT, IDC_MACHINE_ARCS_LABEL, IDC_MACHINE_ARCS,
@@ -77,7 +77,6 @@ namespace
         { IDC_MACHINE_TRAVEL_Y, L"The Y travel", &Machine::travelY },
         { IDC_MACHINE_TRAVEL_Z, L"The Z travel", &Machine::travelZ },
         { IDC_MACHINE_SPINDLE, L"The maximum spindle speed", &Machine::maxSpindleRpm },
-        { IDC_MACHINE_RAPID, L"The rapid rate", &Machine::rapidRate },
         { IDC_MACHINE_HOLDER_DIA, L"The tool holder diameter", &Machine::holderDiameter },
         { IDC_MACHINE_HOLDER_DEPTH, L"The tool holder depth", &Machine::holderDepth },
     };
@@ -169,7 +168,7 @@ BEGIN_MESSAGE_MAP(CMachineDlg, CDialog)
     ON_EN_KILLFOCUS(IDC_MACHINE_TRAVEL_Y, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_TRAVEL_Z, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_SPINDLE, &CMachineDlg::OnMachineFieldChanged)
-    ON_EN_KILLFOCUS(IDC_MACHINE_RAPID, &CMachineDlg::OnMachineFieldChanged)
+    ON_BN_CLICKED(IDC_MACHINE_SIM_OPTIONS, &CMachineDlg::OnSimOptions)
     ON_EN_KILLFOCUS(IDC_MACHINE_HOLDER_DIA, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_HOLDER_DEPTH, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_ARC_TOL, &CMachineDlg::OnMachineFieldChanged)
@@ -342,6 +341,7 @@ void CMachineDlg::UpdateButtons()
     GetDlgItem(IDC_MACHINE_DELETE)->EnableWindow(m_machineList.GetCurSel() >= 0 ? TRUE : FALSE);
     GetDlgItem(IDC_MACHINE_NAME)->EnableWindow(edit);
     GetDlgItem(IDC_MACHINE_AXES)->EnableWindow(edit);
+    GetDlgItem(IDC_MACHINE_SIM_OPTIONS)->EnableWindow(edit);
     for (const NumberBox& box : kNumberBoxes)
         GetDlgItem(box.id)->EnableWindow(edit);
     GetDlgItem(IDC_MACHINE_ROTARY)->EnableWindow((m_canEdit && m_axes.GetCurSel() == 1) ? TRUE : FALSE);
@@ -434,7 +434,6 @@ bool CMachineDlg::ApplyMachineFields()
     if (changed.name == m_machine.name && changed.axes == m_machine.axes && changed.rotary == m_machine.rotary &&
         changed.travelX == m_machine.travelX && changed.travelY == m_machine.travelY &&
         changed.travelZ == m_machine.travelZ && changed.maxSpindleRpm == m_machine.maxSpindleRpm &&
-        changed.rapidRate == m_machine.rapidRate &&
         changed.holderDiameter == m_machine.holderDiameter && changed.holderDepth == m_machine.holderDepth &&
         changed.arcs == m_machine.arcs)
         return true;
@@ -464,6 +463,24 @@ bool CMachineDlg::ApplyMachineFields()
 void CMachineDlg::OnMachineFieldChanged()
 {
     ApplyMachineFields();
+}
+
+void CMachineDlg::OnSimOptions()
+{
+    // The axes as they're shown now, then the limits, saved straight away like the other fields.
+    if (!m_canEdit || !ApplyMachineFields())
+        return;
+    CSimOptionsDlg dialog(m_machine.motion, m_machine.axes, this);
+    if (dialog.DoModal() != IDOK || dialog.GetMotion() == m_machine.motion)
+        return;
+    const Machine before = m_machine;
+    m_machine.motion = dialog.GetMotion();
+    if (!SaveCurrentMachine())
+    {
+        m_machine = before;
+        return;
+    }
+    m_entries[static_cast<size_t>(m_machineList.GetCurSel())].machine = m_machine;
 }
 
 void CMachineDlg::OnMachineChosen()

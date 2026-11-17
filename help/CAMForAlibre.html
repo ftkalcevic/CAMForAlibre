@@ -247,7 +247,7 @@
 <p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's or Rotate's direction, so tilted origins cut along their tool axis. On a 4 axis machine, where the rotary axis turns between two operations (as the post turns it), the tool goes up along the last operation's axis to the retract height above the rotary axis, then swings round the axis in steps of 2 degrees at rapid (the stock stays put and the tool goes round it, which cuts the same); a retract too low to clear the stock stops it with a rapid into stock. The shank (the tool above its flutes, up to its overall length; at its shank diameter with a shank of its own, when only the flutes cut) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. A thread mill cuts with its teeth (see the <a href="#tab-thread-milling">Thread Milling tab</a>), but is checked as a cylinder of its diameter. The tool (its own shape), shank and holder are also checked against the parts of each operation's <a href="#fixtures">Fixtures</a> step, at their true size (without the clearance), wherever they are, even outside the stock. Nothing is checked against the parts themselves. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
 <dl>
   <dt>Position</dt>
-  <dd>The operation being cut, the move of all the moves (arcs are split into short straight moves), and the machining time so far of the whole: from the feeds, the machine's Rapid rate and dwells, with no allowance for acceleration.</dd>
+  <dd>The operation being cut, the move of all the moves (arcs are split into short straight moves), and the machining time so far of the whole: from the feeds, the machine's <a href="#sim-options">Sim Options</a> (each axis's velocity and acceleration, corners blended within the tolerance, the rotary axis's turn) and dwells.</dd>
   <dt>Tool</dt>
   <dd>The tool the operation being cut uses: its number, name, type and diameter (in mm).</dd>
   <dt>Scrub bar</dt>
@@ -265,7 +265,7 @@
   <dt>Speed</dt>
   <dd>How many moves are cut at each step while playing, from 1 to 500. Greyed while Real time is ticked.</dd>
   <dt>Real time</dt>
-  <dd>Plays at the machine's own pace: each move takes its length at its feed (a rapid at the machine's Rapid rate, a dwell its time), so a long cut takes as long to appear as it would to cut, with the tool travelling along it. Play then stops part way along a move when you pause, and carries on from there. Step, To Op End, To End and the scrub bar work as without it. Remembered until Alibre closes.</dd>
+  <dd>Plays at the machine's own pace: each move takes the time the machine would, from its feed and the machine's <a href="#sim-options">Sim Options</a> (a rapid with each axis at its maximum, a dwell its time), so a long cut takes as long to appear as it would to cut, with the tool travelling along it. Play then stops part way along a move when you pause, and carries on from there. Step, To Op End, To End and the scrub bar work as without it. Remembered until Alibre closes.</dd>
   <dt>Real time speed</dt>
   <dd>The slider beside Real time: from 0.1 times (slower than the machine) through 1 (the middle) to 10 times, shown beside it. Greyed unless Real time is ticked. Remembered until Alibre closes.</dd>
   <dt>Stock model</dt>
@@ -395,8 +395,8 @@
   <dd>How far the machine can move along each axis, in millimetres. Each must be more than 0. <span class="tbc">Not used for checking toolpaths yet.</span></dd>
   <dt>Max spindle speed</dt>
   <dd>The spindle's top speed, in RPM. It must be more than 0. <span class="tbc">Not used for checking speeds yet.</span></dd>
-  <dt>Rapid rate</dt>
-  <dd>How fast the machine moves at rapid, in mm/min. The simulation uses it to play rapids in real time and for its machining time. It must be more than 0; 5000 by default.</dd>
+  <dt>Sim Options...</dt>
+  <dd>Opens <a href="#sim-options">Sim Options</a>: each axis's maximum velocity and acceleration, and the corner blend tolerance, which time the simulation's moves. Saved when you press OK.</dd>
   <dt>Tool holder Diameter, Depth</dt>
   <dd>The tool holder (collet nut or chuck) as a plain cylinder, in millimetres: its diameter, and how far it reaches up from the tool's overall length. The simulation draws it and stops if it touches the stock. Each must be more than 0; 20 and 30 by default.</dd>
   <dt>Arcs: Fit arcs, XY, ZX, YZ</dt>
@@ -439,6 +439,21 @@
   <dd>Renames the chosen material. Tools' speeds and feeds stay with it.</dd>
   <dt>Delete</dt>
   <dd>Deletes the chosen material, after asking. Every machine's tools lose their speeds and feeds for it, and a job using it is left with no material.</dd>
+</dl>
+</section>
+
+<section id="sim-options">
+<h2>Sim Options</h2>
+<p>Opened from the Machine tab's Sim Options button. The machine's motion limits, saved in its file. They're used only to time the simulation's moves (Real time and the machining time); nothing is cut differently. Rapids run each axis at its own maximum, as LinuxCNC does, so a diagonal rapid is as fast as its slowest share allows. Each feed is held to what its axes can do. Between moves the tool doesn't stop: it rounds each corner within the blend tolerance, at the speed its acceleration allows, and it stops at dwells, sharp reversals, and the start and end of each operation. Every value must be more than 0, except the tolerance, which can be 0.</p>
+<dl>
+  <dt>X, Y, Z: Max velocity</dt>
+  <dd>The axis's top speed, in mm/s. 80 by default; a machine saved before these existed takes its old Rapid rate (mm/min, divided by 60).</dd>
+  <dt>X, Y, Z: Max acceleration</dt>
+  <dd>How quickly the axis can speed up or slow down, in mm/s&sup2;. 500 by default.</dd>
+  <dt>Rotary: Max velocity, Max acceleration</dt>
+  <dd>The rotary axis's top speed in degrees a second (180 by default) and its acceleration in degrees/s&sup2; (720 by default), timing each turn between operations: one turn speeds up and slows down once. Greyed unless the machine has 4 axes.</dd>
+  <dt>Blend tolerance (G64 P)</dt>
+  <dd>How far, in mm, the tool may leave the path to round a corner without stopping, as LinuxCNC's G64 P. Larger is quicker through corners; 0 stops at every corner. 0.1 by default.</dd>
 </dl>
 </section>
 

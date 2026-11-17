@@ -17,7 +17,7 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
     - Curve machining
     - Between 2 curves
 - More stock alignment options
-- 4th axis: indexing is built (Rotate steps, Set Origins solved for the rotary angle, the 4 axis post, the simulated turn). Still to do: simultaneous 4th axis (wrapping, rotary machining); the APT CL post's rotary output; a rotary rate on the machine (the turn is timed at the rapid rate)
+- 4th axis: indexing is built (Rotate steps, Set Origins solved for the rotary angle, the 4 axis post, the simulated turn). Still to do: simultaneous 4th axis (wrapping, rotary machining); the APT CL post's rotary output
 - 5 axis indexing (3+2): machine kinematics (table-table A/C or B/C, head-head, head-table), pivot offsets, axis limits, choosing between two solutions
 - Tilted plane output (G68.2, CYCLE800, PLANE) as a post option, for controls that have it
 - Lathe support: machine type, rod stock, turning operations, tools, post and simulation (staged plan saved in `docs\LatheSupport.md`)

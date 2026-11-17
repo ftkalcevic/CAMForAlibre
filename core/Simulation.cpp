@@ -11,6 +11,7 @@
 #include <intrin.h>
 #endif
 
+#include "MotionTiming.h"
 #include "Rotary.h"          // RotateAbout
 #include "ThreadMilling.h"
 
@@ -1479,7 +1480,7 @@ namespace camcore
 
     void Simulation::Start(const StockBox& box, const std::vector<Vec3>& stockTriangles,
                            const std::vector<SimOperation>& operations, const SimResolution& resolution,
-                           double rapidRate)
+                           const MotionLimits& limits)
     {
         m_model = resolution.model;
         double cell = resolution.cell;
@@ -1527,7 +1528,6 @@ namespace camcore
         m_position = 0;
         m_into = 0.0;
         m_warning = SimWarning::None;
-        const double rapid = (rapidRate > 0.0) ? rapidRate : 5000.0;
         // Each operation's moves in assembly mm. Arcs become chords within half a
         // cell, and dwells go nowhere.
         const double tolerance = Spacing() / 2.0;
@@ -1543,12 +1543,12 @@ namespace camcore
             Vec3 turnAxis;
             if (index.present && haveLast && Normalise(index.axisDirection, turnAxis))
             {
-                const auto add = [&](const Vec3& from, const Vec3& to, const Vec3& axis) {
+                const auto add = [&](const Vec3& from, const Vec3& to, const Vec3& axis, double seconds) {
                     SimMove sim;
                     sim.from = from;
                     sim.to = to;
                     sim.rapid = true;
-                    sim.seconds = Length(to - from) / rapid * 60.0;
+                    sim.seconds = seconds;
                     sim.operation = o;
                     sim.ownAxis = true;
                     sim.axis = axis;
@@ -1560,7 +1560,10 @@ namespace camcore
                 if (index.retract > height)
                 {
                     up = lastTip + lastAxis * (index.retract - height);
-                    add(lastTip, up, lastAxis);
+                    // Up the machine's Z, from rest to rest.
+                    const double lift = index.retract - height;
+                    add(lastTip, up, lastAxis,
+                        RestToRestSecondsAt(lift, limits.z.velocity, limits.z.acceleration, lift));
                 }
                 // Seen from the work, the tool turns with the angle: at angle a it's
                 // where the machine point is turned by a (WorldFromMachine).
@@ -1572,7 +1575,13 @@ namespace camcore
                     const double turned = change * s / steps;
                     const Vec3 next = index.axisPoint + RotateAbout(up - index.axisPoint, turnAxis, turned);
                     const Vec3 nextAxis = RotateAbout(lastAxis, turnAxis, turned);
-                    add(at, next, nextAxis);
+                    // The whole turn speeds up and slows down once; each step takes its share.
+                    const double total = std::fabs(change);
+                    const double seconds =
+                        RestToRestSecondsAt(total, limits.rotaryVelocity, limits.rotaryAcceleration, total * s / steps) -
+                        RestToRestSecondsAt(total, limits.rotaryVelocity, limits.rotaryAcceleration,
+                                            total * (s - 1) / steps);
+                    add(at, next, nextAxis, seconds);
                     at = next;
                 }
             }
@@ -1590,6 +1599,7 @@ namespace camcore
                         SimMove sim;
                         sim.from = sim.to = FramePointToWorld(operation.frame, previous);
                         sim.seconds = move.seconds;
+                        sim.dwell = true;
                         sim.operation = o;
                         sim.toolpathMove = m;
                         m_moves.push_back(sim);
@@ -1620,8 +1630,7 @@ namespace camcore
                     sim.from = FramePointToWorld(operation.frame, points[p]);
                     sim.to = FramePointToWorld(operation.frame, points[p + 1]);
                     sim.rapid = move.kind == MoveKind::Rapid;
-                    const double rate = (sim.rapid || !(move.feed > 0.0)) ? rapid : move.feed;
-                    sim.seconds = Length(sim.to - sim.from) / rate * 60.0;
+                    sim.feed = sim.rapid ? 0.0 : move.feed;
                     sim.operation = o;
                     sim.toolpathMove = m;
                     m_moves.push_back(sim);
@@ -1635,6 +1644,36 @@ namespace camcore
                 lastTip = FramePointToWorld(operation.frame, previous);
             }
         }
+
+        // Each operation's runs between dwells, from rest to rest, by the axes' limits.
+        size_t runStart = 0;
+        const auto timeRun = [&](size_t end) {
+            if (end <= runStart)
+                return;
+            const Frame& machine = m_operations[m_moves[runStart].operation].machine;
+            std::vector<MotionStep> steps;
+            steps.reserve(end - runStart);
+            for (size_t m = runStart; m < end; ++m)
+            {
+                const Vec3 d = m_moves[m].to - m_moves[m].from;
+                steps.push_back({ { Dot(d, machine.xAxis), Dot(d, machine.yAxis), Dot(d, machine.zAxis) },
+                                  m_moves[m].feed });
+            }
+            const std::vector<double> seconds = TimeRun(steps, limits);
+            for (size_t m = runStart; m < end; ++m)
+                m_moves[m].seconds = seconds[m - runStart];
+        };
+        for (size_t m = 0; m < m_moves.size(); ++m)
+        {
+            const SimMove& move = m_moves[m];
+            const bool breaks = move.dwell || move.index || move.operation != m_moves[runStart].operation;
+            if (breaks)
+            {
+                timeRun(m);
+                runStart = (move.dwell || move.index) ? m + 1 : m;
+            }
+        }
+        timeRun(m_moves.size());
 
         m_moveStarts.assign(m_moves.size() + 1, 0.0);
         for (size_t m = 0; m < m_moves.size(); ++m)
@@ -1664,12 +1703,36 @@ namespace camcore
         return (m_position < m_moves.size()) ? PointAlong(m_moves[m_position], m_into) : m_moves.back().to;
     }
 
+    Vec3 Simulation::AxisAfter(size_t m) const
+    {
+        const SimMove& move = m_moves[m];
+        return move.ownAxis ? move.axis : m_operations[move.operation].frame.zAxis;
+    }
+
     Vec3 Simulation::ToolAxis() const
     {
         if (m_moves.empty())
             return Vec3{ 0.0, 0.0, 1.0 };
-        const SimMove& move = m_moves[(std::min)(m_position, m_moves.size() - 1)];
-        return move.ownAxis ? move.axis : m_operations[move.operation].frame.zAxis;
+        if (m_position >= m_moves.size())
+            return AxisAfter(m_moves.size() - 1);
+
+        // Part way along the move: turned from the axis it starts at (the one the
+        // move before ended at) towards its own, by the time into it, so the tool
+        // (and a view turning with the work) turns smoothly as the rotary axis
+        // speeds up and slows down, rather than a step ahead.
+        const Vec3 end = AxisAfter(m_position);
+        if (m_position == 0)
+            return end;
+        const Vec3 start = AxisAfter(m_position - 1);
+        const SimMove& move = m_moves[m_position];
+        const double f = (move.seconds > 0.0) ? (std::max)(0.0, (std::min)(1.0, m_into / move.seconds)) : 0.0;
+        if (f <= 0.0)
+            return start;
+        Vec3 turnAxis;
+        const double angle = std::acos((std::max)(-1.0, (std::min)(1.0, Dot(start, end))));
+        if (angle < 1e-12 || !Normalise(Cross(start, end), turnAxis))
+            return f < 1.0 ? start : end;
+        return RotateAbout(start, turnAxis, f * angle * 180.0 / kPi);
     }
 
     const SimOperation* Simulation::CurrentOperation() const

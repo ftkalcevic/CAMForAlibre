@@ -30,6 +30,29 @@ namespace camcore
     // "-X", "+X", "-Y", "+Y".
     std::string RotaryAxisName(RotaryAxis axis);
 
+    // One linear axis's limits, for timing the simulation's moves.
+    struct AxisLimit
+    {
+        double velocity = 80.0;         // mm/s
+        double acceleration = 500.0;    // mm/s^2
+    };
+
+    // The machine's motion limits (the Machine tab's Sim Options). Rapids run each
+    // axis at its own maximum; corners are blended within the tolerance, as
+    // LinuxCNC's G64 P. Only the simulation's times use them.
+    struct MotionLimits
+    {
+        AxisLimit x, y, z;
+        double rotaryVelocity = 180.0;      // degrees/s
+        double rotaryAcceleration = 720.0;  // degrees/s^2
+        double blendTolerance = 0.1;        // mm; 0 stops at every corner
+    };
+
+    // Returns a sentence for each problem. Empty means they're valid.
+    std::vector<std::string> ValidateMotion(const MotionLimits& motion);
+
+    bool operator==(const MotionLimits& a, const MotionLimits& b);
+
     struct Machine
     {
         std::string id;     // stable; also the file's name
@@ -43,7 +66,9 @@ namespace camcore
         double travelZ = 100.0;
 
         double maxSpindleRpm = 24000.0;
-        double rapidRate = 5000.0;      // mm/min, for the simulation's real time and time estimates
+        // For the simulation's times. Files without them take their old rapid rate
+        // (rapidRate, mm/min) as each linear axis's velocity, in mm/s.
+        MotionLimits motion;
 
         // The tool holder, as a cylinder from the tool's overall length up, in mm.
         // The simulation draws it and stops if it touches the stock. Files without

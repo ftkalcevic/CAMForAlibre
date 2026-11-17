@@ -75,6 +75,7 @@
     <ClCompile Include="FacingToolpathTests.cpp" />
     <ClCompile Include="HolePocketToolpathTests.cpp" />
     <ClCompile Include="ThreadMillToolpathTests.cpp" />
+    <ClCompile Include="MotionTimingTests.cpp" />
     <ClCompile Include="RotaryTests.cpp" />
     <ClCompile Include="PocketToolpathTests.cpp" />
     <ClCompile Include="ProfileToolpathTests.cpp" />

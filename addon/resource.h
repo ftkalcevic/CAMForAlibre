@@ -233,6 +233,7 @@
 #define IDD_FIXTURES                    13051
 #define IDD_OP_THREAD_MILLING           13052
 #define IDD_ROTATE                      13053
+#define IDD_SIM_OPTIONS                 13054
 #define IDC_VIEW_SMALL                  13296
 #define IDC_VIEW_MEDIUM                 13297
 #define IDC_VIEW_LARGE                  13298
@@ -401,9 +402,6 @@
 #define IDC_MACHINE_ARC_TOL_LABEL       13467
 #define IDC_MACHINE_ARC_TOL             13468
 #define IDC_MACHINE_ARC_TOL_UNIT        13469
-#define IDC_MACHINE_RAPID_LABEL         13470
-#define IDC_MACHINE_RAPID               13471
-#define IDC_MACHINE_RAPID_UNIT          13472
 #define IDC_SIM_REALTIME                13473
 #define IDC_SIM_REALTIME_SPEED          13474
 #define IDC_SIM_REALTIME_TEXT           13475
@@ -486,6 +484,17 @@
 #define IDC_INDEX_DIRECTION             13561
 #define IDC_INDEX_RETRACT_LABEL         13562
 #define IDC_SIM_TURN_WORK               13563
+#define IDC_MACHINE_SIM_OPTIONS         13564
+#define IDC_SIMOPT_X_VEL                13565
+#define IDC_SIMOPT_X_ACC                13566
+#define IDC_SIMOPT_Y_VEL                13567
+#define IDC_SIMOPT_Y_ACC                13568
+#define IDC_SIMOPT_Z_VEL                13569
+#define IDC_SIMOPT_Z_ACC                13570
+#define IDC_SIMOPT_ROTARY_VEL           13571
+#define IDC_SIMOPT_ROTARY_ACC           13572
+#define IDC_SIMOPT_BLEND                13573
+#define IDC_SIMOPT_ROTARY_LABEL         13574
 #define IDC_MATDLG_TYPICAL              13524
 #define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
@@ -536,9 +545,9 @@
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        13054
+#define _APS_NEXT_RESOURCE_VALUE        13055
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13564
+#define _APS_NEXT_CONTROL_VALUE         13575
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

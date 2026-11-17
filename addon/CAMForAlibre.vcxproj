@@ -117,6 +117,7 @@
     <ClCompile Include="OperationDialog.cpp" />
     <ClCompile Include="OriginDialog.cpp" />
     <ClCompile Include="RotateDialog.cpp" />
+    <ClCompile Include="SimOptionsDialog.cpp" />
     <ClCompile Include="PostDialog.cpp" />
     <ClCompile Include="SettingsDialog.cpp" />
     <ClCompile Include="Help.cpp" />
@@ -147,6 +148,7 @@
     <ClInclude Include="OperationDialog.h" />
     <ClInclude Include="OriginDialog.h" />
     <ClInclude Include="RotateDialog.h" />
+    <ClInclude Include="SimOptionsDialog.h" />
     <ClInclude Include="PostDialog.h" />
     <ClInclude Include="SettingsDialog.h" />
     <ClInclude Include="Help.h" />

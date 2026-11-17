@@ -59,6 +59,7 @@ protected:
     afx_msg void OnCopyMachine();
     afx_msg void OnDeleteMachine();
     afx_msg void OnMachineFieldChanged();
+    afx_msg void OnSimOptions();
     afx_msg void OnAddTool();
     afx_msg void OnEditTool();
     afx_msg void OnCopyTool();

@@ -61,6 +61,40 @@ namespace camcore
         }
     }
 
+    std::vector<std::string> ValidateMotion(const MotionLimits& motion)
+    {
+        std::vector<std::string> problems;
+        const struct
+        {
+            const char* name;
+            const AxisLimit& limit;
+        } axes[] = { { "X", motion.x }, { "Y", motion.y }, { "Z", motion.z } };
+        for (const auto& axis : axes)
+        {
+            if (!(axis.limit.velocity > 0.0))
+                problems.push_back(std::string("The ") + axis.name + " axis's maximum velocity must be more than 0.");
+            if (!(axis.limit.acceleration > 0.0))
+                problems.push_back(std::string("The ") + axis.name +
+                                   " axis's maximum acceleration must be more than 0.");
+        }
+        if (!(motion.rotaryVelocity > 0.0))
+            problems.push_back("The rotary axis's maximum velocity must be more than 0.");
+        if (!(motion.rotaryAcceleration > 0.0))
+            problems.push_back("The rotary axis's maximum acceleration must be more than 0.");
+        if (!(motion.blendTolerance >= 0.0))
+            problems.push_back("The blend tolerance can't be less than 0.");
+        return problems;
+    }
+
+    bool operator==(const MotionLimits& a, const MotionLimits& b)
+    {
+        return a.x.velocity == b.x.velocity && a.x.acceleration == b.x.acceleration &&
+               a.y.velocity == b.y.velocity && a.y.acceleration == b.y.acceleration &&
+               a.z.velocity == b.z.velocity && a.z.acceleration == b.z.acceleration &&
+               a.rotaryVelocity == b.rotaryVelocity && a.rotaryAcceleration == b.rotaryAcceleration &&
+               a.blendTolerance == b.blendTolerance;
+    }
+
     std::vector<std::string> ValidateMachine(const Machine& machine)
     {
         std::vector<std::string> problems;
@@ -72,8 +106,8 @@ namespace camcore
             problems.push_back("The machine must have 3 or 4 axes.");
         if (!(machine.travelX > 0.0) || !(machine.travelY > 0.0) || !(machine.travelZ > 0.0))
             problems.push_back("Each axis's travel must be more than 0.");
-        if (!(machine.rapidRate > 0.0))
-            problems.push_back("The rapid rate must be more than 0.");
+        for (const std::string& problem : ValidateMotion(machine.motion))
+            problems.push_back(problem);
         if (!(machine.maxSpindleRpm > 0.0))
             problems.push_back("The spindle's maximum speed must be more than 0.");
         if (!(machine.holderDiameter > 0.0) || !(machine.holderDepth > 0.0))
@@ -136,9 +170,40 @@ namespace camcore
             const auto spindle = root.find("maxSpindleRpm");
             if (spindle != root.end())
                 result.machine.maxSpindleRpm = spindle->get<double>();
+            // Before the motion limits, one rapid rate for every axis.
             const auto rapid = root.find("rapidRate");
             if (rapid != root.end())
-                result.machine.rapidRate = rapid->get<double>();
+            {
+                const double rate = rapid->get<double>();
+                MotionLimits& motion = result.machine.motion;
+                motion.x.velocity = motion.y.velocity = motion.z.velocity = rate / 60.0;
+            }
+            const auto motion = root.find("motion");
+            if (motion != root.end())
+            {
+                MotionLimits& limits = result.machine.motion;
+                const auto readAxis = [&](const char* name, AxisLimit& axis) {
+                    const auto found = motion->find(name);
+                    if (found == motion->end())
+                        return;
+                    // In mm/s; "velocity" was mm/min, before Frank changed it.
+                    if (found->contains("maxVelocity"))
+                        axis.velocity = found->at("maxVelocity").get<double>();
+                    else if (found->contains("velocity"))
+                        axis.velocity = found->at("velocity").get<double>() / 60.0;
+                    axis.acceleration = found->value("acceleration", axis.acceleration);
+                };
+                readAxis("x", limits.x);
+                readAxis("y", limits.y);
+                readAxis("z", limits.z);
+                const auto rotary = motion->find("rotary");
+                if (rotary != motion->end())
+                {
+                    limits.rotaryVelocity = rotary->value("velocity", limits.rotaryVelocity);
+                    limits.rotaryAcceleration = rotary->value("acceleration", limits.rotaryAcceleration);
+                }
+                limits.blendTolerance = motion->value("blendTolerance", limits.blendTolerance);
+            }
             const auto holder = root.find("toolHolder");
             if (holder != root.end())
             {
@@ -198,7 +263,14 @@ namespace camcore
                 { "rotaryAxis", RotaryAxisName(machine.rotary) },
                 { "travel", json::array({ machine.travelX, machine.travelY, machine.travelZ }) },
                 { "maxSpindleRpm", machine.maxSpindleRpm },
-                { "rapidRate", machine.rapidRate },
+                { "motion",
+                  { { "x", { { "maxVelocity", machine.motion.x.velocity }, { "acceleration", machine.motion.x.acceleration } } },
+                    { "y", { { "maxVelocity", machine.motion.y.velocity }, { "acceleration", machine.motion.y.acceleration } } },
+                    { "z", { { "maxVelocity", machine.motion.z.velocity }, { "acceleration", machine.motion.z.acceleration } } },
+                    { "rotary",
+                      { { "velocity", machine.motion.rotaryVelocity },
+                        { "acceleration", machine.motion.rotaryAcceleration } } },
+                    { "blendTolerance", machine.motion.blendTolerance } } },
                 { "toolHolder", { { "diameter", machine.holderDiameter }, { "depth", machine.holderDepth } } },
                 { "arcs",
                   { { "enabled", machine.arcs.enabled },

@@ -1908,7 +1908,7 @@ bool CCamTabCommand::ComputeRemainingStock(const StepRef& target, const camcore:
     const double cell = (std::max)(camcore::AutoDivideCell(box), (std::min)(0.25, (std::max)(0.05, toolRadius / 8.0)));
     const ULONGLONG start = GetTickCount64();
     camcore::Simulation simulation;
-    simulation.Start(box, points, operations, camcore::SimResolution{ true, cell }, m_machine.rapidRate);
+    simulation.Start(box, points, operations, camcore::SimResolution{ true, cell }, m_machine.motion);
     while (!simulation.Finished())
     {
         const size_t moved = simulation.RunToEnd();
@@ -1988,9 +1988,29 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
     }
     m_fixtureRuns.clear();
 
+    // The machine's axes for timing the moves: the work zero's, turned by each
+    // operation's rotary angle on a 4 axis machine.
+    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+    const auto machineAxes = [&](const camcore::Frame& zero, double angle) {
+        camcore::Frame machine;
+        const camcore::Vec3 at = camcore::WorldFromMachine(zero, m_machine.rotary, angle, { 0, 0, 0 });
+        machine.xAxis = camcore::WorldFromMachine(zero, m_machine.rotary, angle, { 1, 0, 0 }) - at;
+        machine.yAxis = camcore::WorldFromMachine(zero, m_machine.rotary, angle, { 0, 1, 0 }) - at;
+        machine.zAxis = camcore::WorldFromMachine(zero, m_machine.rotary, angle, { 0, 0, 1 }) - at;
+        return machine;
+    };
+    if (zeroIndex != camcore::kNoStepIndex)
+    {
+        const camcore::FrameResult zero = camcore::BuildFrame(m_job.sequence[zeroIndex].origin);
+        if (zero.ok)
+        {
+            for (camcore::SimOperation& operation : operations)
+                operation.machine = machineAxes(zero.frame, 0.0);
+        }
+    }
+
     // On a 4 axis machine, the rotary axis turns between operations as the post
     // turns it: up to the retract height, then round.
-    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
     if (m_machine.axes == 4 && zeroIndex != camcore::kNoStepIndex && !operations.empty())
     {
         const camcore::FrameResult zero = camcore::BuildFrame(m_job.sequence[zeroIndex].origin);
@@ -2007,6 +2027,8 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
                 entries[i].frame = operations[i].frame;
             }
             const camcore::IndexPlan plan = camcore::PlanIndexes(zero.frame, Orientation(), entries);
+            for (size_t i = 0; i < operations.size() && i < plan.angles.size(); ++i)
+                operations[i].machine = machineAxes(zero.frame, plan.angles[i]);
             for (size_t i = 0; i < operations.size(); ++i)
             {
                 const camcore::IndexMove& move = plan.moves[i];
@@ -2052,7 +2074,7 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
         m_simulationTriangles = triangles;
         m_simulation.Start(box, triangles, operations,
                            CSimulationDlg::ChosenResolution(SimulationStops(CSimulationDlg::ChosenModel())),
-                           m_machine.rapidRate);
+                           m_machine.motion);
         Log(L"[simulate] %zu operations, %zu moves, %s, ready in %llu ms", operations.size(),
             m_simulation.Moves().size(), SimulationGridText().c_str(), GetTickCount64() - start);
     }
@@ -2084,7 +2106,7 @@ void CCamTabCommand::RestartSimulation(const camcore::SimResolution& resolution)
     const ULONGLONG start = GetTickCount64();
     const size_t position = m_simulation.Position();
     const std::vector<camcore::SimOperation> operations = m_simulation.Operations();
-    m_simulation.Start(m_simulationBox, m_simulationTriangles, operations, resolution, m_machine.rapidRate);
+    m_simulation.Start(m_simulationBox, m_simulationTriangles, operations, resolution, m_machine.motion);
     m_simulation.SeekTo(position);
     m_simulationChunks.assign(static_cast<size_t>(m_simulation.ChunkCount()), camcore::StockMesh());
     m_simulationMesh = camcore::StockMesh();

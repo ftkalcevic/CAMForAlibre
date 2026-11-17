@@ -13337,6 +13337,359 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Alibre isn't running, so I'm installing now.
 
+> Simulate now has a **Turn the work** check box, next to Ignore collisions. When it's ticked, Alibre's own view turns about the rotary axis as the simulated angle changes. The tool stays upright and the work turns, including Alibre's parts, the stock, toolpaths and fixtures. It's built and installed (7:01 pm), and all 390 tests pass, but it hasn't been tried in Alibre yet.
+>
+> - **What isn't known yet:** Alibre doesn't say which way its view transform takes a turn. On the first turn it tries one way and uses the screen to check that the tool kept pointing the same way. If it didn't, it tries the other way, and the log records the result as `[turn view]` lines.
+> - **How it behaves:**
+>   - It only turns the view by the change in angle, so if you orbit or zoom while it runs, that's kept.
+>   - Rewinding turns the view back.
+>   - Unticking the box or closing the simulation leaves the view where it is, as you asked.
+> - **Where it is:** the code is in `core\Rotary`, and `TurnViewToSimulation` is in [CamTabCommand.cpp](addon/CamTabCommand.cpp). I've updated the help, spec, `CLAUDE.md` and `TODO.md` (I removed "drawing the stock turning" from the 4th axis line). Nothing is committed.
+>
+> To test (restart Alibre first):
+> 1. On a 3 axis machine, Turn the work is greyed out.
+> 2. On the 4 axis job with a Rotate 90 folder, tick it and Play through the turn. The view should turn about the rotary axis while the tool stays upright, with the parts, stock and fixtures turning together.
+> 3. Rewind to the start: the view turns back.
+> 4. Orbit or zoom part way through: your view is kept, and only the turn is added.
+> 5. Close the simulation at 90°: the view stays turned.
+> 6. Check the help's Simulation section, which has the new entry.
+> 7. If it turns the wrong way or stays still, send me the `[turn view]` lines from the log.
+
+### 🧑 Frank · 19:10
+
+> Excellent.  Tests passed.
+
+### 🤖 Claude
+
+> Questions:
+> - What should the axis limits change in the simulation?
+>   - Move timing (Recommended): Real time playback and the elapsed/total time: each move's time comes from the axis limits, and the rotary swing is timed from its rpm. Nothing is cut differently.
+>   - Timing and warnings: The same timing, plus a warning in the simulation when an operation's feed rate is more than an axis can reach.
+> - What happens to the Machine tab's existing Rapid rate (mm/min) field?
+>   - Replace it (Recommended): Rapids run each axis at its own max velocity, as LinuxCNC does, so Rapid rate is removed. Old machine files take their rapid rate as each linear axis's max velocity.
+>   - Keep it: Rapid rate stays as the rapid feed, capped by each axis's max velocity.
+> - How should acceleration be modelled?
+>   - Blend corners (Recommended): The tool doesn't stop at gentle corners: it slows to a corner speed set by the turn's angle and the acceleration, and stops fully only where a move turns sharply or the next is a rapid or a plunge. This is close to LinuxCNC's blending, and it's estimated from the angles.
+>   - Stop every move: Each move speeds up from rest and slows back to rest (a trapezoid). It's simple, but the timing is too long on finishing paths with thousands of short moves.
+> - Which units should the Sim Options dialog use?
+>   - mm/min, mm/s² (Recommended): Linear velocity in mm/min (as feeds are), linear acceleration in mm/s². The rotary axis's velocity in rpm, its acceleration in degrees/s².
+>   - mm/s, mm/s²: As LinuxCNC's INI file has them. The rotary axis's velocity in rpm, its acceleration in degrees/s².
+
+### 🧑 Frank · 19:16
+
+> Answers:
+> - What should the axis limits change in the simulation?
+>   **Move timing (Recommended)**
+> - What happens to the Machine tab's existing Rapid rate (mm/min) field?
+>   **Replace it (Recommended)**
+> - How should acceleration be modelled?
+>   **Use Linuxcnc's P option to allow blending.  It should default to 0.1**
+> - Which units should the Sim Options dialog use?
+>   **mm/min, mm/s² (Recommended)**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Machine: Sim Options (axis velocity and acceleration)
+>
+> ## Context
+>
+> Frank wants a **Sim Options...** button on the Machine tab that sets each axis's maximum velocity and acceleration, with the rotary axis's velocity in rpm. Today the simulation times every move at the feed, or at one Rapid rate (mm/min), with no acceleration. Real time playback and the elapsed and total times are optimistic, and the rotary turn is timed as if it were a linear move.
+>
+> Frank's choices:
+> - The limits change only move timing: real time playback and the elapsed and total times. Nothing is cut differently.
+> - They replace Rapid rate. Rapids run each axis at its own maximum, LinuxCNC style.
+> - Acceleration is planned with blending like LinuxCNC's G64 P: a path tolerance in the options, default 0.1 mm.
+> - Units: mm/min and mm/s² for linear axes; rpm and degrees/s² for the rotary axis.
+>
+> Also, first: record in `CLAUDE.md` that Turn the work was tested by Frank. The log wasn't written, so which way the view takes the turn stays unknown.
+>
+> ## Core
+>
+> **`core\Machine`**
+> - `MotionLimits`:
+>   - `AxisLimit x, y, z`: `velocity` (mm/min), `acceleration` (mm/s²).
+>   - `rotaryVelocity` (rpm), `rotaryAcceleration` (degrees/s²).
+>   - `blendTolerance` (mm, 0.1).
+> - `Machine::motion` replaces `rapidRate`.
+> - Defaults: 5000 mm/min and 500 mm/s² for each linear axis; 30 rpm and 720 degrees/s² for the rotary axis. Claude's choices, to be confirmed in the test list.
+> - Saved as `motion` in the machine file. It's optional on load, so the file version doesn't change. An old file's `rapidRate` becomes each linear axis's velocity.
+> - `ValidateMotion`: every value above 0; the tolerance 0 or more.
+>
+> **`core\MotionTiming.h/.cpp` (new; add to `CamCore.vcxproj`)**
+> - `TimeMoves(std::vector<SimMove>& moves, ranges, limits)` sets each move's `seconds`. Its inputs:
+>   - Each move's direction in machine axes: `SimOperation::machine`, a `Frame` holding the machine's X, Y and Z in the assembly at that operation's angle, filled by the tab from the work zero and `PlanIndexes`' angle. Its default is the assembly's axes.
+>   - Its feed (rapids: none).
+> - Each straight move:
+>   - Velocity cap: the feed, or for a rapid nothing, then the smallest of each axis's velocity divided by the move's share along that axis.
+>   - Acceleration cap: likewise from each axis's acceleration.
+> - Each joint between two moves (G64 P):
+>   - The blend arc whose deviation from the corner is at most P: `r = P / (1/cos(θ/2) - 1)`, where θ is the turn.
+>   - It uses at most half of each move: `r ≤ min(L1, L2) / 2 / tan(θ/2)`.
+>   - Joint speed `sqrt(a·r)`, using the smaller acceleration of the two moves, capped by both moves' velocities. Straight on is uncapped; a reversal is 0.
+> - Runs end at rest:
+>   - at dwells, at operation boundaries and around the index;
+>   - and in a forward then a backward pass, each joint is held to `v² ≤ v_prev² + 2aL`.
+> - Each move's time is a trapezoid or triangle from its entry, cruise and exit speeds.
+> - Within a move, the tool still moves evenly in time (`PointAlong`), which is a small approximation.
+> - **Index:**
+>   - The lift is one Z move, rest to rest.
+>   - The turn is one rotary trapezoid over the whole change, from `rotaryVelocity × 6` degrees/s and `rotaryAcceleration`. Its time is shared out over the 2° steps by where each step falls on the profile.
+>
+> **`core\Simulation`**
+> - `Start(..., const MotionLimits& limits)` replaces `rapidRate`.
+> - `Start` builds the moves as now, with seconds at 0, then calls `TimeMoves`.
+> - Dwells keep their own time.
+> - `SimOperation::machine` is added.
+>
+> ## Add-on
+>
+> **Machine tab**
+> - The Rapid rate label, edit and unit are removed.
+> - **Sim Options...** (`IDC_MACHINE_SIM_OPTIONS`) goes where they were (x 176, y 148).
+> - It opens `CSimOptionsDlg` (new, `addon\SimOptionsDialog.h/.cpp`, modal, `IDD_SIM_OPTIONS`, with a ? button and the help section `sim-options`):
+>   - A grid with rows X, Y, Z and Rotary, and columns Max velocity and Max acceleration, with unit labels. The Rotary row is greyed unless the machine has 4 axes.
+>   - Then "Blend tolerance (G64 P): [0.1] mm".
+> - OK validates with `ValidateMotion` and edits the dialog's working machine. The existing changed-machine comparison (`MachineDialog.cpp:437`) compares `motion` in place of `rapidRate`.
+> - **IDs:** next resource 13054 for the dialog; controls from 13564.
+> - `CamTabCommand`: the three `Start` calls pass `m_machine.motion`, and `MakeSimOperation` fills `operation.machine` from the work zero frame turned by the operation's planned angle (`WorldFromMachine` directions).
+>
+> ## Docs
+>
+> - Help:
+>   - In the Machine section, Rapid rate becomes Sim Options.
+>   - A new Sim Options section describes each field.
+>   - In the Simulation section, timing is now from the axis limits.
+> - `docs\SPEC.md`: the motion timing decision.
+> - `CLAUDE.md`: the state line, and the Turn the work tested note.
+> - `TODO.md`: drop "a rotary rate on the machine".
+>
+> ## Verification
+>
+> 1. **Unit tests** (`tests\MotionTimingTests.cpp`):
+>    - A long straight move is about its length over the velocity plus v/a.
+>    - A short move never reaches the velocity (a triangle).
+>    - A diagonal is held by the slower axis.
+>    - A rapid runs each axis at its own maximum.
+>    - A 90° corner with P 0 stops, and with P 0.1 it doesn't.
+>    - A row of chords on a gentle arc keeps nearly full speed.
+>    - A 180° turn of the rotary axis takes the trapezoid's time.
+>    - An old machine file's `rapidRate` loads as the velocities.
+>    - Save and load keep `motion`.
+>    - Existing simulation tests still pass.
+> 2. **Build:** a full Release rebuild (structs change), `CamCoreTests.exe`, close Alibre, install, then `python tools\BuildDiscussion.py`.
+> 3. **Frank in Alibre:**
+>    1. The Machine tab shows Sim Options... where Rapid rate was. The dialog loads the old rapid rate as the X, Y and Z velocities.
+>    2. The Rotary row is greyed on 3 axes.
+>    3. Bad values are refused.
+>    4. Values are saved and reopened.
+>    5. Real time Simulate: the total time grows with lower acceleration.
+>    6. A Rotate turn takes about the expected time at the set rpm.
+>    7. Changing P changes the time on a finishing path.
+>    8. The help.
+
+*(Frank turned the plan down.)*
+
+### 🧑 Frank · 19:21
+
+> rpm should be degree/s
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Machine: Sim Options (axis velocity and acceleration)
+> 
+> ## Context
+> 
+> Frank wants a **Sim Options...** button on the Machine tab that sets each axis's maximum velocity and acceleration, with the rotary axis's velocity in rpm (then changed by Frank: degrees/s). Today the simulation times every move at the feed, or at one Rapid rate (mm/min), with no acceleration. Real time playback and the elapsed and total times are optimistic, and the rotary turn is timed as if it were a linear move.
+> 
+> Frank's choices:
+> - The limits change only move timing: real time playback and the elapsed and total times. Nothing is cut differently.
+> - They replace Rapid rate. Rapids run each axis at its own maximum, LinuxCNC style.
+> - Acceleration is planned with blending like LinuxCNC's G64 P: a path tolerance in the options, default 0.1 mm.
+> - Units: mm/min and mm/s² for linear axes; degrees/s and degrees/s² for the rotary axis (Frank's correction from rpm).
+> 
+> Also, first: record in `CLAUDE.md` that Turn the work was tested by Frank. The log wasn't written, so which way the view takes the turn stays unknown.
+> 
+> ## Core
+> 
+> **`core\Machine`**
+> - `MotionLimits`:
+>   - `AxisLimit x, y, z`: `velocity` (mm/min), `acceleration` (mm/s²).
+>   - `rotaryVelocity` (degrees/s), `rotaryAcceleration` (degrees/s²).
+>   - `blendTolerance` (mm, 0.1).
+> - `Machine::motion` replaces `rapidRate`.
+> - Defaults: 5000 mm/min and 500 mm/s² for each linear axis; 180 degrees/s and 720 degrees/s² for the rotary axis. Claude's choices, to be confirmed in the test list.
+> - Saved as `motion` in the machine file. It's optional on load, so the file version doesn't change. An old file's `rapidRate` becomes each linear axis's velocity.
+> - `ValidateMotion`: every value above 0; the tolerance 0 or more.
+> 
+> **`core\MotionTiming.h/.cpp` (new; add to `CamCore.vcxproj`)**
+> - `TimeMoves(std::vector<SimMove>& moves, ranges, limits)` sets each move's `seconds`. Its inputs:
+>   - Each move's direction in machine axes: `SimOperation::machine`, a `Frame` holding the machine's X, Y and Z in the assembly at that operation's angle, filled by the tab from the work zero and `PlanIndexes`' angle. Its default is the assembly's axes.
+>   - Its feed (rapids: none).
+> - Each straight move:
+>   - Velocity cap: the feed, or for a rapid nothing, then the smallest of each axis's velocity divided by the move's share along that axis.
+>   - Acceleration cap: likewise from each axis's acceleration.
+> - Each joint between two moves (G64 P):
+>   - The blend arc whose deviation from the corner is at most P: `r = P / (1/cos(θ/2) - 1)`, where θ is the turn.
+>   - It uses at most half of each move: `r ≤ min(L1, L2) / 2 / tan(θ/2)`.
+>   - Joint speed `sqrt(a·r)`, using the smaller acceleration of the two moves, capped by both moves' velocities. Straight on is uncapped; a reversal is 0.
+> - Runs end at rest:
+>   - at dwells, at operation boundaries and around the index;
+>   - and in a forward then a backward pass, each joint is held to `v² ≤ v_prev² + 2aL`.
+> - Each move's time is a trapezoid or triangle from its entry, cruise and exit speeds.
+> - Within a move, the tool still moves evenly in time (`PointAlong`), which is a small approximation.
+> - **Index:**
+>   - The lift is one Z move, rest to rest.
+>   - The turn is one rotary trapezoid over the whole change, from `rotaryVelocity` (degrees/s) and `rotaryAcceleration`. Its time is shared out over the 2° steps by where each step falls on the profile.
+> 
+> **`core\Simulation`**
+> - `Start(..., const MotionLimits& limits)` replaces `rapidRate`.
+> - `Start` builds the moves as now, with seconds at 0, then calls `TimeMoves`.
+> - Dwells keep their own time.
+> - `SimOperation::machine` is added.
+> 
+> ## Add-on
+> 
+> **Machine tab**
+> - The Rapid rate label, edit and unit are removed.
+> - **Sim Options...** (`IDC_MACHINE_SIM_OPTIONS`) goes where they were (x 176, y 148).
+> - It opens `CSimOptionsDlg` (new, `addon\SimOptionsDialog.h/.cpp`, modal, `IDD_SIM_OPTIONS`, with a ? button and the help section `sim-options`):
+>   - A grid with rows X, Y, Z and Rotary, and columns Max velocity and Max acceleration, with unit labels. The Rotary row is greyed unless the machine has 4 axes.
+>   - Then "Blend tolerance (G64 P): [0.1] mm".
+> - OK validates with `ValidateMotion` and edits the dialog's working machine. The existing changed-machine comparison (`MachineDialog.cpp:437`) compares `motion` in place of `rapidRate`.
+> - **IDs:** next resource 13054 for the dialog; controls from 13564.
+> - `CamTabCommand`: the three `Start` calls pass `m_machine.motion`, and `MakeSimOperation` fills `operation.machine` from the work zero frame turned by the operation's planned angle (`WorldFromMachine` directions).
+> 
+> ## Docs
+> 
+> - Help:
+>   - In the Machine section, Rapid rate becomes Sim Options.
+>   - A new Sim Options section describes each field.
+>   - In the Simulation section, timing is now from the axis limits.
+> - `docs\SPEC.md`: the motion timing decision.
+> - `CLAUDE.md`: the state line, and the Turn the work tested note.
+> - `TODO.md`: drop "a rotary rate on the machine".
+> 
+> ## Verification
+> 
+> 1. **Unit tests** (`tests\MotionTimingTests.cpp`):
+>    - A long straight move is about its length over the velocity plus v/a.
+>    - A short move never reaches the velocity (a triangle).
+>    - A diagonal is held by the slower axis.
+>    - A rapid runs each axis at its own maximum.
+>    - A 90° corner with P 0 stops, and with P 0.1 it doesn't.
+>    - A row of chords on a gentle arc keeps nearly full speed.
+>    - A 180° turn of the rotary axis takes the trapezoid's time.
+>    - An old machine file's `rapidRate` loads as the velocities.
+>    - Save and load keep `motion`.
+>    - Existing simulation tests still pass.
+> 2. **Build:** a full Release rebuild (structs change), `CamCoreTests.exe`, close Alibre, install, then `python tools\BuildDiscussion.py`.
+> 3. **Frank in Alibre:**
+>    1. The Machine tab shows Sim Options... where Rapid rate was. The dialog loads the old rapid rate as the X, Y and Z velocities.
+>    2. The Rotary row is greyed on 3 axes.
+>    3. Bad values are refused.
+>    4. Values are saved and reopened.
+>    5. Real time Simulate: the total time grows with lower acceleration.
+>    6. A Rotate turn takes about the expected time at the set degrees/s.
+>    7. Changing P changes the time on a finishing path.
+>    8. The help.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Now the core changes: Machine limits, the timing module, and the simulation hookup.
+
+> Now the implementation.
+
+> Now Machine, Simulation and the timing edits.
+
+> Now the tests: Machine tests, the timing tests in SimulationTests, and a new MotionTimingTests.
+
+> The core timing and the tab wiring are written. Now the Sim Options dialog and the Machine tab button.
+
+> I'm adding the new dialog to the project files, then building.
+
+> One test was failing, and the mistake was in my expected value, not the code. At 90°/s and 180°/s², speeding up takes 0.5 s over 22.5°, so the 180° turn takes 2.5 s. I'm correcting the test.
+
+> All 397 tests pass. Now the docs.
+
+> Alibre isn't running, so I'm installing now.
+
+> The Machine tab now has a **Sim Options...** button where Rapid rate was. It's built and installed (7:28 pm) and all 397 tests pass, but it hasn't been tried in Alibre yet. Nothing is committed.
+>
+> I've also recorded in `CLAUDE.md` that Turn the work passed your tests. The log file isn't being written, so I couldn't see which way it ended up turning the view.
+>
+> **The dialog:**
+> - **X, Y, Z:** max velocity in mm/min and max acceleration in mm/s². Defaults are 5000 and 500. A machine saved before this takes its old Rapid rate as all three velocities.
+> - **Rotary:** max velocity in degrees/s and acceleration in degrees/s², defaults 180 and 720. The row is greyed unless the machine has 4 axes.
+> - **Blend tolerance (G64 P):** 0.1 mm by default. 0 stops at every corner.
+> - The default values are my choices, so change them if your router differs.
+> - The limits are saved in the machine file when you press OK.
+>
+> **How it times moves:**
+> - Rapids run each axis at its own maximum, as LinuxCNC does.
+> - Feeds are held to what their axes can reach.
+> - Corners are rounded within the tolerance at the speed the acceleration allows. The tool stops at dwells, at reversals, and at the start and end of each operation.
+> - Each rotary turn speeds up and slows down once.
+> - This changes only Real time playback and the elapsed and total times. Nothing is cut differently.
+> - Within a single move the tool still moves at an even pace, so the tool's position part way through a move is slightly approximate.
+>
+> The timing code is in `core\MotionTiming` and the dialog in `addon\SimOptionsDialog`. The help has a new Sim Options section, and the Simulation section's timing wording is updated. I've also updated the spec, `TODO.md` and the README.
+>
+> To test (restart Alibre first):
+> 1. The Machine tab shows Sim Options... where Rapid rate was, and the dialog shows your old rapid rate as the X, Y and Z velocities.
+> 2. On a 3 axis machine, the Rotary row is greyed.
+> 3. Typing 0, a negative number or text is refused with a message.
+> 4. Change some values, press OK, close the dialog and reopen it: they're kept.
+> 5. Simulate with Real time: lowering the acceleration makes the total time longer.
+> 6. On the 4 axis job, a 180° turn at 90°/s and 180°/s² should take about 2.5 s.
+> 7. Raising the blend tolerance shortens the total time on a finishing path.
+> 8. Check the help's new Sim Options section.
+
+### 🧑 Frank · 19:35
+
+> Change linear max velocity to mm/s
+
+### 🤖 Claude
+
+> Max velocity for the X, Y and Z axes is now in mm/s, and the default is 80 mm/s. All 397 tests pass and the 7:37 pm build is installed, but it hasn't been tried in Alibre yet. Nothing is committed.
+>
+> - **Old machine files:** an old Rapid rate is in mm/min, so it's divided by 60 when the file loads. A machine you saved with the earlier mm/min build is converted the same way. The machine file now stores the mm/s value under a new name (`maxVelocity`), so the two can't be mixed up.
+> - **Docs:** the dialog's labels now read mm/s, and I've updated the help, spec and `CLAUDE.md` to match.
+>
+> To test (restart Alibre first):
+> 1. Open Sim Options: the X, Y and Z velocity labels read mm/s, and the values are your old ones divided by 60. For example, 5000 mm/min shows as 83.33.
+> 2. Change a velocity, press OK, then reopen the dialog: the new value is kept.
+> 3. Simulate with Real time: rapids take about the time you'd expect at the new mm/s speeds.
+
+### 🧑 Frank · 19:46
+
+> The rotary axis appeared to accelerate correctly, but it didn't appear to decelerate.  Confirm deceleration is being used when stopping.
+
+### 🤖 Claude
+
+> I'll check the timing directly: the turn's step times should mirror each other, slow at both ends.
+
+> Everything passes, including a new check that halfway through a 2° step the tool has turned 1°. Now I'm recording the fix and installing.
+
+> Deceleration is being used. The problem was in how the turn was drawn, and I've fixed that.
+>
+> **The timing is right.** For the 180° test turn at 90°/s and 180°/s², the 2° steps take 0.149 s, 0.062 s and so on at the start, 0.022 s through the middle, and the same in reverse at the end. The whole turn is 2.5 s, and a test now checks that the step times mirror each other.
+>
+> **What was wrong:** the simulation showed the tool's axis at the end of the step being played, even before any of that step had run. So the tool, and the view when Turn the work is ticked, was always one 2° step ahead. At the start that was hard to see. At the end the view reached the final angle when the slowest step (0.149 s) began, then sat still for it, so the turn looked like it stopped dead.
+>
+> **The fix:** `Simulation::ToolAxis` now turns the axis smoothly through each step, by how far into the step the simulation is. A new test checks that halfway through a 2° step the tool has turned 1°. All 397 tests pass.
+>
+> It's built but not installed, because Alibre is open. Once it's installed and Alibre restarted, play a Rotate turn with Real time ticked, both with and without Turn the work. It should ease into the turn and ease to a stop.
+
+### 🧑 Frank · 19:51
+
+> Install now
+
 ---
 
 # Side conversation

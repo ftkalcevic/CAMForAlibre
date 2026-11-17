@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "Machine.h"     // MotionLimits
 #include "Stock.h"
 #include "ToolLibrary.h"
 #include "Toolpath.h"
@@ -322,7 +323,9 @@ namespace camcore
         Vec3 from;
         Vec3 to;
         bool rapid = false;
-        double seconds = 0.0;       // how long it takes: at its feed, the rapid rate, or a dwell's time
+        double seconds = 0.0;       // how long it takes, from the motion limits, or a dwell's time
+        double feed = 0.0;          // mm/min; 0 for a rapid or a dwell
+        bool dwell = false;
         size_t operation = 0;       // which of the simulation's operations
         size_t toolpathMove = 0;    // which move of the operation's toolpath it comes from
 
@@ -364,6 +367,10 @@ namespace camcore
 
         // The rotary axis turning before it, after the operation before.
         SimIndex index;
+
+        // The machine's X, Y and Z in the assembly while it runs (the work zero's
+        // axes turned by its rotary angle), for timing moves by each axis's limits.
+        Frame machine;
     };
 
     // Steps through the operations' moves, cutting the stock.
@@ -372,10 +379,11 @@ namespace camcore
     public:
         // The stock filled, and the operations' moves made ready. A triangle mesh
         // fills the box's cells inside it; none fills them all.
-        // Rapids take their length at the rapid rate (mm/min); dwells their own time.
+        // Moves are timed by the machine's motion limits (TimeRun, with the corners
+        // blended); the rotary turn by its own; dwells take their own time.
         void Start(const StockBox& box, const std::vector<Vec3>& stockTriangles,
                    const std::vector<SimOperation>& operations, const SimResolution& resolution = SimResolution(),
-                   double rapidRate = 5000.0);
+                   const MotionLimits& limits = MotionLimits());
 
         // The stock as voxels (empty in tri-dexel mode), and as tri-dexels (empty with voxels).
         VoxelStock& Stock() { return m_stock; }
@@ -415,7 +423,7 @@ namespace camcore
         // Where the tool's tip is (part way along a move Advance stopped in), its axis,
         // and its shape, at the current position.
         Vec3 ToolTip() const;
-        Vec3 ToolAxis() const;
+        Vec3 ToolAxis() const;      // turned part way through a move whose axis changes
         const SimOperation* CurrentOperation() const;
 
         // Cuts up to count moves. Stops early, after the move, at a rapid that cuts
@@ -455,6 +463,7 @@ namespace camcore
         bool IgnoreCollisions() const { return m_ignoreCollisions; }
 
     private:
+        Vec3 AxisAfter(size_t move) const;     // the tool's axis once the move is done
         // Cuts one move's piece from a to b with the holder, shank and rapid checks,
         // returning the warning (None for none).
         SimWarning CutPiece(const SimMove& move, const Vec3& a, const Vec3& b);

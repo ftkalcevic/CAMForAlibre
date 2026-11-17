@@ -828,6 +828,17 @@ TEST_CASE("a cut into the part is too much removed, and divided or not gives the
     }
 }
 
+namespace
+{
+    // Every axis at one velocity (given in mm/min) with no time to speed up or slow down.
+    MotionLimits Instant(double velocity)
+    {
+        MotionLimits limits;
+        limits.x = limits.y = limits.z = { velocity / 60.0, 1e12 };
+        return limits;
+    }
+}
+
 TEST_CASE("each move takes its time: feeds, the rapid rate and dwells")
 {
     std::vector<ToolpathMove> moves = {
@@ -843,7 +854,7 @@ TEST_CASE("each move takes its time: feeds, the rapid rate and dwells")
     moves.push_back(dwell);
     Simulation simulation;
     simulation.Start({ { 0, 0, 0 }, { 120, 20, 10 } }, {}, { Operation(Flat(4), moves) }, SimResolution{ true, 0.5 },
-                     3000.0);      // 10 mm at 3000 mm/min: 0.2 s
+                     Instant(3000.0));      // 10 mm at 3000 mm/min: 0.2 s
     REQUIRE(simulation.Moves().size() == 5);     // the first only says where it starts
     CHECK(simulation.Moves()[0].seconds == 0.0);
     CHECK(simulation.Moves()[1].seconds == doctest::Approx(0.2));
@@ -863,7 +874,8 @@ TEST_CASE("advancing by time cuts part way along a move, and the rest matches cu
     moves[1].feed = 600.0;      // 0.9 s
     moves[2].feed = 600.0;      // 10 s
     const auto start = [&](Simulation& simulation) {
-        simulation.Start({ { 0, 0, 0 }, { 120, 20, 10 } }, {}, { Operation(Flat(4), moves) }, SimResolution{ true, 0.5 });
+        simulation.Start({ { 0, 0, 0 }, { 120, 20, 10 } }, {}, { Operation(Flat(4), moves) }, SimResolution{ true, 0.5 },
+                         Instant(5000.0));
     };
 
     Simulation whole;
@@ -911,7 +923,7 @@ TEST_CASE("a rapid into stock found part way along stops there")
     };
     Simulation simulation;
     simulation.Start({ { 0, 0, 0 }, { 20, 20, 10 } }, {}, { Operation(Flat(4), moves) }, SimResolution{ true, 0.5 },
-                     600.0);   // the 10 mm rapid takes 1 s
+                     Instant(600.0));   // the 10 mm rapid takes 1 s
     simulation.Advance(0.8);    // 8 mm down: into the stock at Z 7
     CHECK(simulation.HasWarning());
     CHECK(simulation.Position() == 1);

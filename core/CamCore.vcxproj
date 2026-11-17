@@ -82,6 +82,7 @@
     <ClCompile Include="PseudoPost.cpp" />
     <ClCompile Include="HolePocketing.cpp" />
     <ClCompile Include="ThreadMilling.cpp" />
+    <ClCompile Include="MotionTiming.cpp" />
     <ClCompile Include="Rotary.cpp" />
     <ClCompile Include="ThreadMillToolpath.cpp" />
     <ClCompile Include="HolePocketToolpath.cpp" />
@@ -123,6 +124,7 @@
     <ClInclude Include="FacingToolpath.h" />
     <ClInclude Include="HolePocketing.h" />
     <ClInclude Include="ThreadMilling.h" />
+    <ClInclude Include="MotionTiming.h" />
     <ClInclude Include="Rotary.h" />
     <ClInclude Include="Rotate.h" />
     <ClInclude Include="ThreadMillToolpath.h" />

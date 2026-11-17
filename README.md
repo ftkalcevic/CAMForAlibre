@@ -136,6 +136,7 @@ Visual Studio. The project launches `Alibre Design.exe` and breakpoints in
 | `OperationDialog.cpp/.h` | The modeless operation dialog and its tabs |
 | `OriginDialog.cpp/.h` | The modeless Set Origin dialog |
 | `RotateDialog.cpp/.h` | The Rotate dialog, and the Indexing group it shares with Set Origin |
+| `SimOptionsDialog.cpp/.h` | The machine's Sim Options: axis velocity and acceleration, and the blend tolerance |
 | `PostDialog.cpp/.h` | Finds the post scripts and chooses the post and output file before posting |
 | `Help.cpp/.h` | Opens the help page in the default browser at a section |
 | `StockDialog.cpp/.h` | The Box Stock, Part Box Stock and Imported Stock dialogs |
