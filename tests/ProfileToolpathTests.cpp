@@ -401,3 +401,71 @@ TEST_CASE("a profiling toolpath needs a tool, a profile and room for the tool")
     slot.path = PathFromPoints({ { 0, 0, 0 }, { 10, 0, 0 }, { 10, 1.5, 0 }, { 0, 1.5, 0 } });
     CHECK_FALSE(Generate(step, slot).ok);
 }
+
+TEST_CASE("the top and bottom of a 2 1/2 axis cut, for drawing")
+{
+    SequenceStep step;
+    step.type = StepType::Pocketing;
+    step.cutLevels.totalDepth = 5.0;
+    double top = 0.0, bottom = 0.0;
+
+    // At Top: the geometry is the top.
+    step.cutLevels.location = CutGeometryLocation::AtTop;
+    REQUIRE(CutTopAndBottom(step, nullptr, 2.0, top, bottom));
+    CHECK(top == doctest::Approx(2.0));
+    CHECK(bottom == doctest::Approx(-3.0));
+
+    // At Bottom: the geometry is the bottom.
+    step.cutLevels.location = CutGeometryLocation::AtBottom;
+    REQUIRE(CutTopAndBottom(step, nullptr, 2.0, top, bottom));
+    CHECK(top == doctest::Approx(7.0));
+    CHECK(bottom == doctest::Approx(2.0));
+
+    // Pick Top: neither need be the geometry.
+    step.cutLevels.location = CutGeometryLocation::PickTop;
+    step.cutLevels.topZ = 10.0;
+    REQUIRE(CutTopAndBottom(step, nullptr, 2.0, top, bottom));
+    CHECK(top == doctest::Approx(10.0));
+    CHECK(bottom == doctest::Approx(5.0));
+
+    // A chamfer cuts down from the edge by its depth, with a V-mill or chamfer mill.
+    step.type = StepType::Chamfer;
+    step.chamfer.width = 1.0;
+    Tool tool;
+    tool.type = ToolType::VMill;
+    tool.includedAngle = 90.0;
+    REQUIRE(CutTopAndBottom(step, &tool, 2.0, top, bottom));
+    CHECK(top == doctest::Approx(2.0));
+    CHECK(bottom == doctest::Approx(1.0));
+    CHECK_FALSE(CutTopAndBottom(step, nullptr, 2.0, top, bottom));
+    tool.type = ToolType::FlatEndMill;
+    CHECK_FALSE(CutTopAndBottom(step, &tool, 2.0, top, bottom));
+
+    // Other operations have no single bottom.
+    step.type = StepType::Drill;
+    CHECK_FALSE(CutTopAndBottom(step, nullptr, 2.0, top, bottom));
+    step.type = StepType::WaterlineRoughing;
+    CHECK_FALSE(CutTopAndBottom(step, nullptr, 2.0, top, bottom));
+}
+
+TEST_CASE("outlines moved along a tilted frame's Z keep the frame's X and Y")
+{
+    Frame frame;
+    frame.origin = { 1, 2, 3 };
+    frame.xAxis = { 0, 1, 0 };
+    frame.yAxis = { 0, 0, 1 };
+    frame.zAxis = { 1, 0, 0 };
+    const std::vector<std::vector<Vec3>> outlines = { { { 4, 2, 3 }, { 3, 5, 3 } }, { { 2, 2, 7 } } };
+    double highest = 0.0;
+    REQUIRE(HighestAlongFrameZ(frame, outlines, highest));
+    CHECK(highest == doctest::Approx(3.0));
+    const std::vector<std::vector<Vec3>> moved = OutlinesAtFrameZ(frame, outlines, -1.0);
+    REQUIRE(moved.size() == 2);
+    REQUIRE(moved[0].size() == 2);
+    CHECK(moved[0][1].x == doctest::Approx(0.0));
+    CHECK(moved[0][1].y == doctest::Approx(5.0));
+    CHECK(moved[0][1].z == doctest::Approx(3.0));
+    CHECK(moved[1][0].x == doctest::Approx(0.0));
+    CHECK(moved[1][0].z == doctest::Approx(7.0));
+    CHECK_FALSE(HighestAlongFrameZ(frame, {}, highest));
+}

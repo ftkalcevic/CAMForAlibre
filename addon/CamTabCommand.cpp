@@ -1629,33 +1629,44 @@ void CCamTabCommand::SelectStep(const StepRef& ref)
         RebuildScene();
 }
 
-std::vector<camcore::PickedGeometry> CCamTabCommand::HighlightedFeatures() const
+std::vector<CCamTabCommand::HighlightGroup> CCamTabCommand::HighlightedFeatures() const
 {
+    std::vector<HighlightGroup> groups;
+    const auto add = [&groups](const StepRef& ref, const camcore::SequenceStep* pStep,
+                               const std::vector<camcore::PickedGeometry>& features) {
+        HighlightGroup group;
+        group.ref = ref;
+        group.pStep = pStep;
+        group.features = features;
+        groups.push_back(std::move(group));
+    };
+
     // The open dialog's list, as it's being edited. A bulk dialog edits no
     // features, so its operations' own are shown.
     if (m_pOperationDlg != nullptr && !m_pOperationDlg->IsBulk())
-        return m_pOperationDlg->GetFeatures();
+    {
+        add(m_operationTarget, &m_pOperationDlg->GetStep(), m_pOperationDlg->GetFeatures());
+        return groups;
+    }
     if (m_pOperationDlg != nullptr)
     {
-        std::vector<camcore::PickedGeometry> features;
         for (const StepRef& ref : m_bulkTargets)
         {
             if (const camcore::SequenceStep* pStep = FindStep(ref))
-                features.insert(features.end(), pStep->features.begin(), pStep->features.end());
+                add(ref, pStep, pStep->features);
         }
-        return features;
+        return groups;
     }
 
-    std::vector<camcore::PickedGeometry> features;
     if (!m_chosen.empty())
     {
         // Every operation chosen together.
         for (const StepRef& ref : m_chosen)
         {
             if (const camcore::SequenceStep* pStep = FindStep(ref))
-                features.insert(features.end(), pStep->features.begin(), pStep->features.end());
+                add(ref, pStep, pStep->features);
         }
-        return features;
+        return groups;
     }
     if (m_selected.step != StepRef::kNone && m_selected.step < m_job.sequence.size())
     {
@@ -1664,47 +1675,97 @@ std::vector<camcore::PickedGeometry> CCamTabCommand::HighlightedFeatures() const
         {
             if (m_selected.IsOperation() && m_selected.child != c)
                 continue;
-            const std::vector<camcore::PickedGeometry>& own = step.children[c].features;
-            features.insert(features.end(), own.begin(), own.end());
+            StepRef ref;
+            ref.step = m_selected.step;
+            ref.child = c;
+            add(ref, &step.children[c], step.children[c].features);
         }
     }
-    return features;
+    return groups;
 }
 
 void CCamTabCommand::UpdateHighlights()
 {
     // Read again only when the features change.
-    const std::vector<camcore::PickedGeometry> features = HighlightedFeatures();
-    bool same = features.size() == m_highlighted.size();
-    for (size_t i = 0; same && i < features.size(); ++i)
-        same = camcore::SameFeature(features[i], m_highlighted[i]);
-    if (same)
-        return;
-
-    m_highlighted = features;
-    m_highlightOutlines.clear();
-    IADSessionPtr session;
-    try
+    const std::vector<HighlightGroup> groups = HighlightedFeatures();
+    bool same = groups.size() == m_highlighted.size();
+    for (size_t g = 0; same && g < groups.size(); ++g)
     {
-        session = GetSession();
+        same = groups[g].features.size() == m_highlighted[g].size();
+        for (size_t i = 0; same && i < groups[g].features.size(); ++i)
+            same = camcore::SameFeature(groups[g].features[i], m_highlighted[g][i]);
     }
-    catch (const _com_error& error)
+    if (!same)
     {
-        Log(L"[features] could not find the session: hr=0x%08X", static_cast<unsigned>(error.Error()));
-        return;
+        m_highlighted.clear();
+        for (const HighlightGroup& group : groups)
+            m_highlighted.push_back(group.features);
+        m_highlightGroupOutlines.assign(groups.size(), {});
+        m_highlightOutlines.clear();
+        IADSessionPtr session;
+        try
+        {
+            session = GetSession();
+        }
+        catch (const _com_error& error)
+        {
+            Log(L"[features] could not find the session: hr=0x%08X", static_cast<unsigned>(error.Error()));
+        }
+
+        // A face shows its outer loop, and an edge itself. Points have no outline.
+        for (size_t g = 0; session != nullptr && g < groups.size(); ++g)
+        {
+            for (const camcore::PickedGeometry& feature : groups[g].features)
+            {
+                if (feature.kind == camcore::PickKind::DesignPoint)
+                    continue;
+                std::vector<camcore::Path> outline;
+                std::wstring problem;
+                if (!ReadFeatureOutline(session, feature, outline, problem))
+                    continue;
+                for (const camcore::Path& piece : outline)
+                {
+                    m_highlightGroupOutlines[g].push_back(camcore::PathPoints(piece, false));
+                    m_highlightOutlines.push_back(m_highlightGroupOutlines[g].back());
+                }
+            }
+        }
     }
 
-    // A face shows its outer loop, and an edge itself. Points have no outline.
-    for (const camcore::PickedGeometry& feature : features)
+    // The top and bottom of each 2 1/2 axis operation's cut, drawn thin, worked
+    // out every time as its settings, tool or frame may have changed. A level at
+    // the geometry's own height is left out: the feature shows there.
+    constexpr double kSameLevel = 0.001;
+    m_highlightLevels.clear();
+    for (size_t g = 0; g < groups.size() && g < m_highlightGroupOutlines.size(); ++g)
     {
-        if (feature.kind == camcore::PickKind::DesignPoint)
+        const std::vector<std::vector<camcore::Vec3>>& outlines = m_highlightGroupOutlines[g];
+        const camcore::SequenceStep* pStep = groups[g].pStep;
+        if (pStep == nullptr || outlines.empty() || groups[g].ref.step >= m_job.sequence.size())
             continue;
-        std::vector<camcore::Path> outline;
-        std::wstring problem;
-        if (!ReadFeatureOutline(session, feature, outline, problem))
+        const camcore::FrameResult frame = FrameOf(groups[g].ref.step);
+        double geometryZ = 0.0;
+        if (!frame.ok || !camcore::HighestAlongFrameZ(frame.frame, outlines, geometryZ))
             continue;
-        for (const camcore::Path& piece : outline)
-            m_highlightOutlines.push_back(camcore::PathPoints(piece, false));
+        camcore::Tool tool;
+        const camcore::Tool* pTool = nullptr;
+        if (const camcore::Tool* pFound = camcore::FindToolById(m_library, pStep->toolId))
+        {
+            tool = camcore::ToolInMillimetres(*pFound);
+            pTool = &tool;
+        }
+        double top = 0.0;
+        double bottom = 0.0;
+        if (!camcore::CutTopAndBottom(*pStep, pTool, geometryZ, top, bottom))
+            continue;
+        const double levels[2] = { top, bottom };
+        for (int k = 0; k < 2; ++k)
+        {
+            if (std::fabs(levels[k] - geometryZ) <= kSameLevel || (k == 1 && std::fabs(bottom - top) <= kSameLevel))
+                continue;
+            for (std::vector<camcore::Vec3>& moved : camcore::OutlinesAtFrameZ(frame.frame, outlines, levels[k]))
+                m_highlightLevels.push_back(std::move(moved));
+        }
     }
 }
 
@@ -4296,6 +4357,7 @@ void CCamTabCommand::RebuildScene()
     // The chosen operation's features, outlined in orange.
     UpdateHighlights();
     m_scene.highlights = m_highlightOutlines;
+    m_scene.highlightLevels = m_highlightLevels;
 
     // Every generated toolpath, brought from its origin's frame into the assembly.
     m_scene.showToolpaths = !IsPicking();

@@ -125,4 +125,19 @@ namespace camcore
     // Stepover passes work as in Profiling, there are no tabs, and each profile
     // is cut to its full depth before the next.
     ToolpathResult GenerateChamferToolpath(const ProfileToolpathInput& input);
+
+    // The top and bottom of a 2 1/2 axis operation's cut along its frame's Z,
+    // given the selected geometry's height (its highest point, as Generate
+    // measures from). Facing, Profiling, Pocketing and Engrave use their Cut
+    // Levels; Chamfer cuts from the geometry down its chamfer depth, which
+    // needs a V-mill or chamfer mill. False for other operations, or a chamfer
+    // without such a tool.
+    bool CutTopAndBottom(const SequenceStep& step, const Tool* tool, double geometryZ, double& top, double& bottom);
+
+    // The highest of the points along the frame's Z. False if there are none.
+    bool HighestAlongFrameZ(const Frame& frame, const std::vector<std::vector<Vec3>>& outlines, double& highest);
+
+    // Each point (in assembly coordinates) moved along the frame's Z to z there.
+    std::vector<std::vector<Vec3>> OutlinesAtFrameZ(const Frame& frame,
+                                                    const std::vector<std::vector<Vec3>>& outlines, double z);
 }

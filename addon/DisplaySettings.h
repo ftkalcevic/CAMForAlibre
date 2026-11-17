@@ -51,6 +51,7 @@ const float kBoundaryLineWeight = 2.0f;
 // The chosen operation's picked features.
 const DisplayColour kFeatureHighlightColour = { 255, 150, 0, 255 };
 const float kFeatureHighlightLineWeight = 3.0f;
+const float kCutLevelLineWeight = 1.5f;     // the same outline at the top and bottom of the cut
 
 // The simulated stock, shaded, the tool, and a rapid into the stock.
 const DisplayColour kSimStockColour = { 120, 160, 200, 255 };

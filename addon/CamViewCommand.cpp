@@ -387,6 +387,20 @@ void CCamViewCommand::DrawScene(IADAddOnCanvasDisplay* pCanvas, const CamScene& 
         }
     }
 
+    if (scene.showToolpaths && !scene.highlightLevels.empty())
+    {
+        const __int64 segment = AddSegment(pCanvas, L"Operation cut top and bottom", kFeatureHighlightColour,
+                                           kCutLevelLineWeight, scene.foreground);
+        for (const std::vector<Vec3>& outline : scene.highlightLevels)
+        {
+            std::vector<float> points;
+            points.reserve(outline.size() * 3);
+            for (const Vec3& point : outline)
+                AddPoint(points, point, unit);
+            DrawPolyline(pCanvas, segment, points);
+        }
+    }
+
     if (scene.showToolpaths && !scene.boundaries.empty())
     {
         const __int64 segment = AddSegment(pCanvas, L"Facing boundaries", kBoundaryColour, kBoundaryLineWeight,

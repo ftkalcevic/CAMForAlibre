@@ -42,6 +42,7 @@ struct CamScene
     std::vector<Toolpath> toolpaths;
     std::vector<std::vector<camcore::Vec3>> boundaries;     // facing areas, closed
     std::vector<std::vector<camcore::Vec3>> highlights;     // the chosen operation's features
+    std::vector<std::vector<camcore::Vec3>> highlightLevels;    // the top and bottom of their cuts, thin
     bool showToolpaths = true;      // the boundaries too. Off while picking.
     bool toolpathsShown = true;     // the toolbar's Show Toolpaths, for the toolpaths alone
 

@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "AdaptiveClearing.h"
+#include "Features.h"
 #include "FacingToolpath.h"
 #include "PathBuilder.h"
 #include "PlungeRoughToolpath.h"
@@ -2027,5 +2028,69 @@ namespace camcore
                                     "tool can reach."
                                   : "Nothing fits in the pocket.";
         return result;
+    }
+
+    bool CutTopAndBottom(const SequenceStep& step, const Tool* tool, double geometryZ, double& top, double& bottom)
+    {
+        switch (step.type)
+        {
+        case StepType::Facing:
+        case StepType::Profiling:
+        case StepType::Pocketing:
+        case StepType::Engrave:
+            top = CutTopZ(step.cutLevels, geometryZ);
+            bottom = top - step.cutLevels.totalDepth;
+            return std::isfinite(top) && std::isfinite(bottom);
+        case StepType::Chamfer:
+        {
+            if (tool == nullptr || (tool->type != ToolType::VMill && tool->type != ToolType::ChamferMill) ||
+                !(tool->includedAngle > 0.0 && tool->includedAngle < 180.0))
+                return false;
+            const double depth = ChamferDepth(*tool, step.chamfer);
+            if (!std::isfinite(depth))
+                return false;
+            top = geometryZ;
+            bottom = geometryZ - depth;
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
+    bool HighestAlongFrameZ(const Frame& frame, const std::vector<std::vector<Vec3>>& outlines, double& highest)
+    {
+        bool found = false;
+        for (const std::vector<Vec3>& outline : outlines)
+        {
+            for (const Vec3& point : outline)
+            {
+                const double z = WorldToFrame(frame, point).z;
+                if (!found || z > highest)
+                    highest = z;
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    std::vector<std::vector<Vec3>> OutlinesAtFrameZ(const Frame& frame,
+                                                    const std::vector<std::vector<Vec3>>& outlines, double z)
+    {
+        std::vector<std::vector<Vec3>> moved;
+        moved.reserve(outlines.size());
+        for (const std::vector<Vec3>& outline : outlines)
+        {
+            std::vector<Vec3> points;
+            points.reserve(outline.size());
+            for (const Vec3& point : outline)
+            {
+                Vec3 local = WorldToFrame(frame, point);
+                local.z = z;
+                points.push_back(FramePointToWorld(frame, local));
+            }
+            moved.push_back(std::move(points));
+        }
+        return moved;
     }
 }

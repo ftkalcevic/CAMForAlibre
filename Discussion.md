@@ -13690,6 +13690,161 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Install now
 
+### 🤖 Claude
+
+> The fix is installed (7:48 pm build). Restart Alibre, then:
+>
+> 1. Tick Real time and play through a Rotate turn. The tool should speed up into the turn and slow to a stop at the end, with no sudden halt.
+> 2. Do the same with Turn the work ticked. The view should ease in and out the same way.
+
+### 🧑 Frank · 19:52
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> next change, when we click on an operation, we show the selected geometry outline in bold orange.  Also draw the same geometry at the bottom of the cut as a thinner orange line.
+
+### 🤖 Claude
+
+> Reading how the operation frame and cut depth are worked out, so the plan can put the outline at the cut's bottom.
+
+> I've read how picked features are drawn and how the cut depth is worked out. Two questions before I write the plan.
+
+> Questions:
+> - Which operations should draw the thinner bottom-of-cut outline? (2 1/2 axis ones work out the bottom from the Cut Levels tab: cut top less the total depth.)
+>   - 2 1/2 axis (Recommended): Facing, Profiling, Pocketing, Engrave from Cut Levels, plus Chamfer at its chamfer depth (needs the chosen tool). Hole operations pick points, so they have no outline; 3 axis ones have no single bottom.
+>   - Also 3 axis: As well, Plunge/Waterline Roughing, Waterline and Parallel Finishing draw it at their Bottom (the Cut Levels tab's Bottom, or the stock's bottom when that isn't set).
+>   - Cut Levels ops only: Facing, Profiling, Pocketing and Engrave only; Chamfer left out.
+> - The picked outline is already drawn orange at weight 3. How should the two lines look?
+>   - Top 3, bottom 1.5 (Recommended): Keep today's bold line; the bottom-of-cut copy at half its weight, same orange.
+>   - Top 4, bottom 1.5: Make the top bolder than today as well.
+
+### 🧑 Frank · 19:55
+
+> Answers:
+> - Which operations should draw the thinner bottom-of-cut outline? (2 1/2 axis ones work out the bottom from the Cut Levels tab: cut top less the total depth.)
+>   **2 1/2 axis (Recommended)**
+> - The picked outline is already drawn orange at weight 3. How should the two lines look?
+>   **Top 3, bottom 1.5 (Recommended)**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Picked geometry at the bottom of the cut
+>
+> ## Context
+>
+> When an operation is chosen, or its dialog is open, its picked faces and edges are drawn in bold orange (`UpdateHighlights` in `addon\CamTabCommand.cpp:1674`, drawn in `CCamViewCommand::DrawScene`, `addon\CamViewCommand.cpp:376`, weight `kFeatureHighlightLineWeight` 3.0). Frank wants the same outline drawn again at the bottom of the cut as a thinner orange line, so the depth can be seen.
+>
+> Frank's choices:
+> - **2 1/2 axis operations only:**
+>   - Facing, Profiling, Pocketing and Engrave take the bottom from the Cut Levels tab.
+>   - Chamfer takes its chamfer depth.
+>   - Hole operations pick points, so they have no outline.
+>   - 3 axis operations have no single bottom.
+> - **Line weights:** the top line stays at 3.0, and the bottom line is 1.5 in the same orange.
+>
+> ## Where the bottom is (matching Generate)
+>
+> The outlines are taken into the operation's frame (`FrameOf(ref.step).frame`, `WorldToFrame` in `core\Features.h`). The geometry's Z is the highest frame Z of all that operation's outline points, which is where `GatherAreas` flattens them.
+>
+> - **Facing, Profiling, Pocketing, Engrave:** `bottom = CutTopZ(cutLevels, geometryZ) - cutLevels.totalDepth` (`core\CutLevels.h`). A total of 0 gives the top, so no second line is drawn.
+> - **Chamfer:** `bottom = geometryZ - ChamferDepth(tool, chamfer)` (`core\ProfileToolpath.h`). The tool comes from `FindToolById(m_machine tools, step.toolId)`. With no tool, or not a V or chamfer mill, there's no bottom line.
+> - Each outline point keeps its frame X and Y, its Z is set to the bottom, and it goes back to the world with `FramePointToWorld` (`core\Origin.h`).
+> - This goes in a small core function, so it can be tested:
+>   - `std::vector<std::vector<Vec3>> OutlinesAtDepth(const Frame&, const std::vector<std::vector<Vec3>>& outlines, double depthBelowTop, ...)`
+>   - or `CutBottomZ(const SequenceStep&, const Tool*, double geometryZ, double& bottom)` plus a projection helper.
+>   - Proposed home: `core\CutLevels` for `CutBottomZ`, with the chamfer case through `ProfileToolpath.h`. If that would make CutLevels depend on ProfileToolpath, it goes in a new `core\CutBottom.h/.cpp` instead, added to `CamCore.vcxproj`.
+>
+> ## Add-on changes
+>
+> - **Group the highlights by operation:**
+>   - `HighlightedFeatures()` returns a list of groups, each holding the operation (`StepRef`) and its features: from the open dialog (`m_operationTarget` and `GetFeatures()`, or the bulk targets), the chosen operations, or the selected operation or folder's children.
+>   - The outline cache (`m_highlighted`, `m_highlightOutlines`) stays keyed on the features, so Alibre is read only when they change. The cache keeps the outlines per group.
+> - **Work out the bottom lines on every `RebuildScene`.** It's cheap: no Alibre calls. It uses the operation's saved step, or the open dialog's step (`COperationDlg::GetStep()`, so it follows Apply and Generate), with its frame, cut levels, chamfer settings and tool.
+>   - The bottom lines go in a new `CamScene::highlightBottoms` (`addon\CamViewCommand.h`).
+>   - They're drawn in their own segment, "Operation cut bottom", in `kFeatureHighlightColour` at a new `kFeatureBottomLineWeight` = 1.5f (`addon\DisplaySettings.h`), under the same `showToolpaths` condition, so they're hidden while picking.
+>   - Only operations of the five types above get a bottom line. A suppressed operation's is drawn like its top.
+>
+> ## Docs
+>
+> - **Help:** the CAM tab or tree text that describes the orange picked geometry gains the thin line at the bottom of the cut, with the five operations named.
+> - **`docs\SPEC.md`:** a line under geometry display.
+> - **`CLAUDE.md`:** the "Showing picked geometry" state line.
+>
+> ## Verification
+>
+> 1. **Unit tests** in `tests\CutLevelsTests.cpp`, or wherever `CutTopZ` is tested:
+>    - The bottom for At Top, At Bottom and Pick Top.
+>    - A total of 0 gives no line.
+>    - The chamfer bottom is the top less `ChamferDepth`.
+>    - Projection in a tilted frame keeps frame X and Y.
+> 2. **Build:** a full Release rebuild (`CamScene` changes), run `CamCoreTests.exe`, close Alibre, install, then `python tools\BuildDiscussion.py`.
+> 3. **Frank in Alibre:**
+>    1. Click a Pocketing operation with a 5 mm total depth: a thin orange copy of the outline sits 5 mm below the bold one.
+>    2. Change Cut Levels to At Bottom or Pick Top, then Apply: the line moves.
+>    3. Facing with a total of 0: no thin line.
+>    4. Chamfer: the thin line sits at the chamfer's depth.
+>    5. Drill, a 3 axis operation and a folder: a folder shows each 2 1/2 axis child's bottom; the others show none.
+>    6. An operation under a Rotate or a tilted Set Origin: the bottom is along that frame's Z.
+>    7. The help.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Now the core function. Let me check what Origin.h/Features.h give and whether ProfileToolpath.cpp already includes them.
+
+*(Frank stopped Claude here.)*
+
+### 🧑 Frank · 20:02
+
+> The plan doesn't cover all situations.  the cut levels tab allows the selected feature to be the bottom.  We can also have offsets.  So, continue to show the selected geometry bold, but then show the top and bottom of the cut as non-bold.  If the feature is at the same level as the top or bottom, on show the feature.
+
+### 🤖 Claude
+
+> That's the same rule I'm already building: the feature bold where it is, the cut's top and bottom thin, and a thin line left out wherever it falls at the feature's own level. Continuing.
+
+> Adding tests.
+
+> Now the add-on. Let me read the scene struct and where `RebuildScene` sets the highlights.
+
+> The core helpers and tests are in. Now I'm wiring the tab to draw the thin top and bottom lines, writing the edit script to a file because the inline version tripped over quoting.
+
+> An old script with that name was already in the scratchpad (it failed on its first edit, so it changed nothing). Writing mine under a new name.
+
+> Code is in. Running the full Release rebuild now, since the scene struct changed.
+
+> All 399 tests pass. Now the docs.
+
+> Alibre is closed, so installing.
+
+> When you select one of these operations, its picked geometry still shows in bold orange. Thin orange copies of the same outline now show at the top and the bottom of the cut. The 8:07 pm build is installed and all 399 tests pass, but I haven't tried it in Alibre. Nothing is committed.
+>
+> This applies to Facing, Profiling, Pocketing, Engrave and Chamfer:
+> - **Cut Levels operations:** the top is the cut top for your setting (At Top, At Bottom or Pick Top), and the bottom is that top less the total depth.
+> - **Chamfer:** the top is the edge, and the bottom is the chamfer depth below it. The bottom line only shows when the tool is a V-mill or chamfer mill.
+> - **Same level as the feature:** a thin line within 0.001 mm of the feature's height is left out, so only the bold line shows there.
+> - **Height used:** levels are measured along the operation's own Z from the picked geometry's highest point, the same way Generate measures them.
+> - **While the dialog is open:** the thin lines move when you press Apply or Generate, not as you type.
+>
+> I updated the help, `docs\SPEC.md` and `CLAUDE.md` to match.
+>
+> Restart Alibre, then test:
+> 1. **Pocketing, At Top, total depth 5:** bold outline at the face, thin line 5 mm below, no thin line at the top.
+> 2. **At Bottom:** bold outline at the face, thin line 5 mm above.
+> 3. **Pick Top above the face:** bold outline, plus two thin lines, one at the picked top and one 5 mm below it.
+> 4. **Facing with total depth 0:** only the bold outline.
+> 5. **Chamfer with a V-mill:** a thin line at the chamfer depth below the edge. With a flat mill, no thin line.
+> 6. **A folder:** each Cut Levels or Chamfer operation in it shows its own lines. Drill and the 3 axis operations show none.
+> 7. **An operation under a Rotate or a tilted Set Origin:** the thin lines are offset along that frame's Z.
+> 8. **Open the dialog and change Cut Levels:** nothing moves until Apply or Generate.
+> 9. **The help:** the Operation entry in the tree section describes the thin lines.
+
+### 🧑 Frank · 20:18
+
+> tests passed
+
 ---
 
 # Side conversation

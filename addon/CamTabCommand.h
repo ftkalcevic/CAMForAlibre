@@ -235,8 +235,15 @@ public:
     // The features whose outlines are drawn in orange: the open operation
     // dialog's, otherwise the tree's selected operation's (all of a folder's
     // operations' for a folder). Their outlines are read from the model and kept
-    // until the features change.
-    std::vector<camcore::PickedGeometry> HighlightedFeatures() const;
+    // until the features change. Each operation's own, so the top and bottom of
+    // its cut (drawn thin) are worked out from its own settings and frame.
+    struct HighlightGroup
+    {
+        StepRef ref;                                    // the folder, and the operation in it (or kNewStep)
+        const camcore::SequenceStep* pStep = nullptr;   // the operation's settings (the dialog's while it's open)
+        std::vector<camcore::PickedGeometry> features;
+    };
+    std::vector<HighlightGroup> HighlightedFeatures() const;
     void UpdateHighlights();
     void OnOperationDialogDone(COperationDlg* pDialog, bool apply);
     void OnOperationDialogGenerate(COperationDlg* pDialog);
@@ -369,8 +376,10 @@ private:
     std::vector<StepRef> m_bulkTargets; // the operations a bulk dialog edits, with m_operationTarget the first
     std::vector<StepRef> m_chosen;      // the operations chosen together in the tree
     bool m_showingFeatures;             // Features list rows are selected in the view
-    std::vector<camcore::PickedGeometry> m_highlighted;    // the features m_highlightOutlines were read for
-    std::vector<std::vector<camcore::Vec3>> m_highlightOutlines;   // in assembly mm
+    std::vector<std::vector<camcore::PickedGeometry>> m_highlighted;  // each group's features, as last read
+    std::vector<std::vector<std::vector<camcore::Vec3>>> m_highlightGroupOutlines;  // each group's, in assembly mm
+    std::vector<std::vector<camcore::Vec3>> m_highlightOutlines;   // every group's, in assembly mm
+    std::vector<std::vector<camcore::Vec3>> m_highlightLevels;     // the cuts' tops and bottoms, in assembly mm
 
     // Only one dialog is open at a time, so this is set only when the others aren't.
     CPartBoxStockDlg* m_pPartBoxDlg;
