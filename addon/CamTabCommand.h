@@ -161,6 +161,12 @@ public:
     std::wstring SimulationCompareText() const;     // the volumes, or why the parts can't be compared
     bool SaveSimulationStl(const std::filesystem::path& path, std::wstring& message);
     void OnSimulationChanged();             // the stock or tool moved: mesh again and redraw
+
+    // Turn the work: Alibre's view turns about the rotary axis with the simulated
+    // angle, so the tool stays upright and the work turns. Only on a 4 axis
+    // machine with a work zero. The view is left where it is when it's unticked.
+    bool CanTurnSimulationView() const;
+    void SetSimulationTurnsWork(bool turn);
     void OnSimulationDialogDone(CSimulationDlg* pDialog);
 
     // Several operations chosen in the tree with Ctrl or Shift: drawn as chosen,
@@ -401,6 +407,10 @@ private:
     camcore::Simulation m_simulation;
     camcore::StockBox m_simulationBox;                  // the stock it started from, to start again
     SimulationShow m_simulationShow;
+    bool m_simulationTurnsWork = false;
+    double m_viewAngle = 0.0;           // degrees the view has been turned about the rotary axis (0 to 360)
+    int m_viewTurnWay = 0;              // how ViewTransform takes a turn: 0 not known, 1 before it, 2 after it
+    void TurnViewToSimulation();
     std::vector<camcore::Vec3> m_simulationPartTriangles;   // all the parts, in assembly mm, read once
     bool m_simulationPartsRead = false;
     std::wstring m_simulationPartProblem;

@@ -218,6 +218,41 @@ TEST_CASE("the rotary angle that reaches a frame")
     CHECK_FALSE(SolveIndex(zero, OrientationContext(), frame).ok);
 }
 
+TEST_CASE("the rotary angle of the simulated tool, for turning the view")
+{
+    const Frame zero;
+    // About +Y, right-handed: Z turns towards +X.
+    for (double angle : { 0.0, 2.0, 90.0, 180.0, 270.0, 358.0 })
+    {
+        const Vec3 axis = RotateAbout({ 0, 0, 1 }, { 0, 1, 0 }, angle);
+        const IndexSolution solution = RotaryAngleOf(zero, RotaryAxis::PlusY, axis * 3.0);
+        REQUIRE(solution.ok);
+        CHECK(solution.angle == doctest::Approx(angle).epsilon(1e-9));
+    }
+    // About +X.
+    const IndexSolution aboutX = RotaryAngleOf(zero, RotaryAxis::PlusX, RotateAbout({ 0, 0, 1 }, { 1, 0, 0 }, 90));
+    REQUIRE(aboutX.ok);
+    CHECK(aboutX.angle == doctest::Approx(90));
+    // A swing's steps grow.
+    double last = -1;
+    for (int s = 0; s <= 45; ++s)
+    {
+        const IndexSolution step = RotaryAngleOf(zero, RotaryAxis::PlusY, RotateAbout({ 0, 0, 1 }, { 0, 1, 0 }, s * 2.0));
+        REQUIRE(step.ok);
+        CHECK(step.angle > last);
+        last = step.angle;
+    }
+    CHECK_FALSE(RotaryAngleOf(zero, RotaryAxis::PlusY, { 0, 1, 0 }).ok);
+    CHECK_FALSE(RotaryAngleOf(zero, RotaryAxis::PlusY, { 0, 1, 1 }).ok);
+
+    // Turning about a line keeps its points and turns the rest.
+    const RowMatrix turn = TurnAboutLine({ 5, 0, 2 }, { 0, 1, 0 }, 90);
+    CHECK(Near(TransformPoint({ 5, 7, 2 }, turn), { 5, 7, 2 }, 1e-12));
+    CHECK(Near(TransformPoint({ 5, 0, 3 }, turn), { 6, 0, 2 }, 1e-12));
+    const RowMatrix back = MultiplyRows(turn, TurnAboutLine({ 5, 0, 2 }, { 0, 1, 0 }, -90));
+    CHECK(Near(TransformPoint({ 1, 2, 3 }, back), { 1, 2, 3 }, 1e-12));
+}
+
 TEST_CASE("machine points are turned back by the rotary angle")
 {
     Frame zero;

@@ -13209,6 +13209,134 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Install again
 
+### 🤖 Claude
+
+> The fix is installed: the add-on in Alibre is now the 6:44 pm build. Start Alibre and run the five tests from my last message. The main ones are Facing 2's orange circle sitting on its side face, and Facing 2 (copy) generating once its Rotate is set to 270. Nothing is committed.
+
+### 🧑 Frank · 18:54
+
+> tests passed
+
+### 🤖 Claude
+
+> You've committed the 4th axis work ("Add 4th axis rotate for planar work"). I've added a note to `CLAUDE.md` that you tested the drawing fix, the "from the work zero" wording and the Generate hint. That note and the rebuilt `Discussion.md` are the only uncommitted changes.
+
+### 🧑 Frank · 18:55
+
+> is it possible to add a checkbox to simulate, so the part, or the view of the part, rotates, rather than the tool rotating around the axis?
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+### 🤖 Claude
+
+> Yes, it's possible. Alibre's model drawing has to be handled one of two ways, so I need your choice before I write the plan.
+
+> Questions:
+> - When 'Turn the work' is ticked in Simulate, how should the work appear to turn?
+>   - Turn the camera (Recommended): At each index, Alibre's view turns about the rotary axis (IADDesignSession::SetViewTransform), so the tool stays upright on screen and everything else turns with the work: Alibre's own parts, the stock and the toolpaths. Only the change is applied, so your own orbit and zoom are kept. Untested: how SetViewTransform behaves in 27.0.1. If it doesn't work, I'll fall back to the second option.
+>   - Redraw our graphics only: The simulated stock, part cells, fixtures and differences are drawn turned back into the machine's pose, with the tool upright. Alibre's own parts don't move, so they'd sit at the wrong angle unless you hide them. This uses only drawing that's already proven.
+> - When the simulation closes or rewinds to the start, what should happen to the view?
+>   - Turn back to 0 (Recommended): The view follows the simulated angle, so rewinding or closing returns it to the work zero's angle.
+>   - Leave it where it is: Closing leaves the view at its last angle.
+
+### 🧑 Frank · 18:56
+
+> Answers:
+> - When 'Turn the work' is ticked in Simulate, how should the work appear to turn?
+>   **Turn the camera (Recommended)**
+> - When the simulation closes or rewinds to the start, what should happen to the view?
+>   **Leave it where it is**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Simulate: turn the work instead of the tool
+>
+> ## Context
+>
+> On a 4 axis job the simulation currently keeps the work still. At each index the tool swings round the rotary axis and tilts. Frank asked for a Simulate check box that makes the work turn instead, as it does on the machine. His choices:
+> - **Turn the camera:** Alibre's view turns about the rotary axis by the change in the simulated angle (`IADDesignSession::SetViewTransform`, exists in the 27.0.1 headers). The tool stays upright on screen, and Alibre's parts, the stock, toolpaths and fixtures all turn together.
+> - **Leave the view where it is when the simulation closes.** While the box is ticked, the view follows the simulated angle, so rewinding turns it back.
+>
+> Nothing is drawn differently: every graphic stays in assembly coordinates, and only the camera moves.
+>
+> ## Core (`core\Rotary.h/.cpp`)
+>
+> - Add `double RotaryAngleOf(const Frame& workZero, RotaryAxis rotary, const Vec3& toolAxis, bool& ok)`. It returns the angle about the rotary direction that turns the work zero's Z onto the tool axis, using the same `atan2(Dot(Cross(up, across), axis), Dot(up, across))` that `SolveIndex` uses. It's continuous through a swing, because the tool axis turns with each 2° step. It isn't ok when the tool axis isn't square to the rotary axis.
+> - Add `Matrix` helpers only if `Frame` and `RotateAbout` aren't enough. The rotation about the axis line is built from `RotateAbout` applied to the unit axes plus the line's point.
+>
+> ## Add-on
+>
+> **Simulation dialog**
+> - Add "Turn the work" (`IDC_SIM_TURN_WORK`, next control ID 13563) on the Ignore collisions row at x 130. The dialog keeps its size.
+> - Its value, `g_turnWork`, is off at first and remembered until Alibre closes.
+> - It's greyed unless the machine has 4 axes and the job has a work zero (`CCamTabCommand::Orientation().axes == 4`).
+> - `OnTurnWork` calls `m_pTab->SetSimulationTurnsWork(bool)`.
+>
+> **Tab (`CCamTabCommand`)**
+> - Members:
+>   - `m_simulationTurnsWork`.
+>   - `m_viewAngle`: degrees the camera has been turned about the axis. It's kept for the whole tab, not reset when the simulation closes, so a later simulation starting at 0 turns the view back from where it was left.
+> - `TurnViewToSimulation()` runs from `OnSimulationChanged` when the box is ticked:
+>   1. Take the work zero frame (`FrameOf`) and `RotaryAxisDirection`.
+>   2. Find the current angle with `RotaryAngleOf(m_simulation.ToolAxis())`.
+>   3. Get `delta = angle - m_viewAngle`, unwrapped to -180..180. If it's under 1e-6, do nothing.
+>   4. Otherwise read `GetViewTransform()`, compose a rotation by the delta about the axis line (through the work zero; the translation in model units, using `millimetresPerUnit`), call `SetViewTransform`, and set `m_viewAngle = angle`.
+> - Unticking stops following. The view stays where it is.
+>
+> **Unproven convention**
+> - `WorldTransform` is row-major with the translation in row 4, which is proven. Whether ViewTransform is world to view or view to world, and so whether the rotation goes before or after it and which sign it takes, is not.
+> - On the first turn the tab checks itself:
+>   1. Before setting the view, project the tool tip and tip + axis with the command site's `WorldToScreen` (as ScanToAlibre does).
+>   2. Set the view and project them again.
+>   3. The tool should keep its screen direction. If it doesn't, try the other composition and remember the one that works.
+> - Every step is logged as `[turn view]`: the matrices, both screen directions and the choice made. If `WorldToScreen` isn't reachable from the tab, log the matrices and ask Frank which way it went.
+>
+> ## Docs
+>
+> - `help\CAMForAlibre.html`: Simulation section, "Turn the work" (4 axis only; turns Alibre's view; the view stays where it is when you close).
+> - `docs\SPEC.md`: the simulation decision.
+> - `CLAUDE.md`: the current-state line, and the ViewTransform convention once it's proven.
+> - `TODO.md`: remove "drawing the stock turning instead of the tool".
+>
+> ## Files
+>
+> - `core\Rotary.h/.cpp`, `tests\RotaryTests.cpp`
+> - `addon\SimulationDialog.h/.cpp`, `addon\CamTabCommand.h/.cpp`, possibly `addon\CamViewCommand` (to reach the command site's `WorldToScreen`)
+> - `addon\resource.h`, `addon\CAMForAlibre.rc`
+> - The docs above.
+>
+> ## Verification
+>
+> 1. Unit tests for `RotaryAngleOf`:
+>    - 0, 90, 180 and 270 on +Y and +X axes.
+>    - A swing's intermediate axes giving increasing angles.
+>    - An axis not square to the rotary axis isn't ok.
+> 2. Release build, `CamCoreTests.exe`, close Alibre, install, then `python tools\BuildDiscussion.py`.
+> 3. Frank in Alibre, on the 4 axis job (a Rotate 90 folder):
+>    1. The box is greyed on a 3 axis machine.
+>    2. Tick it and Play through the index: the view turns about the rotary axis while the tool stays upright. Alibre's parts, the stock and the fixtures turn together.
+>    3. Rewind: the view turns back.
+>    4. Orbit or zoom mid-way: it's kept, and only the turn is added.
+>    5. Close at 90: the view stays turned.
+>    6. The help.
+>    7. The log's `[turn view]` lines if it turns the wrong way.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> The core angle and turn maths are in. Next I'm adding `<array>` and moving on to the dialog and the view turning.
+
+> Now I'm writing the tab code that turns Alibre's view. I'm checking how transforms are made through the geometry factory first.
+
+> Nothing from that step applied. I'll write the script with the Write tool instead.
+
+> Everything builds and all 390 tests pass. Now the docs.
+
+> Alibre isn't running, so I'm installing now.
+
 ---
 
 # Side conversation

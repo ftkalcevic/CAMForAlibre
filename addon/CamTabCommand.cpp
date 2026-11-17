@@ -2279,7 +2279,248 @@ void CCamTabCommand::UpdateSimulationScene()
 void CCamTabCommand::OnSimulationChanged()
 {
     UpdateSimulationScene();
+    if (m_simulationTurnsWork)
+        TurnViewToSimulation();
     RebuildScene();
+}
+
+namespace
+{
+    // An Alibre transform's 16 numbers (row-major, translation in row 4).
+    bool ReadTransform(IADTransformation* pTransform, camcore::RowMatrix& m)
+    {
+        if (pTransform == nullptr)
+            return false;
+        SAFEARRAY* pArray = pTransform->Array();
+        double* pData = nullptr;
+        if (pArray == nullptr || FAILED(SafeArrayAccessData(pArray, reinterpret_cast<void**>(&pData))))
+        {
+            if (pArray != nullptr)
+                SafeArrayDestroy(pArray);
+            return false;
+        }
+        std::copy(pData, pData + 16, m.begin());
+        SafeArrayUnaccessData(pArray);
+        SafeArrayDestroy(pArray);
+        return true;
+    }
+
+    IADTransformationPtr MakeTransform(IADSession* pSession, const camcore::RowMatrix& m)
+    {
+        SAFEARRAY* pArray = SafeArrayCreateVector(VT_R8, 0, 16);
+        if (pArray == nullptr)
+            return nullptr;
+        double* pData = nullptr;
+        SafeArrayAccessData(pArray, reinterpret_cast<void**>(&pData));
+        std::copy(m.begin(), m.end(), pData);
+        SafeArrayUnaccessData(pArray);
+        IADTransformationPtr transform = pSession->GetGeometryFactory()->CreateTransform(&pArray);
+        SafeArrayDestroy(pArray);
+        return transform;
+    }
+
+    // A model point (model units) on the screen, through the view command's site.
+    bool ScreenPoint(IADAddOnCommandSite* pSite, const camcore::Vec3& p, double screen[2])
+    {
+        if (pSite == nullptr)
+            return false;
+        SAFEARRAY* pWorld = SafeArrayCreateVector(VT_R8, 0, 3);
+        if (pWorld == nullptr)
+            return false;
+        double* pData = nullptr;
+        SafeArrayAccessData(pWorld, reinterpret_cast<void**>(&pData));
+        pData[0] = p.x;
+        pData[1] = p.y;
+        pData[2] = p.z;
+        SafeArrayUnaccessData(pWorld);
+        SAFEARRAY* pScreen = nullptr;
+        const HRESULT hr = pSite->WorldToScreen(&pWorld, &pScreen);
+        SafeArrayDestroy(pWorld);
+        if (FAILED(hr) || pScreen == nullptr)
+            return false;
+        VARTYPE type = VT_EMPTY;
+        SafeArrayGetVartype(pScreen, &type);
+        long lower = 0;
+        SafeArrayGetLBound(pScreen, 1, &lower);
+        for (long i = 0; i < 2; ++i)
+        {
+            long index = lower + i;
+            if (type == VT_R8)
+                SafeArrayGetElement(pScreen, &index, &screen[i]);
+            else if (type == VT_R4)
+            {
+                float f = 0.0f;
+                SafeArrayGetElement(pScreen, &index, &f);
+                screen[i] = f;
+            }
+            else
+            {
+                long l = 0;
+                SafeArrayGetElement(pScreen, &index, &l);
+                screen[i] = l;
+            }
+        }
+        SafeArrayDestroy(pScreen);
+        return true;
+    }
+
+    // The screen direction (degrees) from a to b, false if they're within two pixels.
+    bool ScreenDirection(IADAddOnCommandSite* pSite, const camcore::Vec3& a, const camcore::Vec3& b, double& degrees)
+    {
+        double sa[2] = {}, sb[2] = {};
+        if (!ScreenPoint(pSite, a, sa) || !ScreenPoint(pSite, b, sb))
+            return false;
+        const double dx = sb[0] - sa[0], dy = sb[1] - sa[1];
+        if (dx * dx + dy * dy < 4.0)
+            return false;
+        degrees = std::atan2(dy, dx) * 180.0 / 3.14159265358979323846;
+        return true;
+    }
+
+    // a less b, from -180 to 180.
+    double AngleBetween(double a, double b)
+    {
+        double d = std::fmod(a - b, 360.0);
+        if (d > 180.0)
+            d -= 360.0;
+        if (d <= -180.0)
+            d += 360.0;
+        return d;
+    }
+}
+
+bool CCamTabCommand::CanTurnSimulationView() const
+{
+    if (m_machine.axes != 4)
+        return false;
+    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+    return zeroIndex != camcore::kNoStepIndex && camcore::BuildFrame(m_job.sequence[zeroIndex].origin).ok;
+}
+
+void CCamTabCommand::SetSimulationTurnsWork(bool turn)
+{
+    m_simulationTurnsWork = turn && CanTurnSimulationView();
+    Log(L"[turn view] %s", m_simulationTurnsWork ? L"on" : L"off");
+    if (m_simulationTurnsWork && m_pSimulationDlg != nullptr)
+    {
+        TurnViewToSimulation();
+        RebuildScene();
+    }
+}
+
+void CCamTabCommand::TurnViewToSimulation()
+{
+    if (m_simulation.CurrentOperation() == nullptr)
+        return;
+    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+    if (zeroIndex == camcore::kNoStepIndex)
+        return;
+    const camcore::FrameResult zero = camcore::BuildFrame(m_job.sequence[zeroIndex].origin);
+    if (!zero.ok)
+        return;
+    const camcore::Vec3 toolAxis = m_simulation.ToolAxis();
+    const camcore::IndexSolution now = camcore::RotaryAngleOf(zero.frame, m_machine.rotary, toolAxis);
+    if (!now.ok)
+        return;
+    const double delta = AngleBetween(now.angle, m_viewAngle);
+    if (std::fabs(delta) < 1e-6)
+        return;
+
+    try
+    {
+        IADSessionPtr session = GetSession();
+        IADDesignSessionPtr design = session;
+        if (design == nullptr)
+            return;
+        camcore::RowMatrix view{};
+        if (!ReadTransform(design->GetViewTransform(), view))
+        {
+            Log(L"[turn view] couldn't read the view transform");
+            return;
+        }
+
+        // In model units: the axis through the work zero.
+        const double unit = m_scene.millimetresPerUnit > 0.0 ? m_scene.millimetresPerUnit : 1.0;
+        const camcore::Vec3 axisPoint = zero.frame.origin * (1.0 / unit);
+        const camcore::Vec3 direction = camcore::RotaryAxisDirection(zero.frame, m_machine.rotary);
+
+        // The tool's way up on screen before the turn: the work zero's Z turned by
+        // the view's angle so far. After it, the tool's axis should point the same way.
+        IADAddOnCommandSite* pSite = (m_pView != nullptr) ? m_pView->Site() : nullptr;
+        const double length = 50.0 / unit;
+        const camcore::Vec3 upBefore = camcore::RotateAbout(zero.frame.zAxis, direction, m_viewAngle);
+        double before = 0.0;
+        const bool haveBefore = ScreenDirection(pSite, axisPoint, axisPoint + upBefore * length, before);
+
+        // The work turns back by the change, as the machine sees it: before the
+        // view if it takes assembly points to the screen (way 1), or the other
+        // turn after it if it's the camera's place in the assembly (way 2).
+        const camcore::RowMatrix way1 =
+            camcore::MultiplyRows(camcore::TurnAboutLine(axisPoint, direction, -delta), view);
+        const camcore::RowMatrix way2 =
+            camcore::MultiplyRows(view, camcore::TurnAboutLine(axisPoint, direction, delta));
+        auto apply = [&](int way) -> bool
+        {
+            IADTransformationPtr transform = MakeTransform(session, way == 2 ? way2 : way1);
+            if (transform == nullptr)
+                return false;
+            design->SetViewTransform(transform);
+            return true;
+        };
+        auto check = [&](double& error) -> bool
+        {
+            double after = 0.0;
+            if (!haveBefore || !ScreenDirection(pSite, axisPoint, axisPoint + toolAxis * length, after))
+                return false;
+            error = AngleBetween(after, before);
+            return true;
+        };
+
+        const int first = (m_viewTurnWay == 2) ? 2 : 1;
+        if (!apply(first))
+        {
+            Log(L"[turn view] couldn't make the transform");
+            return;
+        }
+        if (m_viewTurnWay == 0)
+        {
+            Log(L"[turn view] view was %g %g %g %g / %g %g %g %g / %g %g %g %g / %g %g %g %g", view[0], view[1],
+                view[2], view[3], view[4], view[5], view[6], view[7], view[8], view[9], view[10], view[11], view[12],
+                view[13], view[14], view[15]);
+            double error = 0.0;
+            if (!check(error))
+                Log(L"[turn view] turned %.1f degrees way 1; the screen couldn't be checked", delta);
+            else if (std::fabs(error) < 3.0)
+            {
+                m_viewTurnWay = 1;
+                Log(L"[turn view] way 1 (before the view) keeps the tool upright (off by %.2f degrees)", error);
+            }
+            else
+            {
+                // Put it back and try the other way.
+                IADTransformationPtr original = MakeTransform(session, view);
+                if (original != nullptr)
+                    design->SetViewTransform(original);
+                apply(2);
+                double error2 = 0.0;
+                if (check(error2) && std::fabs(error2) < 3.0)
+                {
+                    m_viewTurnWay = 2;
+                    Log(L"[turn view] way 2 (after the view) keeps the tool upright (way 1 was off by %.1f)", error);
+                }
+                else
+                {
+                    Log(L"[turn view] neither way keeps the tool upright: way 1 off by %.1f, way 2 by %.1f degrees",
+                        error, error2);
+                }
+            }
+        }
+        m_viewAngle = now.angle;
+    }
+    catch (const _com_error& error)
+    {
+        Log(L"[turn view] failed: hr=0x%08X", static_cast<unsigned>(error.Error()));
+    }
 }
 
 void CCamTabCommand::OnSimulationDialogDone(CSimulationDlg* pDialog)

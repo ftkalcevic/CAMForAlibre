@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,19 @@ namespace camcore
     // The rotary angle at which a frame's Z is the machine's (the work zero's Z).
     // A 3 axis machine reaches only frames along the work zero's Z, at 0.
     IndexSolution SolveIndex(const Frame& workZero, const OrientationContext& context, const Frame& frame);
+
+    // The rotary angle (0 to 360) at which the tool, along toolAxis in the
+    // assembly, is upright on the machine; for the simulation turning the view.
+    // Not ok when the tool axis isn't square to the rotary axis.
+    IndexSolution RotaryAngleOf(const Frame& workZero, RotaryAxis rotary, const Vec3& toolAxis);
+
+    // A turn of degrees (right-handed) about the line through point along
+    // direction, as a 4 x 4 row-major matrix for row vectors (p' = p M), the
+    // translation in row 4, as Alibre's transforms are.
+    typedef std::array<double, 16> RowMatrix;
+    RowMatrix TurnAboutLine(const Vec3& point, const Vec3& direction, double degrees);
+    RowMatrix MultiplyRows(const RowMatrix& a, const RowMatrix& b);    // a then b
+    Vec3 TransformPoint(const Vec3& p, const RowMatrix& m);
 
     // An assembly point as the machine sees it with the rotary axis at an angle:
     // from the work zero, turned back about the axis. Directions likewise.

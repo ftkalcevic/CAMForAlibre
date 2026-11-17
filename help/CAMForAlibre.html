@@ -276,6 +276,8 @@
   <dd>For voxels, only while Auto divide voxels is off: from Fine (small cells: sharper, slower, more memory) to Coarse (large cells: blockier, faster). For Tri-dexel, always: the spacing of the lines, from Fine (closer: finer detail, slower) to Coarse; the finest has at most 4 million lines in each direction. The choices depend on the stock's size, with Medium in the middle as the start; each model has its own stops. Letting go at a new stop starts the stock again and cuts back to the same move. Remembered until Alibre closes.</dd>
   <dt>Ignore collisions</dt>
   <dd>Off at first. Ticked, none of the warnings below is checked: rapids that cut stock, the shank or holder touching it, and fixtures, don't stop the simulation, which also runs a little faster. Ticking it clears a warning that's showing. It works from the next move cut; moves already cut aren't checked again. Remembered until Alibre closes.</dd>
+  <dt>Turn the work</dt>
+  <dd>For a 4 axis machine with a work zero; greyed otherwise. Off at first, remembered until Alibre closes. Ticked, Alibre's view turns about the rotary axis with the simulated angle, so the tool stays upright and the work turns round it, as on the machine: the parts, stock, toolpaths and fixtures all turn together, as only the view moves. Unticked, the tool swings round the work. Rewinding turns the view back; orbiting or zooming meanwhile is kept, as only the change in angle is added. Unticking it or closing the simulation leaves the view where it is.</dd>
   <dt>Warning</dt>
   <dd>Unless Ignore collisions is ticked, the simulation stops after a move that does one of these, which is drawn in thick red, and the warning names the operation and its toolpath move:
     <ul>

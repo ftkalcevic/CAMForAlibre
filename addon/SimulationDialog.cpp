@@ -29,6 +29,7 @@ namespace
     bool g_autoDivide = true;
     camcore::StockModel g_stockModel = camcore::StockModel::Voxels;
     bool g_ignoreCollisions = false;    // off at first, remembered until Alibre closes
+    bool g_turnWork = false;            // likewise: turn the view with the rotary axis
     std::wstring g_stlFolder;       // where the last STL was saved this session
     CCamTabCommand::SimulationShow g_show;      // what's shown, remembered until Alibre closes
     int g_resolutionStop = -1;      // the slider's stop, fine to coarse; -1 is the middle
@@ -73,6 +74,7 @@ BEGIN_MESSAGE_MAP(CSimulationDlg, CDialog)
     ON_BN_CLICKED(IDC_SIM_AUTO_DIVIDE, &CSimulationDlg::OnAutoDivide)
     ON_CBN_SELCHANGE(IDC_SIM_MODEL, &CSimulationDlg::OnModelChanged)
     ON_BN_CLICKED(IDC_SIM_IGNORE_COLLISIONS, &CSimulationDlg::OnIgnoreCollisions)
+    ON_BN_CLICKED(IDC_SIM_TURN_WORK, &CSimulationDlg::OnTurnWork)
     ON_BN_CLICKED(IDC_SIM_SAVE_STL, &CSimulationDlg::OnSaveStl)
     ON_BN_CLICKED(IDC_SIM_SHOW_STOCK, &CSimulationDlg::OnShowChanged)
     ON_BN_CLICKED(IDC_SIM_SHOW_PART, &CSimulationDlg::OnShowChanged)
@@ -144,6 +146,13 @@ BOOL CSimulationDlg::OnInitDialog()
     CheckDlgButton(IDC_SIM_IGNORE_COLLISIONS, g_ignoreCollisions ? BST_CHECKED : BST_UNCHECKED);
     if (m_pTab != nullptr)
         m_pTab->GetSimulation().SetIgnoreCollisions(g_ignoreCollisions);
+
+    // Turn the work: only on a 4 axis machine with a work zero.
+    const bool canTurn = m_pTab != nullptr && m_pTab->CanTurnSimulationView();
+    GetDlgItem(IDC_SIM_TURN_WORK)->EnableWindow(canTurn ? TRUE : FALSE);
+    CheckDlgButton(IDC_SIM_TURN_WORK, (canTurn && g_turnWork) ? BST_CHECKED : BST_UNCHECKED);
+    if (m_pTab != nullptr)
+        m_pTab->SetSimulationTurnsWork(canTurn && g_turnWork);
 
     // What's shown.
     CheckDlgButton(IDC_SIM_SHOW_STOCK, g_show.stock ? BST_CHECKED : BST_UNCHECKED);
@@ -338,6 +347,13 @@ void CSimulationDlg::OnIgnoreCollisions()
         return;
     }
     ShowState();
+}
+
+void CSimulationDlg::OnTurnWork()
+{
+    g_turnWork = IsDlgButtonChecked(IDC_SIM_TURN_WORK) == BST_CHECKED;
+    if (m_pTab != nullptr)
+        m_pTab->SetSimulationTurnsWork(g_turnWork);
 }
 
 void CSimulationDlg::OnModelChanged()

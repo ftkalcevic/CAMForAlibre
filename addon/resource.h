@@ -485,6 +485,7 @@
 #define IDC_INDEX_RETRACT               13560
 #define IDC_INDEX_DIRECTION             13561
 #define IDC_INDEX_RETRACT_LABEL         13562
+#define IDC_SIM_TURN_WORK               13563
 #define IDC_MATDLG_TYPICAL              13524
 #define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
@@ -537,7 +538,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        13054
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13563
+#define _APS_NEXT_CONTROL_VALUE         13564
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

@@ -193,6 +193,66 @@ namespace camcore
         return solution;
     }
 
+    IndexSolution RotaryAngleOf(const Frame& workZero, RotaryAxis rotary, const Vec3& toolAxis)
+    {
+        Frame frame = workZero;
+        IndexSolution solution;
+        if (!Normalise(toolAxis, frame.zAxis))
+        {
+            solution.message = "The tool has no axis.";
+            return solution;
+        }
+        OrientationContext context;
+        context.axes = 4;
+        context.rotary = rotary;
+        return SolveIndex(workZero, context, frame);
+    }
+
+    RowMatrix TurnAboutLine(const Vec3& point, const Vec3& direction, double degrees)
+    {
+        RowMatrix m{};
+        Vec3 axis;
+        if (!Normalise(direction, axis))
+            axis = { 0, 0, 1 };
+        const Vec3 rows[3] = { RotateAbout({ 1, 0, 0 }, axis, degrees), RotateAbout({ 0, 1, 0 }, axis, degrees),
+                               RotateAbout({ 0, 0, 1 }, axis, degrees) };
+        for (int r = 0; r < 3; ++r)
+        {
+            m[r * 4 + 0] = rows[r].x;
+            m[r * 4 + 1] = rows[r].y;
+            m[r * 4 + 2] = rows[r].z;
+        }
+        // The point stays where it is.
+        const Vec3 moved = RotateAbout(point, axis, degrees);
+        m[12] = point.x - moved.x;
+        m[13] = point.y - moved.y;
+        m[14] = point.z - moved.z;
+        m[15] = 1.0;
+        return m;
+    }
+
+    RowMatrix MultiplyRows(const RowMatrix& a, const RowMatrix& b)
+    {
+        RowMatrix m{};
+        for (int r = 0; r < 4; ++r)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                double sum = 0.0;
+                for (int k = 0; k < 4; ++k)
+                    sum += a[r * 4 + k] * b[k * 4 + c];
+                m[r * 4 + c] = sum;
+            }
+        }
+        return m;
+    }
+
+    Vec3 TransformPoint(const Vec3& p, const RowMatrix& m)
+    {
+        return { p.x * m[0] + p.y * m[4] + p.z * m[8] + m[12], p.x * m[1] + p.y * m[5] + p.z * m[9] + m[13],
+                 p.x * m[2] + p.y * m[6] + p.z * m[10] + m[14] };
+    }
+
     Vec3 MachinePoint(const Frame& workZero, RotaryAxis rotary, double angle, const Vec3& world)
     {
         // The axis runs through the work zero, so turning about it turns about 0.

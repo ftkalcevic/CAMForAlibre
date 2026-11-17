@@ -48,6 +48,7 @@ protected:
     afx_msg void OnAutoDivide();
     afx_msg void OnModelChanged();
     afx_msg void OnIgnoreCollisions();
+    afx_msg void OnTurnWork();
     afx_msg void OnSaveStl();
     afx_msg void OnShowChanged();
     afx_msg void OnRealTimeChanged();
