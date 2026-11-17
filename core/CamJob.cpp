@@ -1661,6 +1661,12 @@ namespace camcore
 
         json WriteStep(const SequenceStep& step);
 
+        json WriteIndex(const IndexSettings& index)
+        {
+            return { { "automaticRetract", index.automaticRetract }, { "retractHeight", index.retractHeight },
+                     { "direction", IndexDirectionText(index.direction) } };
+        }
+
         json WriteStepBody(const SequenceStep& step)
         {
             if (step.type == StepType::Group)
@@ -1766,8 +1772,16 @@ namespace camcore
                              { "parts", parts } } } };
             }
 
+            if (step.type == StepType::Rotate)
+                return { { "type", "rotate" }, { "id", step.id }, { "name", step.name },
+                         { "rotate",
+                           { { "angle", step.rotate.angle },
+                             { "originAfter",
+                               step.rotate.originAfter == OriginAfterRotate::TopOfStock ? "topOfStock" : "keep" } } },
+                         { "index", WriteIndex(step.index) } };
+
             const OriginDefinition& origin = step.origin;
-            return
+            json item =
             {
                 { "type", "setOrigin" },
                 { "id", step.id },
@@ -1782,6 +1796,27 @@ namespace camcore
                       { "offset", WriteVec3(origin.options.offset) }
                   } }
             };
+            item["index"] = WriteIndex(step.index);
+            return item;
+        }
+
+        // Steps saved before version 18 have the default index settings.
+        bool ReadIndex(const json& item, IndexSettings& index)
+        {
+            const auto found = item.find("index");
+            if (found == item.end())
+                return true;
+            if (!found->is_object())
+                return false;
+            std::string direction;
+            if (!ReadBool(*found, "automaticRetract", index.automaticRetract) ||
+                !ReadString(*found, "direction", direction) || !IndexDirectionFromText(direction, index.direction))
+                return false;
+            const auto height = found->find("retractHeight");
+            if (height == found->end() || !height->is_number())
+                return false;
+            index.retractHeight = height->get<double>();
+            return true;
         }
 
         bool ReadStep(const json& item, SequenceStep& step);
@@ -1955,13 +1990,30 @@ namespace camcore
                 return true;
             }
 
+            if (type == "rotate")
+            {
+                step.type = StepType::Rotate;
+                const auto rotate = item.find("rotate");
+                if (rotate == item.end() || !rotate->is_object())
+                    return false;
+                const auto angle = rotate->find("angle");
+                std::string after;
+                if (angle == rotate->end() || !angle->is_number() || !ReadString(*rotate, "originAfter", after) ||
+                    (after != "keep" && after != "topOfStock"))
+                    return false;
+                step.rotate.angle = angle->get<double>();
+                step.rotate.originAfter = (after == "topOfStock") ? OriginAfterRotate::TopOfStock
+                                                                  : OriginAfterRotate::Keep;
+                return ReadIndex(item, step.index);
+            }
+
             if (type != "setOrigin")
                 return false;
             step.type = StepType::SetOrigin;
 
             OriginDefinition& origin = step.origin;
             if (!ReadPick(item, "plane", origin.plane) || !ReadPick(item, "position", origin.position) ||
-                !ReadPick(item, "xDirection", origin.xDirection))
+                !ReadPick(item, "xDirection", origin.xDirection) || !ReadIndex(item, step.index))
                 return false;
 
             const auto options = item.find("options");
@@ -2217,7 +2269,8 @@ namespace camcore
         for (size_t i = stepIndex + 1; i-- > 0;)
         {
             const SequenceStep& step = job.sequence[i];
-            if (step.type == StepType::SetOrigin && (i == stepIndex || !step.suppressed))
+            if ((step.type == StepType::SetOrigin || step.type == StepType::Rotate) &&
+                (i == stepIndex || !step.suppressed))
                 return i;
         }
         return kNoStepIndex;

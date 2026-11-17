@@ -76,6 +76,7 @@
   <a class="sub" href="#feeds-calculator">Feeds and Speeds Calculator</a>
   <a class="sub" href="#choose-material">Choose Material</a>
   <a href="#set-origin">Set Origin</a>
+  <a href="#rotate">Rotate</a>
   <a href="#fixtures">Fixtures</a>
   <a href="#post">Post</a>
   <a href="#operation">Operation dialog</a>
@@ -147,7 +148,7 @@
 </dl>
 
 <h3 id="cam-tree">Tree</h3>
-<p>The tree has a fixed <strong>Setup</strong> at the top and the <strong>Operations</strong> sequence below it. Operations run from top to bottom. Drag a step to reorder it. Each node has an image: a gear for Setup, a machine, tools, a block of material and a wireframe stock; axes for a Set Origin, a vice for a Fixtures step and a folder for a folder; each tool shows its type (flat end mill, ball mill, corner radius mill, V-mill, chamfer mill, taper mill, thread mill or drill); and each kind of operation has its own. The images grow with the CAM View Size setting. A red exclamation mark over a node's image means it has a problem: an operation with no toolpath (never generated, cleared, changed since, or Generate failed), a Set Origin that isn't complete, a Fixtures step whose parts can't be found or read, an operation whose last Generate came too close to a fixture (or, for Thread Milling, found a hole not drilled open or a tool whose teeth aren't the thread's pitch), the machine when its file can't be found or read, the material when it's no longer in the list, or the stock when it can't be read. Folders are never marked, and suppressed operations aren't, as they aren't generated on purpose.</p>
+<p>The tree has a fixed <strong>Setup</strong> at the top and the <strong>Operations</strong> sequence below it. Operations run from top to bottom. Drag a step to reorder it. Each node has an image: a gear for Setup, a machine, tools, a block of material and a wireframe stock; axes for a Set Origin, a bar with a curved arrow for a Rotate, a vice for a Fixtures step and a folder for a folder; each tool shows its type (flat end mill, ball mill, corner radius mill, V-mill, chamfer mill, taper mill, thread mill or drill); and each kind of operation has its own. The images grow with the CAM View Size setting. A red exclamation mark over a node's image means it has a problem: an operation with no toolpath (never generated, cleared, changed since, or Generate failed), a Set Origin that isn't complete, a Set Origin or Rotate the machine can't reach (tilted on a 3 axis machine, or not square to the rotary axis) or a Rotate that can't be made (no rotary axis, or Top of stock with no stock), a Fixtures step whose parts can't be found or read, an operation whose last Generate came too close to a fixture (or, for Thread Milling, found a hole not drilled open or a tool whose teeth aren't the thread's pitch), the machine when its file can't be found or read, the material when it's no longer in the list, or the stock when it can't be read. Folders are never marked, and suppressed operations aren't, as they aren't generated on purpose.</p>
 <dl>
   <dt>Setup ▸ Machine</dt>
   <dd>The machine the job is cut on, shown as <em>Machine - name</em>. Double-click it, or right-click and Edit Machine, to open the <a href="#machine">Machine</a> dialog.</dd>
@@ -158,9 +159,11 @@
   <dt>Setup ▸ Stock</dt>
   <dd>The material the parts are cut from. A job has at most one stock, and the node shows its kind, such as <em>Stock - Box Stock</em>. Right-click it to make one: <a href="#stock-box">Box Stock</a>, <a href="#stock-part-box">Part Box Stock</a> or <a href="#stock-import">Import Stock</a>. Once there's a stock, those are greyed, and Edit (or double-clicking Stock) changes it and Delete removes it. The stock is drawn as its edges in teal, and it's measured along the assembly's axes.</dd>
   <dt>Operations</dt>
-  <dd>The ordered sequence of Set Origin steps, Fixtures steps, folders and operations. Right-click it to add steps, generate all toolpaths, or post.</dd>
+  <dd>The ordered sequence of Set Origin, Rotate and Fixtures steps, folders and operations. Right-click it to add steps, generate all toolpaths, or post.</dd>
   <dt>Set Origin</dt>
-  <dd>Defines the origin (work coordinate frame) for the steps below it, up to the next Set Origin. The first one that isn't suppressed is the work zero for posting. Selecting one draws it in the view.</dd>
+  <dd>Defines the origin (work coordinate frame) for the steps below it, up to the next Set Origin or Rotate. The first one that isn't suppressed is the work zero for posting, and on a 4 axis machine the rotary axis runs through it. Selecting one draws it in the view.</dd>
+  <dt>Rotate</dt>
+  <dd>Turns the work about the machine's rotary axis, shown as <em>name (angle&deg; from the work zero)</em>, with <em>top of stock</em> when it moves the origin there. The steps below it, up to the next Set Origin or Rotate, run in the turned frame. Double-click it, or use Edit, to open the <a href="#rotate">Rotate</a> dialog.</dd>
   <dt>Fixtures</dt>
   <dd>The work holding (vices, clamps, screws) the operations below it, up to the next Fixtures step, keep clear of, shown as <em>name (n parts)</em>, with <em>trim</em> when Trim toolpaths round fixtures is ticked. Selecting one outlines its parts in purple. Double-click it, or use Edit, to open the <a href="#fixtures">Fixtures</a> dialog. Drag a later Fixtures step to where the clamps move to (after a flip, say): the operations below it then use its parts instead.</dd>
   <dt>Folder</dt>
@@ -170,13 +173,15 @@
   <dt>Choosing several operations</dt>
   <dd>Ctrl+click operations to choose several, even in different folders; Ctrl+click a chosen one again to take it off. Shift+click chooses every operation between the last one clicked and this one. A plain click goes back to one. Right-click a chosen operation for <strong>Edit N Operations</strong>, which edits them together (see the <a href="#operation">Operation dialog</a>), <strong>Generate</strong>, which generates them all, <strong>Clear Toolpaths</strong>, or <strong>Simulate</strong>. Double-clicking a chosen one edits them together too.</dd>
   <dt>Suppressed items</dt>
-  <dd>Shown grey, with their toolpaths hidden (they're kept, and show again when unsuppressed). A suppressed Set Origin or Fixtures step is skipped (the one above it applies instead), and suppressed operations are left out of Generate and Post.</dd>
+  <dd>Shown grey, with their toolpaths hidden (they're kept, and show again when unsuppressed). A suppressed Set Origin, Rotate or Fixtures step is skipped (the one above it applies instead), and suppressed operations are left out of Generate and Post.</dd>
 </dl>
 
 <h3 id="cam-menus">Right-click menus</h3>
 <dl>
   <dt>Add Set Origin</dt>
   <dd>Adds a Set Origin step and opens the <a href="#set-origin">Set Origin</a> dialog.</dd>
+  <dt>Add Rotate</dt>
+  <dd>Adds a Rotate step at the end of the sequence and opens the <a href="#rotate">Rotate</a> dialog. Greyed until there's a Set Origin.</dd>
   <dt>Add Fixtures</dt>
   <dd>Adds a Fixtures step at the end of the sequence and opens the <a href="#fixtures">Fixtures</a> dialog. Greyed until there's a Set Origin.</dd>
   <dt>Add Folder</dt>
@@ -239,7 +244,7 @@
 
 <section id="simulation">
 <h2>Simulation</h2>
-<p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's direction, so tilted origins cut along their tool axis. The shank (the tool above its flutes, up to its overall length; at its shank diameter with a shank of its own, when only the flutes cut) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. A thread mill cuts with its teeth (see the <a href="#tab-thread-milling">Thread Milling tab</a>), but is checked as a cylinder of its diameter. The tool (its own shape), shank and holder are also checked against the parts of each operation's <a href="#fixtures">Fixtures</a> step, at their true size (without the clearance), wherever they are, even outside the stock. Nothing is checked against the parts themselves. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
+<p>Plays the generated toolpaths against the stock in Alibre's view, cutting it a move at a time. The stock is shown shaded in place of its outline. It's kept one of two ways (the Stock model): as a grid of small cubes (voxels), a cube cut away when its centre falls inside the tool; or as tri-dexels, rows of lines through the stock along X, Y and Z, each cut exactly where the tool passes, drawn as a smooth surface. Each tool cuts with its own shape: flat, ball, corner radius, V, chamfer, taper and drill ends (a thread mill as a plain cylinder). The tool is drawn in yellow where it is, its whole length, with the machine's tool holder above it in grey. Operations run in the sequence's order, each in its own Set Origin's or Rotate's direction, so tilted origins cut along their tool axis. On a 4 axis machine, where the rotary axis turns between two operations (as the post turns it), the tool goes up along the last operation's axis to the retract height above the rotary axis, then swings round the axis in steps of 2 degrees at rapid (the stock stays put and the tool goes round it, which cuts the same); a retract too low to clear the stock stops it with a rapid into stock. The shank (the tool above its flutes, up to its overall length; at its shank diameter with a shank of its own, when only the flutes cut) and the tool holder (a cylinder of the machine's Tool Holder Diameter and Depth, from the tool's overall length up) are checked against the stock: any of them touching it stops the simulation with a warning. A thread mill cuts with its teeth (see the <a href="#tab-thread-milling">Thread Milling tab</a>), but is checked as a cylinder of its diameter. The tool (its own shape), shank and holder are also checked against the parts of each operation's <a href="#fixtures">Fixtures</a> step, at their true size (without the clearance), wherever they are, even outside the stock. Nothing is checked against the parts themselves. Open it with Simulate on the CAM tab's right-click menus; it needs a stock, and operations with no toolpath, origin or tool are left out (the dialog says which).</p>
 <dl>
   <dt>Position</dt>
   <dd>The operation being cut, the move of all the moves (arcs are split into short straight moves), and the machining time so far of the whole: from the feeds, the machine's Rapid rate and dwells, with no allowance for acceleration.</dd>
@@ -383,7 +388,7 @@
   <dt>Number of axes</dt>
   <dd>3, or 4 for a machine with a rotary axis.</dd>
   <dt>Rotary axis</dt>
-  <dd>Which way the rotary (4th) axis runs: along -X, +X, -Y or +Y. Only used with 4 axes. <span class="tbc">Not used for toolpaths yet.</span></dd>
+  <dd>Which way the rotary (4th) axis runs, along the work zero's -X, +X, -Y or +Y, through the work zero (the first Set Origin). A positive angle turns the work so the tool, seen from the work, turns right-handed about that direction; if your machine turns the other way for a positive A, choose the opposite direction. Only used with 4 axes, by <a href="#rotate">Rotate</a> steps, Set Origins that tilt, the 4 axis post and the simulation. It's drawn in orange through the work zero with the origin.</dd>
   <dt>Travel X, Y, Z</dt>
   <dd>How far the machine can move along each axis, in millimetres. Each must be more than 0. <span class="tbc">Not used for checking toolpaths yet.</span></dd>
   <dt>Max spindle speed</dt>
@@ -574,14 +579,15 @@
 
 <section id="set-origin">
 <h2>Set Origin</h2>
-<p>Defines an origin from picked geometry or Alibre's design planes, axes and points: its Z axis (the tool axis, pointing out of the material), its position, and its X direction. The steps below it, up to the next Set Origin, run in this origin. The origin is drawn with red, green and blue axes and its XY plane as an outline and grid.</p>
+<p>Defines an origin from picked geometry or Alibre's design planes, axes and points: its Z axis (the tool axis, pointing out of the material), its position, and its X direction. The steps below it, up to the next Set Origin or Rotate, run in this origin. The origin is drawn with red, green and blue axes and its XY plane as an outline and grid.</p>
+<p>The first Set Origin that isn't suppressed is the work zero, which every point is posted from. On a 4 axis machine the rotary axis runs through it, so put it on the axis: pick the bar's cylindrical face for Position. A later Set Origin can point Z any way the machine can reach (on a 4 axis machine, any way square to the rotary axis); the result says the rotary angle it needs, and the post turns the axis to it. Its position and X only shape the toolpaths: the post works every point out from the work zero.</p>
 <dl>
   <dt>Name</dt>
   <dd>The step's name in the tree.</dd>
   <dt>Plane (Z) Pick</dt>
   <dd>Picks the geometry that gives Z. A new Set Origin starts with nothing picked: click Pick, then click in the view. A flat face points Z out of the material, a cylindrical face gives its axis, a circular edge gives its axis and its centre, and a straight edge runs Z along it. A design plane, such as Alibre's XY plane, points Z along its normal, and a design axis runs Z along it; use Flip Z if it points the wrong way.</dd>
   <dt>Position Pick</dt>
-  <dd>Picks an edge or a design point for the origin's position: the nearer end of a straight edge, a circle's centre, or the point, such as Alibre's Origin. Without one, the plane pick gives the position when it's an edge.</dd>
+  <dd>Picks an edge, a cylindrical face or a design point for the origin's position: the nearer end of a straight edge, a circle's centre, the point on a cylinder's axis level with where you clicked (its centre there, as for a bar on a 4th axis), or the point, such as Alibre's Origin. Without one, the plane pick gives the position when it's an edge.</dd>
   <dt>Position Clear</dt>
   <dd>Removes the position pick.</dd>
   <dt>X direction Pick</dt>
@@ -594,10 +600,44 @@
   <dd>Turns X about Z in quarter turns.</dd>
   <dt>Offset X, Y, Z</dt>
   <dd>Moves the origin along its own axes, in millimetres, after everything else.</dd>
+  <dt>Indexing: Automatic retract</dt>
+  <dd>On a 4 axis machine, before the rotary axis turns to this step's angle the tool goes straight up to a safe height, measured from the rotary axis. Ticked (the default), that height is the furthest the stock, or any toolpath being posted or simulated, reaches from the axis, plus 5 mm. Untick it to type your own.</dd>
+  <dt>Indexing: Height above axis</dt>
+  <dd>The retract height, in mm above the rotary axis (machine Z, as the work zero sits on the axis), when Automatic retract is off. More than 0. Too low, and the simulation stops with a rapid into stock as the tool swings round.</dd>
+  <dt>Indexing: Turn</dt>
+  <dd>Which way the rotary axis turns to this step's angle: <strong>Shortest</strong> (the default; half a turn goes positive), <strong>Positive</strong> (the angle only goes up) or <strong>Negative</strong> (only down). The angle written carries on past 360 or below 0 so the machine turns the way asked, as with cables or a chuck key that mustn't wind up.</dd>
   <dt>Prompt and result</dt>
-  <dd>What to pick next, and the resulting origin or why it can't be made.</dd>
+  <dd>What to pick next, and the resulting origin or why it can't be made. Below it: for the work zero on a 4 axis machine, a reminder to put it on the rotary axis; for a later one, the rotary angle it needs, or why the machine can't reach it.</dd>
   <dt>OK</dt>
   <dd>Saves the origin.</dd>
+  <dt>Cancel</dt>
+  <dd>Closes the dialog without changing the step.</dd>
+</dl>
+</section>
+
+<section id="rotate">
+<h2>Rotate</h2>
+<p>Turns the work about the machine's rotary (4th) axis to an angle, for the steps below it, up to the next Set Origin or Rotate. The rotary axis runs through the work zero (the first Set Origin), along the direction set on the <a href="#machine">Machine</a> tab, so the work zero must be on the axis: set it with Position on the bar's cylindrical face. It needs a 4 axis machine. Its origin is drawn as a Set Origin's is.</p>
+<p>To machine the far side of a bar, say: a folder of operations under the work zero, then a Rotate of 180 with Top of stock, then a folder for that side. To set the origin yourself after turning, add a Set Origin below the Rotate instead (or in place of it): any Set Origin whose Z the rotary axis can reach turns the axis too.</p>
+<dl>
+  <dt>Name</dt>
+  <dd>The step's name in the tree.</dd>
+  <dt>Angle</dt>
+  <dd>Degrees about the rotary axis, from the work zero, not added to the Rotate above it: a Rotate of 90 then one of 180 turns to 180, not 270. -360 to 360. 90 by default. If an operation under it says its features don't enclose an area, and Generate adds that picked faces or circles are edge-on, the angle doesn't point Z out of their side.</dd>
+  <dt>Origin after turning: Keep, on the axis</dt>
+  <dd>The origin is the work zero, turned: still on the rotary axis, with Z out from it at the new angle.</dd>
+  <dt>Origin after turning: Top of stock</dt>
+  <dd>The same, moved out along the turned Z to the stock's highest point that way. Needs a stock.</dd>
+  <dt>Indexing: Automatic retract</dt>
+  <dd>On a 4 axis machine, before the rotary axis turns to this step's angle the tool goes straight up to a safe height, measured from the rotary axis. Ticked (the default), that height is the furthest the stock, or any toolpath being posted or simulated, reaches from the axis, plus 5 mm. Untick it to type your own.</dd>
+  <dt>Indexing: Height above axis</dt>
+  <dd>The retract height, in mm above the rotary axis (machine Z, as the work zero sits on the axis), when Automatic retract is off. More than 0. Too low, and the simulation stops with a rapid into stock as the tool swings round.</dd>
+  <dt>Indexing: Turn</dt>
+  <dd>Which way the rotary axis turns to this step's angle: <strong>Shortest</strong> (the default; half a turn goes positive), <strong>Positive</strong> (the angle only goes up) or <strong>Negative</strong> (only down). The angle written carries on past 360 or below 0 so the machine turns the way asked, as with cables or a chuck key that mustn't wind up.</dd>
+  <dt>Machine line</dt>
+  <dd>Which way the machine's rotary axis runs, or that the machine has none.</dd>
+  <dt>OK</dt>
+  <dd>Saves the step.</dd>
   <dt>Cancel</dt>
   <dd>Closes the dialog without changing the step.</dd>
 </dl>
@@ -640,7 +680,7 @@
 
 <section id="post">
 <h2>Post</h2>
-<p>Writes the generated toolpaths as a program for a machine. Every point is measured from the work zero, the first Set Origin that isn't suppressed. Posts are plain text <code>.post</code> files in the add-on's <code>posts</code> folder, and your own in <code>%APPDATA%\CAMForAlibre\posts\</code> add to them or replace one with the same file name.</p>
+<p>Writes the generated toolpaths as a program for a machine. Every point is measured from the work zero, the first Set Origin that isn't suppressed. A 3 axis post refuses operations whose Set Origin or Rotate tilts the tool away from the work zero's Z. A 4 axis post (such as <em>LinuxCNC (4th axis A router, mm)</em>) turns the rotary axis instead: before an operation at a different angle (the program starts at 0, with the operator setting A to 0 on the work zero) it retracts to the step's retract height above the axis and turns, as its <code>[index]</code> section says, then writes plain X, Y and Z moves from the work zero as the machine sees it at that angle. Operations the axis can't reach, or a machine with no rotary axis, stop it with their names. Posts are plain text <code>.post</code> files in the add-on's <code>posts</code> folder, and your own in <code>%APPDATA%\CAMForAlibre\posts\</code> add to them or replace one with the same file name.</p>
 <dl>
   <dt>Posting</dt>
   <dd>What's being posted: every operation, or a folder's.</dd>

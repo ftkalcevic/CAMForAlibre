@@ -25,6 +25,10 @@ struct CamScene
     camcore::Frame origin;
     camcore::PlaneRectangle plane;
 
+    // On a 4 axis machine, the rotary axis through the work zero, across the parts.
+    bool hasRotaryAxis = false;
+    camcore::LineSegment rotaryAxis;
+
     // Each operation's toolpath as runs of connected lines, already in assembly
     // coordinates. Left out while picking, like the plane.
     struct Toolpath

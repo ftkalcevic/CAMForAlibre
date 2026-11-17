@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "CAMForAlibre.h"
 #include "OriginDialog.h"
+#include "RotateDialog.h"
 #include "Help.h"
 #include "CamTabCommand.h"
 #include "ModelReader.h"
@@ -83,6 +84,7 @@ BEGIN_MESSAGE_MAP(COriginDlg, CDialog)
     ON_EN_CHANGE(IDC_ORIGIN_OFFSET_X, &COriginDlg::OnOptionChanged)
     ON_EN_CHANGE(IDC_ORIGIN_OFFSET_Y, &COriginDlg::OnOptionChanged)
     ON_EN_CHANGE(IDC_ORIGIN_OFFSET_Z, &COriginDlg::OnOptionChanged)
+    ON_BN_CLICKED(IDC_INDEX_AUTO_RETRACT, &COriginDlg::OnAutomaticRetract)
     ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
@@ -125,6 +127,7 @@ BOOL COriginDlg::OnInitDialog()
     SetDlgItemText(IDC_ORIGIN_OFFSET_X, FormatNumber(m_step.origin.options.offset.x).c_str());
     SetDlgItemText(IDC_ORIGIN_OFFSET_Y, FormatNumber(m_step.origin.options.offset.y).c_str());
     SetDlgItemText(IDC_ORIGIN_OFFSET_Z, FormatNumber(m_step.origin.options.offset.z).c_str());
+    LoadIndexControls(this, m_step.index);
 
     m_filling = false;
 
@@ -261,6 +264,11 @@ void COriginDlg::OnClearX()
     UpdatePreview();
 }
 
+void COriginDlg::OnAutomaticRetract()
+{
+    UpdateIndexControls(this);
+}
+
 void COriginDlg::OnOptionChanged()
 {
     if (m_filling)
@@ -297,11 +305,16 @@ void COriginDlg::UpdatePreview()
         if (result.ok)
         {
             const Frame& frame = result.frame;
-            SetDlgItemText(IDC_ORIGIN_RESULT,
-                           (FormatVec3(frame.origin, L"Origin (%.3f, %.3f, %.3f) mm") +
-                            FormatVec3(frame.zAxis, L"\nZ (%.4f, %.4f, %.4f)  ") +
-                            FormatVec3(frame.xAxis, L"X (%.4f, %.4f, %.4f)"))
-                               .c_str());
+            std::wstring text = FormatVec3(frame.origin, L"Origin (%.3f, %.3f, %.3f) mm") +
+                                FormatVec3(frame.zAxis, L"\nZ (%.4f, %.4f, %.4f)  ") +
+                                FormatVec3(frame.xAxis, L"X (%.4f, %.4f, %.4f)");
+            if (m_pTab != nullptr)
+            {
+                const std::wstring index = m_pTab->OriginIndexText(frame);
+                if (!index.empty())
+                    text += L"\n" + index;
+            }
+            SetDlgItemText(IDC_ORIGIN_RESULT, text.c_str());
         }
         else
         {
@@ -337,6 +350,8 @@ void COriginDlg::OnOK()
         const FrameResult result = BuildFrame(m_step.origin);
         if (!result.ok)
             problem = FromUtf8(result.message);
+        else
+            ReadIndexControls(this, m_step.index, problem);
     }
 
     if (!problem.empty())

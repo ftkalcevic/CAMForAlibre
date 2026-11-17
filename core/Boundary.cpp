@@ -198,6 +198,41 @@ namespace camcore
         return points;
     }
 
+    Polyline ArcPointsAbout(const Vec3& start, const Vec3& end, const Vec3& centre, const Vec3& axis)
+    {
+        Vec3 n;
+        if (!Normalise(axis, n))
+            return { end };
+
+        // Anticlockwise about the axis, from the start's direction to the end's;
+        // coincident ends make a full turn. Along the axis, it moves evenly.
+        const Vec3 fromStart = start - centre;
+        const Vec3 fromEnd = end - centre;
+        const Vec3 u = fromStart - n * Dot(fromStart, n);
+        const Vec3 e = fromEnd - n * Dot(fromEnd, n);
+        const Vec3 v = Cross(n, u);
+        double sweep = std::atan2(Dot(e, v), Dot(e, u));     // v is u turned a quarter, the same length
+        while (sweep <= 1e-12)
+            sweep += kTwoPi;
+        while (sweep > kTwoPi + 1e-12)
+            sweep -= kTwoPi;
+        const double startAlong = Dot(fromStart, n);
+        const double endAlong = Dot(fromEnd, n);
+        const int count =
+            (std::max)(1, static_cast<int>(std::ceil(sweep / (kArcDrawingStepDegrees * kPi / 180.0))));
+
+        Polyline points;
+        for (int i = 1; i < count; ++i)
+        {
+            const double t = static_cast<double>(i) / count;
+            const double angle = sweep * t;
+            points.push_back(centre + u * std::cos(angle) + v * std::sin(angle) +
+                             n * (startAlong + (endAlong - startAlong) * t));
+        }
+        points.push_back(end);
+        return points;
+    }
+
     Polyline PathPoints(const Path& path, bool closed)
     {
         Polyline points;
@@ -212,7 +247,11 @@ namespace camcore
             const Vec3& to = path[(i + 1) % path.size()].point;
             if (from.arc)
             {
-                const Polyline arc = ArcPoints(from.point, to, from.centre, ArcIsAnticlockwise(from));
+                // An arc about Z (or -Z) in XY; any other in its own plane, as a
+                // picked edge on a side face is in the assembly.
+                const bool aboutZ = std::fabs(from.axis.z) > 1.0 - 1e-9;
+                const Polyline arc = aboutZ ? ArcPoints(from.point, to, from.centre, ArcIsAnticlockwise(from))
+                                            : ArcPointsAbout(from.point, to, from.centre, from.axis);
                 points.insert(points.end(), arc.begin(), arc.end());
             }
             else

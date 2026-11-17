@@ -19,8 +19,8 @@ namespace camcore
     // One operation to post, with what it runs under.
     struct PostOperation
     {
-        const SequenceStep* origin = nullptr;       // the Set Origin it runs under
-        Frame frame;                                // that origin's frame
+        const SequenceStep* origin = nullptr;       // the Set Origin or Rotate it runs under
+        Frame frame;                                // that step's frame (FrameAt)
         const SequenceStep* operation = nullptr;
         const Tool* tool = nullptr;                 // in mm, or null if it isn't in the library
     };

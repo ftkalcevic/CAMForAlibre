@@ -23,6 +23,7 @@
 #include "HolePocketing.h"
 #include "Pocketing.h"
 #include "Profiling.h"
+#include "Rotate.h"
 #include "Stock.h"
 #include "ThreadMilling.h"
 #include "Toolpath.h"
@@ -35,7 +36,8 @@ namespace camcore
     // Version 14 added helix entries (Entry/Exit's Helix, Waterline Roughing's entry).
     // Version 16 added Fixtures steps.
     // Version 17 added Thread Milling operations.
-    constexpr int kCamFormatVersion = 17;
+    // Version 18 added Rotate steps, and indexing settings on Set Origins.
+    constexpr int kCamFormatVersion = 18;
 
     // Which assembly a job belongs to. The GUID comes from the assembly file,
     // and is empty if it couldn't be read.
@@ -61,7 +63,8 @@ namespace camcore
         WaterlineFinishing, // an operation, 3 axis: one lap round the parts at each level
         ParallelFinishing,  // an operation, 3 axis: straight rows following the parts' surface
         Fixtures,           // the work holding the operations below it keep clear of
-        ThreadMilling       // an operation: internal threads cut with a thread mill on a helix
+        ThreadMilling,      // an operation: internal threads cut with a thread mill on a helix
+        Rotate              // turns the work about the rotary axis, like a Set Origin for the steps below
     };
 
     bool IsOperation(StepType type);
@@ -85,6 +88,12 @@ namespace camcore
 
         // Set Origin steps only
         OriginDefinition origin;
+
+        // Rotate steps only
+        RotateSettings rotate;
+
+        // Set Origin and Rotate steps: how the machine indexes to them.
+        IndexSettings index;
 
         // Fixtures steps only
         FixtureSettings fixtures;
@@ -213,8 +222,9 @@ namespace camcore
 
     constexpr size_t kNoStepIndex = static_cast<size_t>(-1);
 
-    // The Set Origin a step runs under: the step itself if it's a Set Origin,
-    // otherwise the nearest one above it. kNoStepIndex if there's none.
+    // The Set Origin or Rotate a step runs under: the step itself if it's one,
+    // otherwise the nearest unsuppressed one above it. kNoStepIndex if there's none.
+    // Rotary.h's FrameAt gives its frame.
     size_t ActiveOriginIndex(const Job& job, size_t stepIndex);
 
     // The Fixtures step the operations in a top-level step run among: the step

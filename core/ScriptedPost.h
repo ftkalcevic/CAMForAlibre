@@ -7,7 +7,10 @@
 //   [settings]
 //   name = LinuxCNC (3 axis, mm)    ; shown in the Post dialog
 //   extension = ngc                  ; the output file's extension
-//   axes = 3                         ; 3: every operation must cut along the work zero's Z
+//   axes = 3                         ; 3: every operation must cut along the work zero's Z.
+//                                    ; 4: the machine's rotary axis turns the work to each
+//                                    ; operation's Z (its Set Origin or Rotate), see [index]
+//   rotary = A                       ; 4 axes: the rotary axis's word, A, B or C
 //   decimals = 4                     ; for X, Y, Z, I, J and K
 //   feed decimals = 0                ; for F
 //   trim zeros = yes                 ; 12.5 rather than 12.5000
@@ -23,6 +26,11 @@
 //                       last (G17, G18, G19). Program start is taken as XY. Without
 //                       them, arcs in ZX and YZ are written as straight moves; without
 //                       [arc cw] and [arc ccw], every arc is.
+//   [index]             4 axes: before an operation whose rotary angle differs from the
+//                       last (the program starts at 0), with {Z} the retract height above
+//                       the rotary axis and {A} (or {B}, {C}, as rotary says) the angle,
+//                       which goes past 360 or below 0 to turn the way the step asks.
+//                       Clamp and unclamp lines go here too. A 4 axis post must have it.
 //   [operation end]     after each operation's moves
 //   [program end]       written once, last
 //
@@ -30,7 +38,8 @@
 // filling in {...}. The name is the capitals at the end of the braces, and
 // anything before it is written in front of the value, so "G1{ X}{ Y}{ F}"
 // writes "G1 X10 F500" when only X and F change.
-//   X Y Z     the move's end, from the work zero (the first Set Origin), in mm.
+//   X Y Z     the move's end, from the work zero (the first Set Origin), in mm,
+//             turned back by the rotary angle on a 4 axis machine.
 //             Written only when changed since last written, as are F and the
 //             first move after a tool change.
 //   I J K     an arc's centre from where it starts: I and J in XY, I and K in ZX,
@@ -52,6 +61,7 @@
 
 #include "ArcFit.h"         // ArcFitting
 #include "PseudoPost.h"     // PostOperation
+#include "Rotary.h"         // OrientationContext
 
 namespace camcore
 {
@@ -61,6 +71,7 @@ namespace camcore
         std::string name;
         std::string extension = "ngc";
         int axes = 3;
+        std::string rotaryWord = "A";   // 4 axes: A, B or C
         int decimals = 4;
         int feedDecimals = 0;
         bool trimZeros = true;
@@ -89,12 +100,17 @@ namespace camcore
     };
 
     // The whole program for these operations, from the work zero. A 3 axis
-    // post refuses operations whose origin's Z isn't the work zero's, naming them.
+    // post (or a machine with no rotary axis in `rotary`) refuses operations whose
+    // origin's Z isn't the work zero's, naming them; a 4 axis post refuses those
+    // the rotary axis can't reach, turns to each operation's angle with [index],
+    // and retracts first to the step's height or clear of `rotary`'s stock points
+    // and the toolpaths by kIndexClearance.
     // date is what {DATE} writes. Arcs go out as arcs in the work zero's XY, ZX or
     // YZ plane where the machine allows that plane; otherwise (or where an arc's
     // plane isn't one of those, as when its origin is turned about Z) as straight
     // moves within the machine's arc tolerance.
     PostOutput WriteScriptedPost(const PostScript& script, const std::string& jobName, const Frame& workZero,
                                  const std::vector<PostOperation>& operations, const std::string& date,
-                                 const ArcFitting& arcs = ArcFitting());
+                                 const ArcFitting& arcs = ArcFitting(),
+                                 const OrientationContext& rotary = OrientationContext());
 }

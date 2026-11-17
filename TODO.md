@@ -5,7 +5,6 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
 
 - Operations
   - 🔴 V-carve
-  - 4th axis rotate(?), or do we just set the origin
   - 3D
     - Project finishing
     - 3D offset pocketing and profiling
@@ -18,7 +17,9 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
     - Curve machining
     - Between 2 curves
 - More stock alignment options
-- 4th axis: rotate and machine, etc.
+- 4th axis: indexing is built (Rotate steps, Set Origins solved for the rotary angle, the 4 axis post, the simulated turn). Still to do: simultaneous 4th axis (wrapping, rotary machining); the APT CL post's rotary output; a rotary rate on the machine (the turn is timed at the rapid rate); drawing the stock turning instead of the tool
+- 5 axis indexing (3+2): machine kinematics (table-table A/C or B/C, head-head, head-table), pivot offsets, axis limits, choosing between two solutions
+- Tilted plane output (G68.2, CYCLE800, PLANE) as a post option, for controls that have it
 - Lathe support: machine type, rod stock, turning operations, tools, post and simulation (staged plan saved in `docs\LatheSupport.md`)
 - Exact solid (B-rep) in-process stock, probably through Alibre's own kernel (exploring; options in `docs\ExactSolidSimulation.md`)
 - Thread milling: external threads (internal threads built, and simulated with the tool's teeth; see the help's Thread Milling tab); perhaps a first tooth height on the tool, if the lowest crest isn't at the tip

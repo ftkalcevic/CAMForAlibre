@@ -60,7 +60,12 @@ namespace camcore
     // than kArcDrawingStepDegrees apart. Z changes evenly from the start's to the end's.
     Polyline ArcPoints(const Vec3& start, const Vec3& end, const Vec3& centre, bool anticlockwise);
 
-    // A path as points, arcs sampled for drawing. A closed path ends back on its start.
+    // An arc anticlockwise about any axis as points after its start, up to and
+    // including end, no more than kArcDrawingStepDegrees apart.
+    Polyline ArcPointsAbout(const Vec3& start, const Vec3& end, const Vec3& centre, const Vec3& axis);
+
+    // A path as points, arcs sampled for drawing: about Z in XY, about any other
+    // axis in their own plane. A closed path ends back on its start.
     Polyline PathPoints(const Path& path, bool closed);
 
     // The lowest and highest of Dot(point, direction) over a closed path,

@@ -464,4 +464,11 @@ void CCamViewCommand::DrawScene(IADAddOnCanvasDisplay* pCanvas, const CamScene& 
         const __int64 segment = AddSegment(pCanvas, axis.name, axis.colour, kOriginLineWeight, scene.foreground);
         DrawLine(pCanvas, segment, frame.origin, frame.origin + axis.axis * kOriginAxisLengthMm, unit);
     }
+
+    if (scene.hasRotaryAxis)
+    {
+        const __int64 segment = AddSegment(pCanvas, L"Rotary axis", kRotaryAxisColour, kRotaryAxisLineWeight,
+                                           scene.foreground);
+        DrawLine(pCanvas, segment, scene.rotaryAxis.from, scene.rotaryAxis.to, unit);
+    }
 }

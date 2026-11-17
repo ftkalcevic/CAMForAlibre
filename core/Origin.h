@@ -122,8 +122,9 @@ namespace camcore
     // Works out the frame for a definition. The rules are in docs\SPEC.md.
     FrameResult BuildFrame(const OriginDefinition& definition);
 
-    // The point an edge gives as a position: the centre of a circle, or the end
-    // of a line nearer the click. Returns false for faces.
+    // The point a pick gives as a position: the centre of a circle, the end of a
+    // line nearer the click, a design point, or the point on a cylindrical face's
+    // axis level with the click (its centre there). Returns false for other faces.
     bool PositionFromPick(const PickedGeometry& pick, Vec3& position);
 
     // A rectangle in the frame's XY plane that covers an axis-aligned box once it's

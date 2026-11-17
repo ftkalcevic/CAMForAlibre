@@ -28,6 +28,7 @@
     <ClCompile Include="ModelReader.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="OperationDialog.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="OriginDialog.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="RotateDialog.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="PostDialog.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="SettingsDialog.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="Help.cpp"><Filter>Source Files</Filter></ClCompile>
@@ -55,6 +56,7 @@
     <ClInclude Include="ModelReader.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="OperationDialog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="OriginDialog.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="RotateDialog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="PostDialog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="SettingsDialog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="Help.h"><Filter>Header Files</Filter></ClInclude>

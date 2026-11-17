@@ -325,6 +325,25 @@ namespace camcore
         double seconds = 0.0;       // how long it takes: at its feed, the rapid rate, or a dwell's time
         size_t operation = 0;       // which of the simulation's operations
         size_t toolpathMove = 0;    // which move of the operation's toolpath it comes from
+
+        // The tool's axis, when it isn't the operation's (as it swings round the
+        // rotary axis between operations). Unit length.
+        bool ownAxis = false;
+        Vec3 axis;
+        bool index = false;         // part of the turn before its operation
+    };
+
+    // The rotary axis turning before an operation: the tool goes up along the last
+    // operation's Z to the retract height above the axis, then swings round it
+    // (the stock stays put, so the tool swings round it).
+    struct SimIndex
+    {
+        bool present = false;
+        Vec3 axisPoint;             // on the rotary axis, in assembly mm
+        Vec3 axisDirection;         // unit; a positive angle turns right-handed about it
+        double from = 0.0;          // degrees
+        double to = 0.0;
+        double retract = 0.0;       // mm above the axis
     };
 
     // An operation to simulate: its generated toolpath, in its origin's frame.
@@ -342,6 +361,9 @@ namespace camcore
         // The fixtures the operation runs among (its Fixtures step's), shared, or none.
         // The simulation checks them at their true size, without the clearance.
         std::shared_ptr<const std::vector<FixtureGrid>> fixtures;
+
+        // The rotary axis turning before it, after the operation before.
+        SimIndex index;
     };
 
     // Steps through the operations' moves, cutting the stock.
@@ -393,6 +415,7 @@ namespace camcore
         // Where the tool's tip is (part way along a move Advance stopped in), its axis,
         // and its shape, at the current position.
         Vec3 ToolTip() const;
+        Vec3 ToolAxis() const;
         const SimOperation* CurrentOperation() const;
 
         // Cuts up to count moves. Stops early, after the move, at a rapid that cuts

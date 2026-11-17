@@ -11,6 +11,7 @@
 #include <intrin.h>
 #endif
 
+#include "Rotary.h"          // RotateAbout
 #include "ThreadMilling.h"
 
 namespace camcore
@@ -18,6 +19,9 @@ namespace camcore
     namespace
     {
         constexpr double kPi = 3.14159265358979323846;
+
+        // The tool swings round the rotary axis in steps no bigger than this, in degrees.
+        constexpr double kIndexStep = 2.0;
         constexpr double kDexelTouch = 1e-3;     // a rapid that removes more ray than this, in mm, cut stock
 
         // Cell sizes, fine to coarse.
@@ -1527,9 +1531,52 @@ namespace camcore
         // Each operation's moves in assembly mm. Arcs become chords within half a
         // cell, and dwells go nowhere.
         const double tolerance = Spacing() / 2.0;
+        bool haveLast = false;      // where the last operation left the tool, and its axis
+        Vec3 lastTip, lastAxis;
         for (size_t o = 0; o < m_operations.size(); ++o)
         {
             const SimOperation& operation = m_operations[o];
+
+            // The turn before it: up along the last axis to the retract height above
+            // the rotary axis, then round it in steps of at most kIndexStep degrees.
+            const SimIndex& index = operation.index;
+            Vec3 turnAxis;
+            if (index.present && haveLast && Normalise(index.axisDirection, turnAxis))
+            {
+                const auto add = [&](const Vec3& from, const Vec3& to, const Vec3& axis) {
+                    SimMove sim;
+                    sim.from = from;
+                    sim.to = to;
+                    sim.rapid = true;
+                    sim.seconds = Length(to - from) / rapid * 60.0;
+                    sim.operation = o;
+                    sim.ownAxis = true;
+                    sim.axis = axis;
+                    sim.index = true;
+                    m_moves.push_back(sim);
+                };
+                const double height = Dot(lastTip - index.axisPoint, lastAxis);
+                Vec3 up = lastTip;
+                if (index.retract > height)
+                {
+                    up = lastTip + lastAxis * (index.retract - height);
+                    add(lastTip, up, lastAxis);
+                }
+                // Seen from the work, the tool turns with the angle: at angle a it's
+                // where the machine point is turned by a (WorldFromMachine).
+                const double change = index.to - index.from;
+                const int steps = (std::max)(1, static_cast<int>(std::ceil(std::fabs(change) / kIndexStep)));
+                Vec3 at = up;
+                for (int s = 1; s <= steps; ++s)
+                {
+                    const double turned = change * s / steps;
+                    const Vec3 next = index.axisPoint + RotateAbout(up - index.axisPoint, turnAxis, turned);
+                    const Vec3 nextAxis = RotateAbout(lastAxis, turnAxis, turned);
+                    add(at, next, nextAxis);
+                    at = next;
+                }
+            }
+
             bool havePrevious = false;
             Vec3 previous;
             for (size_t m = 0; m < operation.toolpath.moves.size(); ++m)
@@ -1582,6 +1629,11 @@ namespace camcore
                 previous = move.to;
                 havePrevious = true;
             }
+            if (havePrevious)
+            {
+                haveLast = Normalise(operation.frame.zAxis, lastAxis);
+                lastTip = FramePointToWorld(operation.frame, previous);
+            }
         }
 
         m_moveStarts.assign(m_moves.size() + 1, 0.0);
@@ -1612,6 +1664,14 @@ namespace camcore
         return (m_position < m_moves.size()) ? PointAlong(m_moves[m_position], m_into) : m_moves.back().to;
     }
 
+    Vec3 Simulation::ToolAxis() const
+    {
+        if (m_moves.empty())
+            return Vec3{ 0.0, 0.0, 1.0 };
+        const SimMove& move = m_moves[(std::min)(m_position, m_moves.size() - 1)];
+        return move.ownAxis ? move.axis : m_operations[move.operation].frame.zAxis;
+    }
+
     const SimOperation* Simulation::CurrentOperation() const
     {
         if (m_moves.empty())
@@ -1623,6 +1683,7 @@ namespace camcore
     SimWarning Simulation::CutPiece(const SimMove& move, const Vec3& a, const Vec3& b)
     {
         const SimOperation& operation = m_operations[move.operation];
+        const Vec3 toolAxis = move.ownAxis ? move.axis : operation.frame.zAxis;
 
         // The holder and the shank above the flutes mustn't touch the stock as it
         // is before the piece (the flutes cut below them).
@@ -1631,7 +1692,7 @@ namespace camcore
             if (m_ignoreCollisions || !cylinder.Present())
                 return false;
             Vec3 w;
-            if (!Normalise(operation.frame.zAxis, w))
+            if (!Normalise(toolAxis, w))
                 return false;
             ToolProfile plain;
             plain.type = ToolType::FlatEndMill;
@@ -1654,7 +1715,7 @@ namespace camcore
         if (warning == SimWarning::None && !m_ignoreCollisions && operation.fixtures)
         {
             Vec3 w;
-            if (Normalise(operation.frame.zAxis, w))
+            if (Normalise(toolAxis, w))
             {
                 const auto hits = [&](const FixtureGrid& fixture, const ToolProfile& profile, double start) {
                     if (fixture.grid.SizeX() == 0)
@@ -1704,12 +1765,12 @@ namespace camcore
         };
         if (operation.parts.empty())
         {
-            cut = cutWith(operation.profile, a, b, operation.frame.zAxis);
+            cut = cutWith(operation.profile, a, b, toolAxis);
         }
         else
         {
             Vec3 w;
-            if (Normalise(operation.frame.zAxis, w))
+            if (Normalise(toolAxis, w))
             {
                 for (const ToolPart& part : operation.parts)
                 {

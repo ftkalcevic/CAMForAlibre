@@ -135,6 +135,7 @@ Visual Studio. The project launches `Alibre Design.exe` and breakpoints in
 | `ModelReader.cpp/.h` | Reads Alibre data into plain data for `CamCore` |
 | `OperationDialog.cpp/.h` | The modeless operation dialog and its tabs |
 | `OriginDialog.cpp/.h` | The modeless Set Origin dialog |
+| `RotateDialog.cpp/.h` | The Rotate dialog, and the Indexing group it shares with Set Origin |
 | `PostDialog.cpp/.h` | Finds the post scripts and chooses the post and output file before posting |
 | `Help.cpp/.h` | Opens the help page in the default browser at a section |
 | `StockDialog.cpp/.h` | The Box Stock, Part Box Stock and Imported Stock dialogs |
@@ -157,7 +158,7 @@ The add-on GUID `{D3A31918-AFE0-45F2-A080-B531E6894179}` appears in
 
 ## Posts
 
-Post scripts are plain text `.post` files in `posts\`. `deploy\install.ps1` copies them into the add-on's `posts\` folder. To change one for a machine, copy it to `%APPDATA%\CAMForAlibre\posts\` and edit the copy; a post there replaces one of the same file name. The template format is described at the top of `core\ScriptedPost.h`, and `posts\LinuxCNC.post` is the first.
+Post scripts are plain text `.post` files in `posts\`. `deploy\install.ps1` copies them into the add-on's `posts\` folder. To change one for a machine, copy it to `%APPDATA%\CAMForAlibre\posts\` and edit the copy; a post there replaces one of the same file name. The template format is described at the top of `core\ScriptedPost.h`, `posts\LinuxCNC.post` is the first, and `posts\LinuxCNC 4th axis.post` adds a rotary A axis.
 
 ## Help
 

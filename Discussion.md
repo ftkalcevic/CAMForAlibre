@@ -12702,6 +12702,513 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > Remove tri-dexel and fixture from the list
 
+### 🤖 Claude
+
+> I've removed the tri-dexel simulation and fixtures lines from [TODO.md](TODO.md). Nothing is committed.
+
+## 2026-11-17
+
+### 🧑 Frank · 16:13
+
+> I would like to start a add some true 4+5 axis operations.  Starting with just reorienting the work.  First thoughts are just to use the set origin option to move and setup the next folder of operations.  Or maybe a "Rotate" set up to rotate around an axis and don't move the origin.  For 4/5 axis, set origin will probably need a center option.  Anything you can think of?
+
+### 🤖 Claude
+
+> I'm waiting for the codebase survey (origins, machine axes, posts, simulation) before I write up ideas.
+
+### 🧑 Frank · 16:14
+
+> <task-notification>
+> <task-id>ac3f3f91aff72930c</task-id>
+> <tool-use-id>toolu_01MUihs7sjK3eBv6Vy9cshLq</tool-use-id>
+> <output-file>C:\Users\FRANKT~1\AppData\Local\Temp\claude\af67b47206b29857\3929cb7f-8be9-474a-b824-50f2445f44e3\tasks\ac3f3f91aff72930c.output</output-file>
+> <status>completed</status>
+> <summary>Agent "Explore origin, machine axes, post" finished</summary>
+> <note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+> <result>The current code is a 3-axis indexed setup only. The data model already lets each Set Origin have its own tool axis, but nothing works out a rotary angle, and the scripted post refuses any operation tilted from the work zero's Z. All paths below are under `D:\Projects\alibre\AlibreCAM`.
+>
+> ### 1. Origin (`core\Origin.h` / `core\Origin.cpp`)
+> - **No `OriginSettings` struct.** The settings are split in two:
+>   - `OriginOptions` (`Origin.h:99-104`): `bool flipZ`, `int xQuarterTurns` (0–3, turns X about Z), `Vec3 offset` (in the origin's own axes, applied last).
+>   - `OriginDefinition` (`Origin.h:107-113`): `PickedGeometry plane` (sets Z), `PickedGeometry position`, `PickedGeometry xDirection`, `OriginOptions options`.
+> - The comment at `Origin.h:106` says "Stock presets come with stock". No stock-linked origin type exists yet.
+> - **`PickedGeometry`** (`Origin.h:66-97`): `kind`, persistent keys, names, `clicked`, `point`, `direction`, `start`/`end`, `radius`. `PickKind` (`:51-63`) includes `CylindricalFace` and `DesignAxis`.
+> - **`Frame`** (`Origin.h:31-37`): `Vec3 origin, xAxis, yAxis, zAxis`, right-handed, and Z is the tool axis.
+> - **Frame code:**
+>   - `FrameResult BuildFrame(const OriginDefinition&amp;)` (`Origin.h:123`, `Origin.cpp:97-164`). It gets Z from the plane pick's direction, flipped if `flipZ` (`:105-109`). The position comes from `PositionFromPick` (`:111-120`). X comes from the X pick, or else from assembly X (or Y) projected onto the plane (`:122-149`). Quarter turns are applied with `x = Cross(z, x)` (`:152-154`), then `y = z×x`, then the offset (`:156-162`).
+>   - Helpers: `FramePointToWorld` (`Origin.cpp:71`) and `WorldToFrame` (declared in `core\Features.h:33`).
+>
+> ### 2. Machine (`core\Machine.h`)
+> - `enum class RotaryAxis { MinusX, PlusX, MinusY, PlusY }` (`:22-28`), with `RotaryAxisName` giving "-X", "+X", "-Y", "+Y" (`Machine.cpp:53`).
+> - `Machine` (`:33-59`) has:
+>   - `id`, `name`
+>   - `int axes = 3` (3 or 4)
+>   - `RotaryAxis rotary = PlusY` (used only with 4 axes)
+>   - travel X/Y/Z, `maxSpindleRpm`, `rapidRate`, holder diameter/depth, `ArcFitting arcs`, `ToolLibrary tools`
+> - There is no rotary centre, position, limits or second rotary axis.
+> - `ValidateMachine` accepts only 3 or 4 axes (`Machine.cpp:71`).
+> - **Saving:** a JSON file per machine in `%APPDATA%\CAMForAlibre\machines\&lt;id&gt;.json`, format version 3 (`Machine.h:19`). It is written with keys `"axes"` and `"rotaryAxis"` (`Machine.cpp:197-198`) and loaded at `:124-126`.
+>
+> ### 3. How a step finds its frame (`core\CamJob.h` / `core\CamJob.cpp`)
+> - `ActiveOriginIndex(job, stepIndex)` (`CamJob.h:218`, `CamJob.cpp:2211-2224`) returns the step itself if it's a Set Origin (even suppressed), otherwise the nearest unsuppressed Set Origin above it.
+> - `WorkZeroIndex(job)` (`CamJob.h:227`, `CamJob.cpp:2239-2247`) returns the first unsuppressed Set Origin.
+> - `SequenceStep` (`CamJob.h:76-155`) holds `OriginDefinition origin` (`:87`) and `Toolpath toolpath` (`:106`).
+> - Toolpath moves are stored in the active origin's local frame. The frame is not stored; callers rebuild it with `BuildFrame(m_job.sequence[active].origin)` (for example `addon\CamTabCommand.cpp:1762`, `2389`, `2465`).
+>
+> ### 4. Posts
+> - **`PostOperation`** (`core\PseudoPost.h:20-26`) carries `origin`, `frame`, `operation` and `tool`. It is filled at `CamTabCommand.cpp:2389-2391`.
+> - **APT CL post** (`core\PseudoPost.cpp`):
+>   - Every point is converted with `WorldToFrame(workZero, FramePointToWorld(entry.frame, p))` (`:109`, `:123`).
+>   - The tool axis is `DirectionInFrame(workZero, entry.frame.zAxis)` (`:26-28`, `:81`) and is written as i,j,k on each GOTO.
+>   - It never refuses a tilted operation.
+> - **Scripted post** (`core\ScriptedPost.cpp`):
+>   - Points use the same conversion through the `place` lambda (`:381`).
+>   - **Tilt check** (`:330-342`): if `Dot(entry.frame.zAxis, workZero.zAxis) &lt; 1 - 1e-6`, it lists the operation and fails with "This post is for a 3 axis machine…".
+>   - The check runs regardless of the script's `axes`, because `ReadPostScript` only accepts `axes = 3` (`:92-96`: "axes can only be 3 so far.").
+>   - **No rotary support:** `kSections` (`:18`) has no rotary section, and the `{names}` (`ScriptedPost.h:33-44`) have no A or B word. There is no retract-and-index output.
+> - **`posts\LinuxCNC.post`** (70 lines):
+>   - Settings: name "LinuxCNC (3 axis router, mm)", ngc, axes = 3, 4 decimals.
+>   - Program start: `G21 G90 G17 G94 G40 G49 G80`, `G64 P0.01`.
+>   - Tool change: `M5`, `T{TOOL} M6`.
+>   - Operation start: `S{SPINDLE} M3`.
+>   - Moves: G0/G1/G2/G3 with optional X Y Z I J K F; planes G17/G18/G19; dwell `G4 P`.
+>   - Program end: `M5 M30`.
+>
+> ### 5. Simulation
+> - `SimOperation` (`core\Simulation.h:331-345`) has `Frame frame` and `Toolpath toolpath`, still in the origin's frame. `SimMove` (`:320-328`) is in assembly mm.
+> - `MakeSimOperation` (`addon\CamTabCommand.cpp:1756-1782`) builds the frame from `ActiveOriginIndex` and sets `operation.frame`.
+> - `Simulation.cpp` converts each move with `FramePointToWorld(operation.frame, …)` (`:1544`, `:1573-1574`). It cuts with the tool axis `operation.frame.zAxis` (`:1634`, `:1657`, `:1707` `cutWith(..., operation.frame.zAxis)`, `:1712`).
+> - **So a tilted tool is supported per operation**, including the shank and holder checks along that axis.
+> - `RemainingStockHeights` has a fast path only for an upright frame (`:921`, `:948`).
+> - The view draws the tool along `m_scene.simAxis = frame.zAxis` (`CamTabCommand.cpp:2151`).
+> - The stock never rotates. The part stays fixed and the tool tilts, which is not how a physical 4th axis moves.
+>
+> ### 6. `addon\OriginDialog` (`OriginDialog.h:21-70`, `.cpp:75-127`)
+> - Name: `IDC_ORIGIN_NAME`.
+> - Plane (Z): text and Pick button (`IDC_ORIGIN_PLANE_PICK`).
+> - Position: text, Pick and Clear.
+> - X direction: text, Pick and Clear.
+> - Flip Z checkbox (`IDC_ORIGIN_FLIP_Z`).
+> - X rotation combo, 0°/90°/180°/270° (`IDC_ORIGIN_X_ROTATION`).
+> - Offset X, Y and Z edits.
+> - Prompt and result text (`IDC_ORIGIN_PROMPT`, `IDC_ORIGIN_RESULT`), plus Help, OK and Cancel.
+> - `PickSlot` is `None`/`Plane`/`Position`/`XDirection`. There is no rotary-angle control or stock-linked mode.
+>
+> ### 7. `docs\SPEC.md`
+> - **Scope:** `:11` and `:16` say version 1 is indexed 3+2; simultaneous 4/5-axis is out of scope.
+> - **Set Origin rules (`:125-141`):**
+>   - Z from a flat face points out of the material.
+>   - Z from a cylindrical face is the cylinder's axis, which "suits 4th-axis work" (`:132`).
+>   - The rules for circle edges, straight edges, position, X and calculated X (within about 6° of Z falls back to Y) all match `BuildFrame`.
+>   - Adjustments are Flip Z, quarter turns and offsets.
+> - **Not built yet:**
+>   - Reachability (`:144`): each origin is checked against the machine, and an unreachable one is invalid and can't be posted.
+>   - Multiple rotary solutions (`:145`): picked by a rule or the user.
+>   - Tool axis (`:146`): it is stored per toolpath and stays constant within an operation.
+> - **Table (`:148-152`):**
+>
+> | Machine | Valid origins | Rotary output |
+> | --- | --- | --- |
+> | 3-axis | Z aligned with machine Z | None |
+> | With 4th axis | Z reachable by rotating the one rotary axis | Indexed 4th-axis move between operations |
+> | 5-axis | Z reachable using both rotary axes | Indexed moves on both axes |
+>
+> - **Post rules (`:261-271`):**
+>   - At an orientation change the post writes a safe retract and a rotary move, then 3-axis motion.
+>   - The post calculates coordinates for the active rotary position, with no tilted-plane commands.
+>   - The test router's 4th axis runs along machine Y.
+>   - The operator positions and zeroes the 4th axis; the machine stores no measured centre.
+>   - There is one work zero, the first Set Origin, set on the rotary axis. All coordinates are calculated around it, and later Set Origins don't re-zero.
+>   - True 3+2 testing needs a two-rotary machine definition.
+> - **Roadmap and questions:** item 8 is "Indexed 4th axis" (`:402`), and the two questions on axis/centre and work zero are ticked as resolved (`:428-429`).
+>
+> **What's missing for indexing:**
+> - No rotary angle is solved anywhere.
+> - Coordinates are not re-expressed in the rotated work frame, so the posts write tilted-frame positions rather than the rotated position about the work zero.
+> - No reachability check, and no A/B word, section or setting in the post language.
+> - The work zero isn't required to lie on the rotary axis.
+> - The simulation doesn't rotate the stock.</result>
+> <usage><subagent_tokens>77239</subagent_tokens><tool_uses>21</tool_uses><duration_ms>63861</duration_ms></usage>
+> </task-notification>
+
+### 🤖 Claude
+
+> The code already handles most of the geometry. Every Set Origin builds its own frame with any Z direction, toolpaths are generated in that frame, and the simulation already tilts the tool to match. Here's what's missing:
+>
+> 1. **Nothing works out the rotary angle.** No code turns a frame into "A = 90°", checks whether the machine can reach it, or chooses between two possible solutions.
+> 2. **The post refuses tilted operations.** `ScriptedPost.cpp:330` stops on any operation whose Z isn't the work zero's Z, and the post language has no A/B/C word.
+> 3. **The rotary axis has no position.** The spec already says the first Set Origin is the work zero on the rotary axis, and later origins don't re-zero. Nothing makes sure that origin actually sits on the axis.
+>
+> On your two ideas:
+>
+> - **A Rotate step** (turn about the machine's rotary axis by an angle, keeping the work zero) is how the operator thinks, and it can't produce a position the machine can't reach. It builds the frame by rotating the work zero's frame about the rotary axis, so the operations below it need no changes.
+> - **Set Origin by picking a face** stays useful for "machine this face". With a rotary machine it would solve for the angle and refuse anything the machine can't reach. Its position would only be a local zero for that folder; the post still works everything out from the work zero.
+> - **The centre option** for Set Origin: pick a cylindrical face or circular edge, and the position goes onto its axis, with X (or Y) along it. That is what puts the work zero on the rotary axis.
+>
+> Some other things to plan for:
+>
+> - **Indexing on the machine.** The post needs a retract to a safe height, an optional unclamp, the rotary move, then a clamp. The safe height has to clear the stock's radius round the axis, not just its top.
+> - **Rotary word and direction.** The letter should come from the post (A or B; your router's axis is along Y, and many routers still call it A). The machine needs to know which way is positive, and whether to take the shortest way round or unwind.
+> - **5-axis kinematics.** Table-table (A/C or B/C), head-head, or mixed. Each needs pivot positions, axis limits, and a rule for choosing between two solutions, for example the smaller tilt. Indexed 3+2 only needs the angles plus the pivot offsets.
+> - **Simulation.** It tilts the tool rather than turning the stock, which gives the same cut. It would only matter for drawing, and later for collisions with the table or chuck.
+> - **Round stock** (a cylinder on the axis) fits 4th-axis work, and is shared with the lathe plan.
+
+> Questions:
+> - How should an operation folder be reoriented for 4/5 axis indexing?
+>   - Both (Recommended): A new Rotate step (angle(s) about the machine's rotary axes, work zero unchanged), and Set Origin with a picked Z also allowed, its angle solved and checked reachable.
+>   - Rotate step only: Only the Rotate step; later Set Origins stay limited to the work zero's Z.
+>   - Set Origin only: Keep using Set Origin; the post solves the rotary angle from each origin's Z.
+> - Which machines should the first stage cover?
+>   - 4th axis first (Recommended): Your router's single rotary axis now; 5-axis kinematics (table-table, head-head) as a later stage, designed for but not built.
+>   - 4th and 5 axis: Machine definitions for one or two rotary axes (A/C, B/C table-table etc.) with pivots and limits from the start.
+> - How is the rotary axis located relative to the part?
+>   - Work zero on the axis (Recommended): Set Origin gets a Centre option (pick a cylinder or circle: position on its axis, X along it); the first Set Origin must lie on the rotary axis, as the spec says.
+>   - Picked axis line: A separate pick (cylinder, design axis) defines the rotary axis line; the work zero can be anywhere.
+> - What should the post write at a reorientation?
+>   - Retract, rotate, go (Recommended): Retract to a rotary-safe height (clearing the stock's radius about the axis), an [index] section in the post with the rotary word (letter set by the post), optional clamp/unclamp lines, then 3 axis moves in the rotated coordinates.
+>   - Tilted plane (G68.2): Use the control's tilted work plane commands instead of computed coordinates (the spec currently says not to).
+
+### 🧑 Frank · 16:22
+
+> Answers:
+> - How should an operation folder be reoriented for 4/5 axis indexing?
+>   **List the pros and cons of all options**
+> - Which machines should the first stage cover?
+>   **4th axis first (Recommended)**
+> - How is the rotary axis located relative to the part?
+>   **It should support any.  Normally the rotation axis would be zero, but I still should be able to rotate 90, then set the top of the rotated work piece to the origin.  We probably need a simple method that automatically rotates and resets the origin, or manual rotate, and manual reset of the origin**
+> - What should the post write at a reorientation?
+>   **#1 with options to override.  simulation should show collisions if not retracted far enough.  Explan titled plane.**
+
+### 🤖 Claude
+
+> Here's the comparison you asked for, then the tilted plane explanation.
+>
+> **How to reorient a folder**
+>
+> | | Pros | Cons |
+> |---|---|---|
+> | **Rotate step only**: a new step that rotates by an angle about the machine's rotary axis | Matches what the operator does at the machine. The angle is plain to see and goes straight into the post. It can never ask for something a 4th axis can't reach. Toolpath code stays the same, because it only produces a new frame. | You have to know the angle; to machine a particular face you work it out yourself. On its own it doesn't move the zero to the new top. |
+> | **Set Origin only**: pick a face, and the post works out the angle | One idea for everything: pick the face to machine and you're done. Moving the zero to that face is natural. | The angle is hidden. A face that isn't parallel to the rotary axis can't be reached, which means an error and a refusal. With a 4th axis, a picked X direction usually conflicts with the rotation, so X has to be forced. It's less obvious what the machine will actually do. |
+> | **Both** | Rotate for "turn 90°", Set Origin for "this face". Covers your "manual rotate, manual reset" case: a Rotate step, then a Set Origin under it. | Two ways to do the same thing, so more help to write. Needs a rule for how a Set Origin under a Rotate works: its Z must equal the rotated Z, and only the position and X are its own. |
+>
+> Your "automatically rotate and reset" case fits a Rotate step with an **Origin after rotation** choice:
+> - **Keep**: the zero stays where it was, on the axis.
+> - **Top of stock**: the zero moves to the stock's highest point along the new Z, above the axis.
+> - **Leave it to a Set Origin below**: the manual case.
+>
+> For any of these, the post needs to know where the rotary axis is relative to each zero. So the rotary axis becomes a line in the job: the machine says its direction, and a pick or the work zero says where it is. The post then writes coordinates either relative to the current zero, or as a new work offset (G55 and so on) worked out from the axis.
+>
+> **Tilted plane (G68.2, CYCLE800 and similar)**
+>
+> Instead of the post rotating every coordinate itself, the program tells the control "tilt the working plane by these angles about this point". The control then turns the rotary axes and transforms X, Y and Z itself, and the program stays in the tilted frame. That frame is what our toolpaths are already stored in.
+>
+> - **Pros:**
+>   - The posted code is short and readable, and an operator can edit it.
+>   - The control's own kinematics handle pivot offsets and the axis centre exactly.
+>   - The same program works if the part is re-fixtured.
+> - **Cons:**
+>   - It needs control support: Fanuc G68.2, Siemens CYCLE800, Heidenhain PLANE.
+>   - LinuxCNC has no G68.2 as standard. It needs a remap or a kinematics module, and GRBL and most hobby controls have nothing.
+>   - The control has to be set up correctly with the machine's kinematics.
+>
+> So I'd make it a post option for controls that support it. Calculated coordinates would stay the default, which is what your LinuxCNC router needs.
+>
+> **Collisions while indexing**
+>
+> The simulation can show an index as the tool swinging around the rotary axis at its retract height. It's done in short steps, each with a fixed tool axis, which both stock models already handle, and it uses the existing shank and holder checks. A retract that isn't high enough then shows up as a warning.
+
+> Questions:
+> - Given the pros and cons, which way should folders be reoriented?
+>   - Both (Recommended): A Rotate step (angle about the rotary axis, with Origin after rotation: Keep, Top of stock, or set by a Set Origin below), and Set Origin may pick any reachable Z with its angle solved.
+>   - Rotate + Set Origin position: Rotate step for the orientation; a Set Origin below it may only change position and X (its Z must match the rotated Z). No angle solving.
+>   - Rotate step only: Rotate step with its Origin after rotation choices; Set Origin stays as now.
+> - How does the job know where the rotary axis is?
+>   - First Set Origin (Recommended): The work zero (first Set Origin) is on the rotary axis, its direction from the machine; a Centre option on Set Origin makes that easy (pick a cylinder or circle). Later origins can be anywhere.
+>   - Own pick on a Rotate step: Each Rotate step (or a Setup item) picks the axis line (cylinder, circle, design axis); the work zero can be anywhere.
+> - When a later origin isn't the work zero, how should the post write coordinates?
+>   - All from work zero (Recommended): One work offset (G54) on the rotary axis; every coordinate is worked out from it, as the spec says now. Nothing to set at the machine.
+>   - Work offset per origin: Each origin gets G55, G56..., the post prints where each is relative to the axis, the operator or a G10 line sets them.
+>   - Post option: Both, chosen in the post file.
+> - Which overrides should the index output have? (Post or operation settings.)
+>   - Retract height: Override the automatic safe height (stock radius about the axis plus a clearance) per Rotate step.
+>   - Rotary direction: Shortest way, always positive, or always negative / unwind.
+>   - Clamp/unclamp codes: M codes around the index, set in the post.
+>   - Tilted plane output: A post option to write G68.2-style tilted planes instead of computed coordinates.
+
+### 🧑 Frank · 17:09
+
+> Answers:
+> - Given the pros and cons, which way should folders be reoriented?
+>   **Both (Recommended)**
+> - How does the job know where the rotary axis is?
+>   **First Set Origin (Recommended)**
+> - When a later origin isn't the work zero, how should the post write coordinates?
+>   **All from work zero (Recommended)**
+> - Which overrides should the index output have? (Post or operation settings.)
+>   **Retract height,Rotary direction,Clamp/unclamp codes**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Indexed 4th axis: Rotate steps, solved Set Origins, rotary posts
+>
+> ## Context
+>
+> Frank wants true 4/5 axis work, starting with reorienting the work between folders (indexing). Today every Set Origin already builds its own frame (any Z) and toolpaths are generated and simulated in it, but nothing works out a rotary angle, the scripted post refuses any operation tilted from the work zero's Z (`core\ScriptedPost.cpp:330`), the post language has no rotary word, and nothing ties the work zero to the rotary axis.
+>
+> Frank's decisions (this conversation):
+> - Both ways to reorient: a new **Rotate** step (an angle about the machine's rotary axis), and **Set Origin** may pick any Z the machine can reach, its angle solved.
+> - A Rotate step can reset the origin automatically (Top of stock) or leave it; a manual Set Origin below it also works.
+> - 4th axis first; 5 axis (table-table, head-head, pivots, two solutions) later, designed for but not built.
+> - The rotary axis line is the first Set Origin (work zero): it lies on the axis, its direction from the machine. A Centre option on Set Origin makes that easy.
+> - The post writes every coordinate from the one work zero (G54 on the axis), rotated for the current index.
+> - At an index: retract, rotate, carry on. Overrides: retract height, rotary direction, clamp/unclamp codes (in the post).
+> - The simulation shows a collision when the retract isn't high enough.
+> - Tilted plane (G68.2) output is not wanted now.
+>
+> ## Model (core)
+>
+> **Orientation steps.** A Set Origin or a Rotate is an orientation step. `ActiveOriginIndex` (`core\CamJob.cpp:2211`) finds the nearest unsuppressed one of either kind; `WorkZeroIndex` stays the first unsuppressed Set Origin.
+>
+> **New `StepType::Rotate`** with `RotateSettings` (`core\Rotary.h/.cpp`, new):
+> - `angle` (degrees, absolute from the work zero, not relative to the step above);
+> - `originAfter`: `Keep` (the work zero turned about the axis, so the zero stays on it) or `TopOfStock` (that, moved along the new Z to the stock's highest point);
+> - shared `IndexSettings`: `retract` (Automatic, or a height above the axis) and `direction` (Shortest, Positive, Negative).
+> - Saved under `rotate`; `.cam` format version 18. Duplicate, suppress, delete, drag as other steps.
+>
+> **Set Origin additions** (`OriginDefinition`, `core\Origin.h:107`):
+> - **Centre** option on the Position pick: with a cylindrical face or circular edge the position goes onto its axis (the circle's centre, or the cylinder axis's point nearest the click). This is how the work zero is put on the rotary axis.
+> - Its own `IndexSettings` (used when it reorients).
+>
+> **Rotary solving** (`core\Rotary`):
+> - `RotaryAxisLine(job, machine)`: the work zero frame's origin, direction = the machine's `rotary` (-X/+X/-Y/+Y) in the work zero's axes.
+> - `FrameAt(job, stepIndex, stockPoints)` replaces the ~12 `BuildFrame(m_job.sequence[active].origin)` calls in `addon\CamTabCommand.cpp`: a Set Origin is `BuildFrame` as now; a Rotate is the work zero frame rotated by `angle` about the axis line, then moved to the top of stock if asked (`stockPoints` from `ReadStockShape`, as `HighestAlongZ` does).
+> - `SolveIndex(workZero, axis, frame)` -> angle or "unreachable": a 4th axis reaches a frame only if its Z, turned by some angle about the axis, is the work zero's Z (within 1e-6). X and position of a later origin are free: they only shape the toolpath, the post recomputes coordinates. A 3 axis machine reaches only angle 0. The answer goes in 0 to 360 then the post's direction rule picks the move.
+> - `IndexPlan` per operation: angle, retract height. Automatic retract = the stock's furthest point from the axis line + 5 mm, as a machine Z above the axis.
+> - Unreachable orientation steps get the tree's warning mark (`ShowWarnings`) and stop Post with a message naming them.
+>
+> ## Post (core\ScriptedPost, posts\)
+>
+> - `ReadPostScript` accepts `axes = 4` and a setting `rotary = A` (the word letter; Frank's router may call its Y-axis rotary A). Existing 3 axis posts unchanged.
+> - New sections `[index]` (written at an angle change: retract `{Z}`, then the rotary move `{A}`; clamp/unclamp lines are just text in it, Frank's override) and names `{A}`, `{ROTARY}`. A post without `[index]` refuses tilted operations as now.
+> - Coordinates: `place` (`ScriptedPost.cpp:381`) maps each point world -> work zero -> rotated by -angle about the axis, so moves are plain 3 axis in the indexed position. Arcs: the plane chosen after the rotation (existing `ArcFitting` logic).
+> - Direction: Shortest (default), Positive, Negative per orientation step; the post writes the target angle continuing past 360 when needed (no wrap modulo, so the machine turns the asked way).
+> - Retract: the step's height or Automatic, written in the work zero's Z (above the axis).
+> - `posts\LinuxCNC 4th axis.post`: a copy of LinuxCNC.post with `axes = 4`, `rotary = A`, `[index]` = `G0 Z{Z}` then `G0 A{A}`.
+> - `PseudoPost` (APT CL): adds a `ROTABL/` line at index changes.
+>
+> ## Simulation (core\Simulation, addon)
+>
+> - `SimOperation` gains the index before it (angle from, angle to, retract height, axis line). `Simulation::Start` adds index moves: up to the retract height along the old Z, then a swing about the axis in steps of at most 2 degrees, each a short move with the tool axis fixed for the step (voxels and tri-dexel already cut any axis), then down to the next operation's start as now.
+> - Swing moves are rapids, so the existing checks (rapid into stock, shank, holder, fixtures) warn when the retract is too low, unless Ignore collisions is ticked.
+> - The stock is still drawn fixed with the tool round it (geometrically the same cut). Time for a swing uses `Machine::rapidRate` as degrees a minute for now (a machine rotary rate later).
+>
+> ## UI (addon)
+>
+> - Add Rotate on the Operations and step menus beside Add Set Origin (`ID_CAM_ADD_ROTATE`), tree image `kImageRotate`, text `Rotate - A 90`.
+> - `addon\RotateDialog` (`CRotateDlg`, modal, `IDD_ROTATE`, ? button): Angle, Origin after rotation (Keep / Top of stock), Indexing group (Retract Automatic or height; Direction).
+> - `OriginDialog`: Centre check box by Position (on for round picks), and the same Indexing group; the result line shows the solved angle or "Not reachable on this machine".
+> - The origin drawing (`CamViewCommand`) draws the active frame from `FrameAt`, so a Rotate shows its rotated axes; the work zero on a 4 axis machine also draws the rotary axis line.
+> - Machine tab: no new fields now (axis direction exists).
+>
+> ## Files
+>
+> - New: `core\Rotary.h/.cpp`, `addon\RotateDialog.h/.cpp`, `posts\LinuxCNC 4th axis.post`, `tests\RotaryTests.cpp`.
+> - Changed: `core\CamJob` (StepType, save/load, ActiveOriginIndex), `core\Origin` (Centre), `core\ScriptedPost`, `core\PseudoPost`, `core\Simulation`, `addon\CamTabCommand` (FrameAt everywhere, menus, warnings, MakeSimOperation, Post), `addon\OriginDialog`, `addon\CamViewCommand`, `addon\resource.h`, `addon\CAMForAlibre.rc`, tree bitmaps, project files.
+> - Docs: help (Rotate dialog section, Set Origin Centre and Indexing, posts, simulation), `docs\SPEC.md` (indexing decisions, still differs from the Claude doc), `CLAUDE.md`, `TODO.md` (5 axis kinematics, tilted plane output, rotary rate, stock drawn turning).
+>
+> ## Stages
+>
+> 1. Model and UI: Rotate step, Centre, FrameAt, SolveIndex, warnings. Frank tests the frames in Alibre.
+> 2. Post: 4 axis posts, index output, coordinates.
+> 3. Simulation of index swings and collisions.
+>
+> ## Verification
+>
+> 1. Tests: FrameAt for Rotate (Keep, Top of stock) on +Y and +X axes; Centre picks; SolveIndex reachable/unreachable/3 axis; save/load v18 and older files; post output of a job with A0 and A90 folders (coordinates turned, `[index]` written, direction rules, retract automatic and set); a post without `[index]` refusing; simulation of an index with a low retract warning and a high one not.
+> 2. Full Release Rebuild (struct layouts change), `CamCoreTests.exe`, close Alibre, install, `python tools\BuildDiscussion.py`.
+> 3. Frank in Alibre: a round bar job on the 4th axis: Set Origin with Centre on the bar, a folder of operations, Rotate 90 Top of stock with operations, a Set Origin picking a side face (solved angle shown), an unreachable face (warning), Post with the 4th axis post and read the G-code, Simulate with a low retract to see the warning; the help.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> I'm reading the origin and job code now. Next I'll add the Rotate step and a single function that works out each step's frame, to replace the 12 places that build frames directly.
+
+> I'm checking how the Set Origin dialog filters what you can pick. Its Position pick will take a cylinder, which puts the zero on the cylinder's axis; that's the Centre option.
+
+> Now writing the core: settings for the Rotate step, then the rotary maths.
+
+> Writing the rotary maths in `core\Rotary.h` and `.cpp`.
+
+> Now saving and loading the Rotate step, and the indexing settings.
+
+> The core is in place: the Rotate step, the frame each step uses, solving the rotary angle, and Set Origin's Position taking a cylinder's centre. Next is the post, then the add-on.
+
+> Heredocs with quotes fail in this shell, as before, so I'm writing the edit script to a file instead.
+
+> The 4th axis post is in place. Now the add-on: menus, the tree, the Rotate dialog, and building every frame through one helper.
+
+> I'm switching every place in the add-on that builds a frame over to the new helper, so Rotate steps work for Generate, Simulate, Post and drawing.
+
+> Every frame in the add-on now goes through one helper. Next is the tree warning for steps the machine can't reach, then the Rotate menu and dialog.
+
+> Now the Set Origin dialog, which needs the same Indexing settings.
+
+> Writing the Rotate dialog, plus the shared Indexing group that the Set Origin dialog will also use.
+
+> The Set Origin dialog now has the Indexing group and shows the solved angle. Next I'm wiring the Rotate step into the tree menus and editing.
+
+> I'm drawing a tree icon for Rotate: a bar on its axis with a curved arrow.
+
+> The icon reads clearly at all three sizes. Now the tab code for the Rotate step.
+
+> The add-on wiring is done. Next I'll build to catch compile errors, then write tests and the simulation part.
+
+> The core builds cleanly. Now tests.
+
+> I'm writing tests for the Rotate step, angle solving, saving, and the 4th axis post. I'm fixing two details in them before building.
+
+> The new tests pass. Running the whole suite:
+
+> Only one failure: the Thread Milling save test expected file version 17, and it's now 18. I'll make it check at least 17.
+
+> Now the simulation: showing the swing between operations, so a retract that's too low shows up as a collision.
+
+> Now the part of the simulation that builds moves and cuts them.
+
+> Now filling in the swing for Simulate in the add-on, and drawing the tool along the swinging axis.
+
+> I made a sign mistake in the swing: seen from the stock, the tool turns the same way as the angle, not back. Fixing that, then a simulation test.
+
+> Adding the simulation tests to `RotaryTests.cpp`.
+
+> All 387 tests pass, including both stock models swinging round the rotary axis. Now building the add-on.
+
+> The add-on builds. Checking for any code that still assumes the active step is a Set Origin:
+
+> I'll draw the machine's rotary axis line along with the origin, so it's easy to see whether the work zero is on the bar's centre.
+
+> Now the docs. First, the help page's Set Origin section and the menu list:
+
+> Writing the help changes: the Rotate section, Set Origin's cylinder position and Indexing, the 4th axis post, the simulation's swing, and the tree and menu entries.
+
+> Now the spec's origin and 4th axis sections:
+
+> Next, `CLAUDE.md` and `TODO.md`.
+
+> Struct layouts changed (`SequenceStep`, `SimMove`, `SimOperation`), so I'm doing a full Release rebuild before testing and installing.
+
+> Alibre isn't running, so I'm installing now. It will ask for administrator rights.
+
+> The administrator prompt was cancelled, so the add-on isn't installed yet. I'll finish the turn and offer to install again.
+
+> I've built indexing for a 4th axis: a new Rotate step, Set Origins that turn the rotary axis, a 4th axis LinuxCNC post, and the turn shown in the simulation. All 387 tests pass after a full Release rebuild. It isn't installed yet, because the administrator prompt was cancelled. Nothing has been tried in Alibre and nothing is committed.
+>
+> **What's new**
+> - **Rotate step** (Add Rotate on the right-click menus). It turns the work about the rotary axis to an angle measured from the work zero. The origin then either stays on the axis (Keep) or moves out to the stock's highest point (Top of stock). A Set Origin below it can set the origin by hand instead.
+> - **Set Origin**:
+>   - **Position on a bar:** Position now accepts a cylindrical face, which puts the zero on the bar's axis. That's how the work zero goes onto the rotary axis.
+>   - **Rotary angle:** A later Set Origin can point Z any way that's square to the rotary axis. The dialog shows the rotary angle it needs, or why the machine can't reach it.
+> - **Indexing settings**, on both steps:
+>   - **Retract:** Automatic is the furthest the stock or any toolpath reaches from the axis, plus 5 mm; or you type a height.
+>   - **Turn direction:** shortest, positive or negative.
+> - **4th axis post** (`posts\LinuxCNC 4th axis.post`):
+>   - **At an angle change:** it writes `G0 Z…` then `G0 A…`, and clamp or unclamp lines can go in its `[index]` section.
+>   - **Moves:** every move is plain X, Y and Z from the one work zero.
+>   - **Refusals:** the 3 axis post still refuses tilted operations, and so does the 4 axis post when the machine has no rotary axis.
+> - **Simulation:** between two operations at different angles, the tool goes up to the retract height, then swings round the axis in 2° steps. If the retract is too low, it stops with "rapid into stock".
+> - **Tree and view:** a Rotate or Set Origin the machine can't reach gets the red warning mark. The rotary axis is drawn as an orange line through the work zero.
+>
+> **Choices of mine to check**
+> - A positive angle turns right-handed about the machine's Rotary axis direction. If your machine turns the other way for a positive A, pick the opposite direction (for example −Y instead of +Y) on the Machine tab.
+> - The program starts at A0, with the operator zeroing A on the work zero. An operation at the same angle as the one before writes no turn.
+> - I didn't add a separate Centre check box: picking a cylinder for Position does the same job.
+> - The swing is timed at the machine's Rapid rate.
+> - The APT CL post has no rotary output yet.
+>
+> All of this is in `TODO.md`. Also, the Thread Milling save test expected file version 17, so I changed it to accept 17 or later.
+>
+> **To test, after installing (close Alibre first)**
+> 1. On the Machine tab, set 4 axes and the rotary axis to +Y. Check that an orange axis line shows through the work zero.
+> 2. Make the work zero a Set Origin with Position on the bar's cylindrical face, then add a folder of operations.
+> 3. Add Rotate at 90° with Top of stock, plus a folder of operations. Check the tree shows "(90°, top of stock)", the origin is drawn turned, and Generate works.
+> 4. Add a Set Origin that picks a side face of the bar. Its result line should show the rotary angle.
+> 5. Pick a face that isn't square to the axis. It should get the red mark and say why.
+> 6. Post with "LinuxCNC (4th axis A router, mm)" and read the `G0 Z… / G0 A…` lines and the coordinates. Then try a set retract height and the Negative direction.
+> 7. Simulate across the turn, once with Automatic retract and once with a low retract height. The low one should stop with a warning.
+> 8. On a 3 axis machine, a Rotate should be marked, and posting a tilted operation should be refused.
+> 9. Check the help, which has changed: the Rotate section, Set Origin's Position and Indexing, Post, Simulation, Machine, the tree and the menus.
+
+### 🧑 Frank · 17:50
+
+> Install again
+
+### 🤖 Claude
+
+> The add-on is installed: the DLL is dated 17/11/2026 5:38 pm, and the posts folder now has `LinuxCNC 4th axis.post`. Start Alibre and work through the test list from my last message. Nothing is committed.
+
+### 🧑 Frank · 18:27
+
+> There's a problem with rotating 90 degrees. Facing 2 works, but the selected feature is being displayed at 90 degrees to the actual geometry.  "Facing 2 (copy)" shows the same problem, but will also not generate the toolpath - it complains the "the features don't enclose an area"
+
+### 🤖 Claude
+
+> The log hasn't been written since 14/11, so I'll work from the code. First, how the picked features are drawn:
+
+> Questions:
+> - "Rotate 180" turns to 180° from the work zero, not 90°+180° from the Rotate 90 above it. Which should a Rotate angle mean?
+>   - Relative (Recommended): Added to the orientation above it (the nearest Set Origin or Rotate): 90 then 180 gives 270. The tree shows the resulting absolute angle too, e.g. "Rotate 180 (+180° = 270°)".
+>   - Absolute, made clearer: Keep it from the work zero, but label it "Angle from the work zero" in the tree text and dialog, and warn at Generate when a feature is edge-on to the origin's Z.
+>   - Choice per step: A Relative / Absolute option on each Rotate step.
+> - For Facing 2 (under Rotate 90), what is drawn at 90° to the actual geometry?
+>   - Orange feature outline: The picked circle's outline (orange) is drawn turned, away from the real edge.
+>   - Toolpath: The facing passes are drawn turned from the face.
+>   - Origin axes / plane: The origin's axes or grid look wrong for that face.
+>   - Simulation: The simulated cut lands at 90° to the face.
+
+### 🧑 Frank · 18:42
+
+> Answers:
+> - turns to 180° from the work zero, not 90°+180° from the Rotate 90 above it. Which should a Rotate angle mean?
+>   **Absolute, made clearer**
+> - For Facing 2 (under Rotate 90), what is drawn at 90° to the actual geometry?
+>   **Orange feature outline**
+
+### 🤖 Claude
+
+> Now the clearer absolute angle, and a hint when Generate fails because picked faces or circles are edge-on to the origin's Z.
+
+> Now tests for both fixes:
+
+> All 389 tests pass. Now the docs:
+
+> Alibre isn't running, so I'm installing the fix:
+
+> You reported two problems, and they had different causes. Both are fixed and all 389 tests pass, but the install didn't happen: the administrator prompt was cancelled, so Alibre still has the 5:38 pm build. Nothing is committed.
+>
+> 1. **The orange outline turned 90° (a drawing bug).** The code that turns paths into points for drawing treated every arc as lying flat. Picked features are drawn in assembly coordinates, so Facing 2's circle, which faces +X, was drawn flat. Arcs about any other axis are now drawn in their own plane. Generate converts features into the origin's frame first, which is why Facing 2 still generated correctly.
+>
+> 2. **Facing 2 (copy) wouldn't generate (the angle, as designed).** A Rotate angle is measured from the work zero, so "Rotate 180" points Z straight down rather than to 90° + 180°. Facing 2 (copy)'s circle faces −X, so seen down that Z it's edge-on, a line, which encloses no area. Set that Rotate to **270** (or −90). As you chose, angles stay absolute but are now clearer:
+>    - The tree shows "Rotate 180 (180° from the work zero)".
+>    - The dialog's label says the angle is from the work zero, not the Rotate above.
+>    - When Generate fails, it adds that the picked faces or circles are edge-on to the Z of the Set Origin or Rotate above, and to check the angle.
+>
+> The help, spec and `CLAUDE.md` are updated.
+>
+> **To test after installing:**
+> 1. Select Facing 2. The orange circle should sit on the +X side face.
+> 2. Check that the Rotate steps' tree text now reads "(… from the work zero)".
+> 3. Generate Facing 2 (copy) under Rotate 180. The error should now include the edge-on hint.
+> 4. Change that Rotate to 270 and generate again. It should work, and the post should write `A270`, or `A-90` from 90 the shortest way.
+> 5. Check the help's Rotate Angle entry.
+
+### 🧑 Frank · 18:47
+
+> Install again
+
 ---
 
 # Side conversation

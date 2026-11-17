@@ -232,6 +232,7 @@
 #define IDD_MATERIAL                    13050
 #define IDD_FIXTURES                    13051
 #define IDD_OP_THREAD_MILLING           13052
+#define IDD_ROTATE                      13053
 #define IDC_VIEW_SMALL                  13296
 #define IDC_VIEW_MEDIUM                 13297
 #define IDC_VIEW_LARGE                  13298
@@ -475,6 +476,15 @@
 #define IDC_TM_SPRING                   13551
 #define IDC_TM_APPROACH                 13552
 #define IDC_TM_SIZES                    13553
+#define IDC_ROTATE_NAME                 13554
+#define IDC_ROTATE_ANGLE                13555
+#define IDC_ROTATE_KEEP                 13556
+#define IDC_ROTATE_TOP                  13557
+#define IDC_ROTATE_RESULT               13558
+#define IDC_INDEX_AUTO_RETRACT          13559
+#define IDC_INDEX_RETRACT               13560
+#define IDC_INDEX_DIRECTION             13561
+#define IDC_INDEX_RETRACT_LABEL         13562
 #define IDC_MATDLG_TYPICAL              13524
 #define IDC_MATDLG_APPLY                13525
 #define IDC_CHOOSE_MATERIAL_LIST        13489
@@ -525,9 +535,9 @@
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        13053
+#define _APS_NEXT_RESOURCE_VALUE        13054
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13554
+#define _APS_NEXT_CONTROL_VALUE         13563
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

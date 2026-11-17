@@ -179,7 +179,7 @@ TEST_CASE("a thread milling step saves and loads")
     REQUIRE(SaveJob(job, file.Path()).ok);
     const LoadResult loaded = LoadJob(file.Path());
     REQUIRE(loaded.status == LoadStatus::Ok);
-    CHECK(loaded.fileVersion == 17);
+    CHECK(loaded.fileVersion >= 17);
     REQUIRE(loaded.job.sequence.size() == 2);
     REQUIRE(loaded.job.sequence[1].children.size() == 1);
     const SequenceStep& back = loaded.job.sequence[1].children[0];

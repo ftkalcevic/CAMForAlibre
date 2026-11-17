@@ -1,0 +1,78 @@
+; LinuxCNC post for CAMForAlibre: a router with a rotary 4th axis (A), in millimetres, with manual
+; tool changes. Set A to 0 with the work zero on the rotary axis before running it.
+;
+; Lines starting with a semicolon are notes and aren't written. Each [section]
+; is written at its point in the program, filling in {...}: the name is the
+; capitals at the end of the braces, and anything before it is written in front
+; of the value. X, Y, Z and F are written only when they change, and a G0 or G1
+; that would move nothing is left out. See core\ScriptedPost.h for every name.
+;
+; To change it for your machine, copy this file to %APPDATA%\CAMForAlibre\posts\
+; and edit the copy: a post there replaces one of the same file name here.
+
+[settings]
+name = LinuxCNC (4th axis A router, mm)
+extension = ngc
+axes = 4
+rotary = A
+decimals = 4
+feed decimals = 0
+trim zeros = yes
+line numbers = no
+
+[program start]
+%
+({PROGRAM})
+(Posted by CAMForAlibre on {DATE})
+G21 G90 G17 G94 G40 G49 G80
+G64 P0.01
+
+; LinuxCNC's manual tool change asks for the tool, then carries on.
+[tool change]
+M5
+T{TOOL} M6
+({TOOLNAME}, {TOOLDIA} mm)
+
+[operation start]
+({OPERATION})
+S{SPINDLE} M3
+
+[rapid]
+G0{ X}{ Y}{ Z}
+
+[feed]
+G1{ X}{ Y}{ Z}{ F}
+
+; I, J and K are the arc's centre from where it starts: I J in XY, I K in ZX,
+; J K in YZ. Z changing in XY makes a helix.
+[arc cw]
+G2{ X}{ Y}{ Z}{ I}{ J}{ K}{ F}
+
+[arc ccw]
+G3{ X}{ Y}{ Z}{ I}{ J}{ K}{ F}
+
+; The arc plane, written before an arc in a different plane from the last.
+[plane xy]
+G17
+
+[plane zx]
+G18
+
+[plane yz]
+G19
+
+[dwell]
+G4 P{SECONDS}
+
+; Before an operation at a different rotary angle: up to Z (clear of the stock round
+; the axis), then turn. Clamp and unclamp lines would go round the A move.
+[index]
+G0{ Z}
+G0{ A}
+
+[operation end]
+
+[program end]
+M5
+M30
+%

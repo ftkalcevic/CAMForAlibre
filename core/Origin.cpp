@@ -89,6 +89,16 @@ namespace camcore
             position = pick.point;
             return true;
 
+        case PickKind::CylindricalFace:
+        {
+            // The centre: the point on its axis level with the click, as for a 4th axis.
+            Vec3 axis;
+            if (!Normalise(pick.direction, axis))
+                return false;
+            position = pick.point + axis * Dot(pick.clicked - pick.point, axis);
+            return true;
+        }
+
         default:
             return false;
         }
@@ -112,9 +122,9 @@ namespace camcore
         if (definition.position.kind != PickKind::None)
         {
             if (!PositionFromPick(definition.position, position))
-                return Failure("The position must be an edge or a design point.");
+                return Failure("The position must be an edge, a cylindrical face or a design point.");
         }
-        else if (!PositionFromPick(plane, position))
+        else if (plane.kind == PickKind::CylindricalFace || !PositionFromPick(plane, position))
         {
             return Failure("Pick an edge or a design point for the position.");
         }

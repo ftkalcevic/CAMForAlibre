@@ -132,7 +132,7 @@ The geometry method follows these rules:
 - **Z from a cylindrical face:** Z is the cylinder's axis. This suits 4th-axis work.
 - **Z from a circular edge:** Z is the circle's axis, pointing out of the material when the edge borders a flat face square to that axis. A circular edge also gives its centre as the position.
 - **Z from a straight edge:** Z runs along the edge.
-- **Position:** An edge or a design point picked for the position. If none is picked, the plane pick supplies it when it's an edge. A face, design plane or design axis alone gives no position.
+- **Position:** An edge, a cylindrical face or a design point picked for the position. A cylindrical face gives the point on its axis level with the click, its centre there (decided: this is how the work zero is put on a 4th axis bar). If none is picked, the plane pick supplies it when it's an edge. A face (a cylindrical one too), design plane or design axis picked for the plane alone gives no position.
 - **X from an edge:** A straight edge, projected onto the XY plane, pointing away from the end nearer the click, or a design axis, projected the same way and pointing along its own direction. One too close to the tool axis is refused. **Design items:** Alibre's own planes, axes and points (such as XY-Plane, X-Axis and Origin) and the user's can also be picked, in the assembly or on a part: a design plane sets Z along its normal and a design axis along its direction (Flip Z reverses either), a design point sets the position, and a design axis sets X. They have no persistent key, so they're stored by name with the geometry read when picked; renaming one means picking it again.
 - **Calculated X:** Assembly X projected onto the XY plane. If that is within about 6 degrees of the tool axis, assembly Y is used instead.
 - **Adjustments:** Flip Z, turn X about Z in 90 degree steps, and offset the origin along its own X, Y, and Z axes in millimetres. The offset is applied last.
@@ -141,14 +141,18 @@ The geometry method follows these rules:
 
 - **Changes:** If the source geometry or stock changes, the origin and every operation that depends on it are marked out of date.
 - **Deleted geometry:** If the source geometry is deleted, the origin is marked as needing repair, and its operations can't be posted until it's fixed.
-- **Reachability:** Each origin is checked against the machine definition. An origin the machine can't reach is marked invalid, and its operations can't be posted.
-- **Multiple solutions:** Where more than one rotary solution exists, a rule or user choice selects one.
+- **Reachability (decided, built for 3 and 4 axes):** Each Set Origin and Rotate is checked against the machine (`SolveIndex`): on 3 axes its Z must be the work zero's; on a 4th axis its Z must be square to the rotary axis, and the angle that turns the work zero's Z to it (0 to 360) is its rotary angle. Its X and position are free, as they only shape the toolpaths; the post works every point out from the work zero. One the machine can't reach gets the tree's warning mark, and the post refuses its operations by name.
+- **Rotate steps (decided, Frank's choice of both ways):** A Rotate step turns the work about the machine's rotary axis to an angle from the work zero (-360 to 360, absolute, not from the step above; Frank kept it absolute after a Rotate 180 under a Rotate 90 surprised him, and asked for it to be made clearer: the tree says "from the work zero", and Generate says when picked faces or circles are edge-on to the origin's Z), for the steps below it like a Set Origin. Its origin is the work zero turned about the axis (Keep, still on the axis) or that moved out along the turned Z to the stock's highest point (Top of stock). A Set Origin below it can set the origin by hand instead (Frank's: "manual rotate, and manual reset of the origin"). It needs a 4 axis machine and a work zero. Saved as `rotate` with `angle` and `originAfter` (`.cam` format version 18).
+- **The rotary axis (decided):** It runs through the work zero (the first unsuppressed Set Origin), along the work zero's -X, +X, -Y or +Y as the machine says. A positive angle turns the tool, seen from the work, right-handed about that direction (as A about +X). Set Origin's Position can pick the bar's cylindrical face to put the work zero on the axis. It's drawn through the work zero with the origin.
+- **Indexing (decided, Frank's overrides):** Each Set Origin and Rotate has Indexing settings (saved as `index`): Automatic retract (the stock's, and the posted or simulated toolpaths', furthest from the axis plus 5 mm) or a height above the axis, and the turn: Shortest (half a turn goes positive), Positive or Negative, the written angle carrying on past 360 or below 0. Clamp and unclamp codes are lines in the post's `[index]` section.
+- **Multiple solutions:** A 4th axis has one angle for each reachable Z. For 5 axes, a rule or user choice will select one (later).
+- **Tilted plane output (G68.2, CYCLE800 and the like):** Not used (Frank's choice for now): the post calculates coordinates itself, which LinuxCNC needs. It could be a post option for controls that have it.
 - **Future support:** Each toolpath stores a tool axis, which stays constant within an operation in version 1. This leaves room for simultaneous motion later.
 
 | Machine configuration | Valid origins | Rotary output |
 | --- | --- | --- |
 | 3-axis | Z axis aligned with machine Z | None |
-| With 4th axis | Z axis reachable by rotating the one rotary axis | Indexed 4th-axis move between operations |
+| With 4th axis (built) | Z axis reachable by rotating the one rotary axis | Indexed 4th-axis move between operations |
 | Later 5-axis machine | Z axis reachable using both rotary axes | Indexed moves on both axes |
 
 ## Operations and groups
@@ -262,7 +266,7 @@ Machines are configurable, and each one uses a post written in a simple template
 
 - **Machine definition:** Axes, travel limits, rotary setup, spindle limits, and which post to use. Rotary setup defines each rotary axis's orientation, which can be along any direction. Built so far: the name, 3 or 4 axes, the rotary axis along -X, +X, -Y or +Y, the travel along X, Y and Z in mm (defaults 600, 400 and 100), and the spindle's maximum speed in RPM (default 24,000), each more than 0; machine files are format version 2, and version 1 files get the defaults. They aren't used to check toolpaths or speeds yet, and the post choice is still to come.
 - **Post file:** How motion and machine events are written as G-code. It maps events to templates, with number formatting and a few simple conditions.
-- **Orientation changes:** The post outputs a safe retract and rotary move, then continues with 3-axis motion.
+- **Orientation changes:** The post outputs a safe retract and rotary move, then continues with 3-axis motion. Built: a post with `axes = 4` names its rotary word (`rotary = A`, B or C) and must have an `[index]` section, written before an operation at a different angle (the program starts at 0) with `{Z}` the retract height above the axis and `{A}` the angle; `posts\LinuxCNC 4th axis.post` writes `G0 Z..` then `G0 A..`. Every point is the work zero's, turned back by the angle about the axis. A 3 axis post, or a 4 axis post with a machine that has no rotary axis, refuses tilted operations. The simulation shows each turn: up along the last operation's axis to the retract height, then a swing round the axis at rapid in 2 degree steps, the tool tilting with it, so a low retract stops it with a rapid into stock (decided).
 - **First post:** It calculates coordinates for the active rotary position, and doesn't rely on tilted-plane commands.
 - **True 3+2 testing:** The first machine has at most one rotary axis, so this needs a two-rotary machine definition and simulated output.
 - **Tool changes:** The first router uses manual tool changes and a touch plate. For now, the post handles this, so the add-on doesn't need its own tool-change or touch-plate logic. The LinuxCNC post writes just M5 and T<n> M6 at a tool change; touching off is left to the operator.
@@ -399,7 +403,7 @@ The proposed build order proves the whole route to G-code early:
 5. Machine, post language, and stock, through to G-code that can be cut on the router.
 6. Facing, Contour, and Pocket.
 7. Groups, out-of-date marking, and repair.
-8. Indexed 4th axis.
+8. Indexed 4th axis. Built: Rotate steps, solved Set Origins, the 4 axis post and the simulated turn. Then 5 axes.
 
 The `.cam` file uses JSON with a format version number. `CamCore` uses these external libraries, each pinned to a release tag and copied into `third_party\` with its licence:
 

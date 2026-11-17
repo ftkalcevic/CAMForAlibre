@@ -16,6 +16,7 @@
 #include "GeometryReader.h"
 #include "Machine.h"
 #include "Materials.h"
+#include "Rotary.h"
 #include "OperationDialog.h"
 #include "OriginDialog.h"
 #include "ProgramSettings.h"
@@ -99,6 +100,11 @@ public:
     // The operation sequence
     void AddSetOrigin();
     void AddFixtures();
+    void AddRotateStep();
+    void EditRotate(const camcore::SequenceStep& step, size_t editIndex);
+
+    // Which way the machine's rotary axis runs, for the Rotate dialog.
+    std::wstring RotaryAxisText() const;
     void AddFolder();
     void AddOperation(size_t folder, camcore::StepType type);
     bool CanAddFolder() const;
@@ -194,6 +200,27 @@ public:
     void BeginFeatureSelect();
     void EndFeatureSelect();
     bool GetOperationFrame(camcore::Frame& frame) const;
+
+    // The machine's axes and the stock, for frames and indexing.
+    camcore::OrientationContext Orientation() const;
+
+    // The frame a step runs under (its Set Origin or Rotate). Rotates that put the
+    // origin on top of the stock use the stock read by EnsureStockShape.
+    camcore::FrameResult FrameOf(size_t stepIndex) const;
+
+    // Reads the job's stock's edges and points if they aren't up to date.
+    void EnsureStockShape();
+
+    // The IDs of Set Origin and Rotate steps whose frame can't be made, or that
+    // the machine can't reach (a tilted one on 3 axes, or one not square to the
+    // rotary axis), each with the reason.
+    std::map<std::string, std::string> UnreachableOrientationReasons() const;
+    std::vector<std::string> UnreachableOrientations() const;
+
+    // For the Set Origin dialog: the rotary angle its frame needs, or why the
+    // machine can't reach it. Empty when there's nothing to say (a 3 axis
+    // machine cutting along the work zero's Z).
+    std::wstring OriginIndexText(const camcore::Frame& frame) const;
     const camcore::ToolLibrary& GetToolLibrary() const { return m_library; }
 
     // Shows the rows chosen in the Features list in the view.
@@ -395,6 +422,7 @@ private:
     bool m_stockShapeValid;
     bool m_stockUnreadable;         // the job's stock couldn't be read when last drawn
     std::vector<camcore::LineSegment> m_stockEdges;
+    std::vector<camcore::Vec3> m_stockPoints;      // its corners or facets, with the edges
     std::string m_stockFacetsPath;                  // the imported part m_stockPartEdges came from
     std::vector<camcore::LineSegment> m_stockPartEdges;     // in the part's own coordinates, mm
     std::vector<camcore::Vec3> m_stockPartPoints;

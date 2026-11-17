@@ -21,6 +21,7 @@
 #include "SettingsDialog.h"
 #include "StockDialog.h"
 #include "FixturesDialog.h"
+#include "RotateDialog.h"
 #include "SimulationDialog.h"
 #include "ProgressDialog.h"
 #include "PseudoPost.h"
@@ -75,6 +76,7 @@ namespace
 
         // Tree menu commands
         ID_CAM_ADD_ORIGIN,
+        ID_CAM_ADD_ROTATE,
         ID_CAM_ADD_FIXTURES,
         ID_CAM_ADD_FOLDER,
         ID_CAM_ADD_DRILL,
@@ -1376,6 +1378,80 @@ void CCamTabCommand::AddFixtures()
     OpenFixturesDialog(step, kNewStep);
 }
 
+void CCamTabCommand::AddRotateStep()
+{
+    AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+    // The sequence starts with a Set Origin, the work zero a Rotate turns about.
+    if (!CanAddFolder() || FocusOpenDialog())
+        return;
+
+    camcore::SequenceStep step;
+    step.type = camcore::StepType::Rotate;
+    step.id = camcore::NewStableId();
+    step.name = NewStepName(m_job, "Rotate");
+    EditRotate(step, kNewStep);
+}
+
+std::wstring CCamTabCommand::RotaryAxisText() const
+{
+    if (m_machine.axes != 4)
+        return L"The job's machine has no rotary axis, so this can't be cut until it has one (Machine tab).";
+    return L"The machine's rotary axis runs along the work zero's " + FromUtf8(camcore::RotaryAxisName(m_machine.rotary)) +
+           L", through it. A positive angle turns right-handed about that direction.";
+}
+
+void CCamTabCommand::EditRotate(const camcore::SequenceStep& step, size_t editIndex)
+{
+    CRotateDlg dialog(step, RotaryAxisText(), m_pWnd);
+    if (dialog.DoModal() != IDOK || !CanEditSequence())
+        return;
+
+    const camcore::SequenceStep& edited = dialog.GetStep();
+    if (editIndex == kNewStep)
+    {
+        m_job.sequence.push_back(edited);
+        m_selected = StepRef{ m_job.sequence.size() - 1 };
+    }
+    else if (editIndex < m_job.sequence.size())
+    {
+        m_job.sequence[editIndex] = edited;
+        m_selected = StepRef{ editIndex };
+    }
+    else
+    {
+        return;
+    }
+    Log(L"[rotate] applied %s: %g degrees", FromUtf8(edited.name).c_str(), edited.rotate.angle);
+    MarkJobChanged();
+    ShowSequence();
+    RebuildScene();
+}
+
+std::wstring CCamTabCommand::OriginIndexText(const camcore::Frame& frame) const
+{
+    // The step being edited is the work zero if it's the first unsuppressed Set
+    // Origin, or a new one in a job that has none.
+    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+    const bool isZero = (zeroIndex == camcore::kNoStepIndex) || (m_editIndex == zeroIndex);
+    if (isZero)
+    {
+        return (m_machine.axes == 4) ? L"The work zero: put it on the rotary axis (pick a cylinder for Position)."
+                                     : std::wstring();
+    }
+    const camcore::FrameResult zero = camcore::BuildFrame(m_job.sequence[zeroIndex].origin);
+    if (!zero.ok)
+        return std::wstring();
+    const camcore::IndexSolution solution = camcore::SolveIndex(zero.frame, Orientation(), frame);
+    if (!solution.ok)
+        return L"Not reachable on this machine: " + FromUtf8(solution.message);
+    if (m_machine.axes != 4)
+        return std::wstring();
+    wchar_t text[64];
+    swprintf_s(text, L"Rotary angle %g\u00B0", std::round(solution.angle * 1000.0) / 1000.0);
+    return text;
+}
+
 bool CCamTabCommand::CanAddFolder() const
 {
     // The sequence must start with a Set Origin, and folders can't hold one.
@@ -1487,6 +1563,8 @@ void CCamTabCommand::EditStep(const StepRef& ref)
 
     if (pStep->type == camcore::StepType::SetOrigin)
         OpenOriginDialog(*pStep, ref.step);
+    else if (pStep->type == camcore::StepType::Rotate)
+        EditRotate(*pStep, ref.step);
     else if (pStep->type == camcore::StepType::Fixtures)
         OpenFixturesDialog(*pStep, ref.step);
     else if (camcore::IsOperation(pStep->type))
@@ -1758,10 +1836,7 @@ bool CCamTabCommand::MakeSimOperation(const StepRef& ref, camcore::SimOperation&
     const camcore::SequenceStep* pStep = const_cast<CCamTabCommand*>(this)->FindStep(ref);
     if (pStep == nullptr)
         return false;
-    const size_t active = camcore::ActiveOriginIndex(m_job, ref.step);
-    const camcore::FrameResult frame = (active != camcore::kNoStepIndex)
-                                           ? camcore::BuildFrame(m_job.sequence[active].origin)
-                                           : camcore::FrameResult();
+    const camcore::FrameResult frame = FrameOf(ref.step);
     const camcore::Tool* pTool = camcore::FindToolById(m_library, pStep->toolId);
     if (pStep->toolpath.moves.empty() || !frame.ok || pTool == nullptr)
         return false;
@@ -1883,6 +1958,7 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
         return x.step < y.step || (x.step == y.step && x.child < y.child);
     });
     std::vector<camcore::SimOperation> operations;
+    std::vector<StepRef> included;      // each operation's step
     std::wstring leftOut;
     m_fixtureRuns.clear();
     for (const StepRef& ref : refs)
@@ -1908,8 +1984,46 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
         }
         operation.fixtures = fixtures.grids;
         operations.push_back(std::move(operation));
+        included.push_back(ref);
     }
     m_fixtureRuns.clear();
+
+    // On a 4 axis machine, the rotary axis turns between operations as the post
+    // turns it: up to the retract height, then round.
+    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+    if (m_machine.axes == 4 && zeroIndex != camcore::kNoStepIndex && !operations.empty())
+    {
+        const camcore::FrameResult zero = camcore::BuildFrame(m_job.sequence[zeroIndex].origin);
+        if (zero.ok)
+        {
+            EnsureStockShape();
+            std::vector<camcore::PostOperation> entries(operations.size());
+            for (size_t i = 0; i < operations.size(); ++i)
+            {
+                entries[i].operation = FindStep(included[i]);
+                const size_t active = camcore::ActiveOriginIndex(m_job, included[i].step);
+                if (active != camcore::kNoStepIndex)
+                    entries[i].origin = &m_job.sequence[active];
+                entries[i].frame = operations[i].frame;
+            }
+            const camcore::IndexPlan plan = camcore::PlanIndexes(zero.frame, Orientation(), entries);
+            for (size_t i = 0; i < operations.size(); ++i)
+            {
+                const camcore::IndexMove& move = plan.moves[i];
+                if (!move.turn)
+                    continue;
+                camcore::SimIndex& index = operations[i].index;
+                index.present = true;
+                index.axisPoint = zero.frame.origin;
+                index.axisDirection = camcore::RotaryAxisDirection(zero.frame, m_machine.rotary);
+                index.from = move.from;
+                index.to = move.to;
+                index.retract = move.retract;
+            }
+            if (!plan.ok)
+                Log(L"[simulate] not reachable on the rotary axis:%s", FromUtf8(plan.unreachable).c_str());
+        }
+    }
 
     // Each Fixtures step's parts, meshed once, to draw over the stock.
     m_simulationFixtureMeshes.clear();
@@ -2148,7 +2262,7 @@ void CCamTabCommand::UpdateSimulationScene()
     if (pOperation != nullptr)
     {
         m_scene.simTip = m_simulation.ToolTip();
-        m_scene.simAxis = pOperation->frame.zAxis;
+        m_scene.simAxis = m_simulation.ToolAxis();
         m_scene.simProfile = pOperation->profile;
         m_scene.simHolder = pOperation->holder;
         m_scene.simShank = pOperation->shank;
@@ -2223,6 +2337,7 @@ void CCamTabCommand::GenerateTargets(const std::vector<StepRef>& targets)
 {
     // The clearance plane can depend on the parts' size, which may have changed.
     ReadModelSize();
+    EnsureStockShape();
     m_fixtureRuns.clear();
     m_generateWarnings.clear();
 
@@ -2245,6 +2360,9 @@ void CCamTabCommand::GenerateTargets(const std::vector<StepRef>& targets)
             else
             {
                 operation.toolpath = camcore::Toolpath();
+                const camcore::FrameResult frame = FrameOf(target.step);
+                if (frame.ok)
+                    problem += camcore::EdgeOnFeaturesText(operation.features, frame.frame);
                 problems += L"\n" + FromUtf8(operation.name) + L": " + FromUtf8(problem);
             }
             Log(L"[generate] %s: %s", FromUtf8(operation.name).c_str(),
@@ -2307,6 +2425,7 @@ void CCamTabCommand::Post(const StepRef& scope)
 
     if (!CanGenerate())
         return;
+    EnsureStockShape();
 
     const std::vector<StepRef> targets = OperationsIn(scope, true);
     if (targets.empty())
@@ -2386,9 +2505,13 @@ void CCamTabCommand::Post(const StepRef& scope)
         if (active != camcore::kNoStepIndex)
         {
             entry.origin = &m_job.sequence[active];
-            const camcore::FrameResult frame = camcore::BuildFrame(entry.origin->origin);
-            if (frame.ok)
-                entry.frame = frame.frame;
+            const camcore::FrameResult frame = FrameOf(target.step);
+            if (!frame.ok)
+            {
+                ShowError(L"Fix " + FromUtf8(entry.origin->name) + L" before posting: " + FromUtf8(frame.message));
+                return;
+            }
+            entry.frame = frame.frame;
         }
 
         if (const camcore::Tool* pTool = camcore::FindToolById(m_library, entry.operation->toolId))
@@ -2426,7 +2549,7 @@ void CCamTabCommand::Post(const StepRef& scope)
         std::snprintf(date, sizeof(date), "%04u-%02u-%02u", now.wYear, now.wMonth, now.wDay);
         const camcore::PostOutput posted =
             camcore::WriteScriptedPost(read.script, m_job.assembly.name, workZero.frame, entries, date,
-                                       m_machine.arcs);
+                                       m_machine.arcs, Orientation());
         if (!posted.ok)
         {
             ShowError(FromUtf8(posted.problem));
@@ -2461,8 +2584,7 @@ bool CCamTabCommand::GenerateOperation(const StepRef& target, std::string& probl
     camcore::FixtureTool fixtureTool;
     if (haveFixtures)
     {
-        const size_t active = camcore::ActiveOriginIndex(m_job, target.step);
-        frame = camcore::BuildFrame(m_job.sequence[active].origin).frame;
+        frame = FrameOf(target.step).frame;
         if (const camcore::Tool* pTool = camcore::FindToolById(m_library, operation.toolId))
             fixtureTool = camcore::FixtureToolOf(camcore::ToolInMillimetres(*pTool), m_machine.holderDiameter,
                                                  m_machine.holderDepth);
@@ -2526,8 +2648,7 @@ bool CCamTabCommand::GenerateOperation(const StepRef& target, std::string& probl
     {
         if (!haveFixtures)
         {
-            const size_t active = camcore::ActiveOriginIndex(m_job, target.step);
-            frame = camcore::BuildFrame(m_job.sequence[active].origin).frame;
+            frame = FrameOf(target.step).frame;
         }
         CheckThreadHoles(target, frame);
     }
@@ -2595,13 +2716,10 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
         return false;
     }
 
-    const size_t active = camcore::ActiveOriginIndex(m_job, target.step);
-    const camcore::FrameResult frame = (active != camcore::kNoStepIndex)
-                                           ? camcore::BuildFrame(m_job.sequence[active].origin)
-                                           : camcore::FrameResult();
+    const camcore::FrameResult frame = FrameOf(target.step);
     if (!frame.ok)
     {
-        problem = "There's no complete Set Origin above its folder.";
+        problem = "There's no complete Set Origin or Rotate above its folder: " + frame.message;
         return false;
     }
 
@@ -3585,6 +3703,7 @@ void CCamTabCommand::OnOperationDialogGenerate(COperationDlg* pDialog)
 
     // The clearance plane can depend on the parts' size, which may have changed.
     ReadModelSize();
+    EnsureStockShape();
     m_fixtureRuns.clear();
     m_generateWarnings.clear();
 
@@ -3600,7 +3719,12 @@ void CCamTabCommand::OnOperationDialogGenerate(COperationDlg* pDialog)
     }
     camcore::SequenceStep& operation = m_job.sequence[m_operationTarget.step].children[m_operationTarget.child];
     if (!ok)
+    {
         operation.toolpath = camcore::Toolpath();
+        const camcore::FrameResult frame = FrameOf(m_operationTarget.step);
+        if (frame.ok)
+            problem += camcore::EdgeOnFeaturesText(operation.features, frame.frame);
+    }
     const std::wstring name = FromUtf8(operation.name);
     Log(L"[generate] %s from its dialog: %s", name.c_str(), ok ? L"ok" : FromUtf8(problem).c_str());
 
@@ -3779,6 +3903,8 @@ void CCamTabCommand::UpdateTreeWarnings()
     const bool material = !m_job.materialId.empty() && camcore::FindMaterial(m_materials, m_job.materialId) == nullptr;
     std::set<std::string> warnIds = m_warnedOperations;
     warnIds.insert(m_fixtureMissing.begin(), m_fixtureMissing.end());
+    for (const std::string& id : UnreachableOrientations())
+        warnIds.insert(id);
     m_pWnd->ShowWarnings(m_job, machine, material, HasStock() && m_stockUnreadable, warnIds);
 }
 
@@ -3789,21 +3915,11 @@ void CCamTabCommand::RebuildScene()
 
     // While the dialog is open it shows its own step. Otherwise the selected
     // step shows the origin it runs under.
-    const camcore::OriginDefinition* pDefinition = nullptr;
-    if (m_pOriginDlg != nullptr)
+    if (m_pPartBoxDlg == nullptr)
+        EnsureStockShape();
     {
-        pDefinition = &m_pOriginDlg->GetStep().origin;
-    }
-    else
-    {
-        const size_t active = camcore::ActiveOriginIndex(m_job, m_selected.step);
-        if (active != camcore::kNoStepIndex)
-            pDefinition = &m_job.sequence[active].origin;
-    }
-
-    if (pDefinition != nullptr)
-    {
-        const camcore::FrameResult result = camcore::BuildFrame(*pDefinition);
+        const camcore::FrameResult result = (m_pOriginDlg != nullptr) ? camcore::BuildFrame(m_pOriginDlg->GetStep().origin)
+                                                                      : FrameOf(m_selected.step);
         if (result.ok)
         {
             const camcore::Vec3 lower = m_haveBounds ? m_boundsLower : result.frame.origin;
@@ -3811,6 +3927,35 @@ void CCamTabCommand::RebuildScene()
             m_scene.origin = result.frame;
             m_scene.plane = camcore::PlaneCoveringBox(result.frame, lower, upper, kOriginPlaneMargin);
             m_scene.hasOrigin = true;
+        }
+
+        // The rotary axis, through the work zero, as long as the parts (and the
+        // stock's points) reach along it, plus 10 mm each end.
+        m_scene.hasRotaryAxis = false;
+        const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+        const camcore::FrameResult zero = (m_machine.axes == 4 && zeroIndex != camcore::kNoStepIndex)
+                                              ? camcore::BuildFrame(m_job.sequence[zeroIndex].origin)
+                                              : camcore::FrameResult();
+        if (zero.ok)
+        {
+            const camcore::Vec3 direction = camcore::RotaryAxisDirection(zero.frame, m_machine.rotary);
+            double low = -10.0, high = 10.0;
+            std::vector<camcore::Vec3> reach = m_stockPoints;
+            if (m_haveBounds)
+            {
+                for (int i = 0; i < 8; ++i)
+                    reach.push_back({ (i & 1) ? m_boundsUpper.x : m_boundsLower.x,
+                                      (i & 2) ? m_boundsUpper.y : m_boundsLower.y,
+                                      (i & 4) ? m_boundsUpper.z : m_boundsLower.z });
+            }
+            for (const camcore::Vec3& point : reach)
+            {
+                const double along = camcore::Dot(point - zero.frame.origin, direction);
+                low = (std::min)(low, along - 10.0);
+                high = (std::max)(high, along + 10.0);
+            }
+            m_scene.rotaryAxis = { zero.frame.origin + direction * low, zero.frame.origin + direction * high };
+            m_scene.hasRotaryAxis = true;
         }
     }
 
@@ -3840,16 +3985,7 @@ void CCamTabCommand::RebuildScene()
     }
     else
     {
-        if (!m_stockShapeValid)
-        {
-            camcore::StockBox box;
-            std::wstring problem;
-            m_stockEdges.clear();
-            m_stockUnreadable = HasStock() && !ReadStockShape(m_job.stock, m_stockEdges, box, problem);
-            if (m_stockUnreadable)
-                Log(L"[stock] %s", problem.c_str());
-            m_stockShapeValid = true;
-        }
+        EnsureStockShape();
         m_scene.stockEdges = m_stockEdges;
     }
 
@@ -3904,10 +4040,9 @@ void CCamTabCommand::RebuildScene()
     m_scene.boundaries.clear();
     for (size_t i = 0; i < m_job.sequence.size(); ++i)
     {
-        const size_t active = camcore::ActiveOriginIndex(m_job, i);
-        const camcore::FrameResult frame = (active != camcore::kNoStepIndex)
-                                               ? camcore::BuildFrame(m_job.sequence[active].origin)
-                                               : camcore::FrameResult();
+        if (m_job.sequence[i].children.empty())
+            continue;
+        const camcore::FrameResult frame = FrameOf(i);
         if (!frame.ok)
             continue;
 
@@ -4139,10 +4274,75 @@ bool CCamTabCommand::GetOperationFrame(camcore::Frame& frame) const
             return false;
     }
 
-    const camcore::FrameResult result = camcore::BuildFrame(m_job.sequence[active].origin);
+    const camcore::FrameResult result = FrameOf(active);
     if (result.ok)
         frame = result.frame;
     return result.ok;
+}
+
+void CCamTabCommand::EnsureStockShape()
+{
+    if (m_stockShapeValid)
+        return;
+    camcore::StockBox box;
+    std::wstring problem;
+    m_stockEdges.clear();
+    m_stockPoints.clear();
+    m_stockUnreadable = HasStock() && !ReadStockShape(m_job.stock, m_stockEdges, box, problem, &m_stockPoints);
+    if (m_stockUnreadable)
+        Log(L"[stock] %s", problem.c_str());
+    m_stockShapeValid = true;
+}
+
+camcore::OrientationContext CCamTabCommand::Orientation() const
+{
+    camcore::OrientationContext context = camcore::OrientationFor(m_machine);
+    if (HasStock() && !m_stockUnreadable)
+        context.stockPoints = &m_stockPoints;
+    return context;
+}
+
+camcore::FrameResult CCamTabCommand::FrameOf(size_t stepIndex) const
+{
+    return camcore::FrameAt(m_job, stepIndex, Orientation());
+}
+
+std::map<std::string, std::string> CCamTabCommand::UnreachableOrientationReasons() const
+{
+    std::map<std::string, std::string> reasons;
+    const camcore::OrientationContext context = Orientation();
+    const size_t zeroIndex = camcore::WorkZeroIndex(m_job);
+    const camcore::FrameResult zero = (zeroIndex != camcore::kNoStepIndex)
+                                          ? camcore::BuildFrame(m_job.sequence[zeroIndex].origin)
+                                          : camcore::FrameResult();
+    for (size_t i = 0; i < m_job.sequence.size(); ++i)
+    {
+        const camcore::SequenceStep& step = m_job.sequence[i];
+        if (!camcore::IsOrientationStep(step.type))
+            continue;
+        const camcore::FrameResult frame = camcore::OrientationFrame(m_job, i, context);
+        if (!frame.ok)
+        {
+            // An incomplete Set Origin is marked by the tree already.
+            if (step.type == camcore::StepType::Rotate)
+                reasons[step.id] = frame.message;
+            continue;
+        }
+        if (!zero.ok || step.suppressed)
+            continue;
+        const camcore::IndexSolution solution = camcore::SolveIndex(zero.frame, context, frame.frame);
+        if (!solution.ok)
+            reasons[step.id] = solution.message;
+    }
+    return reasons;
+}
+
+std::vector<std::string> CCamTabCommand::UnreachableOrientations() const
+{
+    std::vector<std::string> ids;
+    for (const auto& reason : UnreachableOrientationReasons())
+        ids.push_back(reason.first);
+    return ids;
 }
 
 void CCamTabCommand::RestoreSelectionFilter()
@@ -4300,22 +4500,19 @@ void CCamTabCommand::HandleLocate()
     if (read)
     {
         // Measured from the origin the operation's folder runs under.
-        const size_t active = camcore::ActiveOriginIndex(m_job, m_operationTarget.step);
-        const camcore::FrameResult frame = (active != camcore::kNoStepIndex)
-                                               ? camcore::BuildFrame(m_job.sequence[active].origin)
-                                               : camcore::FrameResult();
+        const camcore::FrameResult frame = FrameOf(m_operationTarget.step);
         if (frame.ok)
         {
             double height = 0.0;
             const bool found = camcore::HeightAlongZ(frame.frame, located, height);
             Log(L"[locate] %s %.4f mm from %s", found ? L"height" : L"no height", height,
-                FromUtf8(m_job.sequence[active].name).c_str());
+                FromUtf8(m_job.sequence[camcore::ActiveOriginIndex(m_job, m_operationTarget.step)].name).c_str());
             m_pOperationDlg->SetLocatedHeight(found, height);
             RestoreSelectionFilter();
         }
         else
         {
-            m_pOperationDlg->ShowLocateProblem(L"There's no complete Set Origin above this folder to measure from.");
+            m_pOperationDlg->ShowLocateProblem(L"There's no complete Set Origin or Rotate above this folder to measure from.");
         }
     }
     else
@@ -4377,6 +4574,7 @@ namespace
         kImageParallelFinishing,
         kImageFixtures,
         kImageThreadMilling,
+        kImageRotate,
         kImageWarning       // drawn over another image, as overlay 1
     };
 
@@ -4416,6 +4614,7 @@ namespace
         case camcore::StepType::WaterlineFinishing: return kImageWaterlineFinishing;
         case camcore::StepType::ParallelFinishing: return kImageParallelFinishing;
         case camcore::StepType::Fixtures: return kImageFixtures;
+        case camcore::StepType::Rotate:   return kImageRotate;
         default:                               return kImageOperations;
         }
     }
@@ -5171,6 +5370,8 @@ void CCamTabWnd::OnTreeRightClick(NMHDR* /*pNotify*/, LRESULT* pResult)
     else
     {
         menu.AppendMenu(MF_STRING | editable, ID_CAM_ADD_ORIGIN, L"Add Set Origin...");
+        menu.AppendMenu(MF_STRING | (m_pTab->CanAddFolder() ? MF_ENABLED : MF_GRAYED), ID_CAM_ADD_ROTATE,
+                        L"Add Rotate...");
         menu.AppendMenu(MF_STRING | (m_pTab->CanAddFolder() ? MF_ENABLED : MF_GRAYED), ID_CAM_ADD_FIXTURES,
                         L"Add Fixtures...");
         menu.AppendMenu(MF_STRING | (m_pTab->CanAddFolder() ? MF_ENABLED : MF_GRAYED), ID_CAM_ADD_FOLDER,
@@ -5206,6 +5407,7 @@ void CCamTabWnd::OnTreeRightClick(NMHDR* /*pNotify*/, LRESULT* pResult)
     {
     case ID_CAM_ADD_ORIGIN:  m_pTab->AddSetOrigin(); break;
     case ID_CAM_ADD_FIXTURES: m_pTab->AddFixtures(); break;
+    case ID_CAM_ADD_ROTATE:  m_pTab->AddRotateStep(); break;
     case ID_CAM_ADD_FOLDER:  m_pTab->AddFolder(); break;
     case ID_CAM_ADD_DRILL:   m_pTab->AddOperation(ref.step, camcore::StepType::Drill); break;
     case ID_CAM_ADD_HOLE_POCKETING: m_pTab->AddOperation(ref.step, camcore::StepType::HolePocketing); break;
@@ -5524,6 +5726,13 @@ void CCamTabWnd::ShowSequence(const camcore::Job& job, const StepRef& selected)
         std::wstring text = FromUtf8(step.name);
         if (step.type == camcore::StepType::SetOrigin && !camcore::BuildFrame(step.origin).ok)
             text += L" (incomplete)";
+        if (step.type == camcore::StepType::Rotate)
+        {
+            wchar_t angle[64];
+            swprintf_s(angle, L" (%g\u00B0 from the work zero%s)", step.rotate.angle,
+                       step.rotate.originAfter == camcore::OriginAfterRotate::TopOfStock ? L", top of stock" : L"");
+            text += angle;
+        }
         if (step.type == camcore::StepType::Fixtures)
         {
             const size_t count = step.fixtures.parts.size();

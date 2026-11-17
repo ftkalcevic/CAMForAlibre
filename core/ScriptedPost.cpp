@@ -17,10 +17,10 @@ namespace camcore
     {
         const std::set<std::string> kSections = { "program start", "tool change", "operation start", "rapid",
                                                   "feed", "arc cw", "arc ccw", "dwell", "plane xy", "plane zx", "plane yz", "plane xz",
-                                                  "operation end",
+                                                  "index", "operation end",
                                                   "program end" };
 
-        const std::set<std::string> kWords = { "X", "Y", "Z", "I", "J", "K", "F" };
+        const std::set<std::string> kWords = { "X", "Y", "Z", "I", "J", "K", "F", "A", "B", "C" };
         const std::set<std::string> kValues = { "TOOL", "TOOLNAME", "TOOLDIA", "SPINDLE", "SECONDS",
                                                 "PROGRAM", "OPERATION", "ORIGIN", "DATE" };
 
@@ -91,11 +91,20 @@ namespace camcore
                 script.extension = value;
             else if (key == "axes")
             {
-                if (!number(script.axes, 3, 3))
+                if (!number(script.axes, 3, 4))
                 {
-                    problem = "axes can only be 3 so far.";
+                    problem = "axes must be 3, or 4 for a machine with a rotary axis.";
                     return false;
                 }
+            }
+            else if (key == "rotary")
+            {
+                if (value != "A" && value != "B" && value != "C")
+                {
+                    problem = "rotary must be A, B or C.";
+                    return false;
+                }
+                script.rotaryWord = value;
             }
             else if (key == "decimals")
                 return number(script.decimals, 0, 6);
@@ -312,13 +321,18 @@ namespace camcore
             number = 0;
             return refuse("The [settings] need a name.");
         }
+        if (result.script.axes == 4 && result.script.sections.count("index") == 0)
+        {
+            number = 0;
+            return refuse("A 4 axis post needs an [index] section, to turn the rotary axis.");
+        }
         result.ok = true;
         return result;
     }
 
     PostOutput WriteScriptedPost(const PostScript& script, const std::string& jobName, const Frame& workZero,
                                  const std::vector<PostOperation>& operations, const std::string& date,
-                                 const ArcFitting& arcs)
+                                 const ArcFitting& arcs, const OrientationContext& rotary)
     {
         const auto has = [&](const char* name) { return script.sections.count(name) != 0; };
         const bool arcSections = has("arc cw") && has("arc ccw");
@@ -327,19 +341,27 @@ namespace camcore
         ArcPlane currentPlane = ArcPlane::XY;       // program start sets G17
         PostOutput output;
 
-        // A 3 axis machine can only cut along the work zero's Z.
-        std::string tilted;
-        for (const PostOperation& entry : operations)
+        // Each operation's rotary angle. A 3 axis post, or a machine with no
+        // rotary axis, can only cut along the work zero's Z.
+        OrientationContext reach = rotary;
+        if (script.axes != 4)
+            reach.axes = 3;
+        const IndexPlan plan = PlanIndexes(workZero, reach, operations);
+        const std::string& tilted = plan.unreachable;
+        if (!plan.ok)
         {
-            if (entry.operation != nullptr && Dot(entry.frame.zAxis, workZero.zAxis) < 1.0 - 1e-6)
-                tilted += "\n" + entry.operation->name;
-        }
-        if (!tilted.empty())
-        {
-            output.problem = "This post is for a 3 axis machine, so it can't cut operations whose Set Origin "
-                             "tilts the tool away from the work zero's Z:" + tilted;
+            if (script.axes != 4)
+                output.problem = "This post is for a 3 axis machine, so it can't cut operations whose Set Origin "
+                                 "or Rotate tilts the tool away from the work zero's Z:" + tilted;
+            else if (rotary.axes != 4)
+                output.problem = "The job's machine has no rotary axis, so it can't cut operations whose Set Origin "
+                                 "or Rotate tilts the tool away from the work zero's Z:" + tilted;
+            else
+                output.problem = "These operations' Z can't be reached by turning the rotary axis, as it isn't "
+                                 "square to the axis:" + tilted;
             return output;
         }
+
 
         Writer writer(script);
         writer.values["PROGRAM"] = jobName;
@@ -371,14 +393,30 @@ namespace camcore
                 writer.Forget();        // where the tool is after a change isn't known
             }
 
+            // Turning the rotary axis: retract, then turn.
+            const size_t entryIndex = static_cast<size_t>(&entry - operations.data());
+            const double angle = plan.angles[entryIndex];
+            if (plan.moves[entryIndex].turn)
+            {
+                writer.words.clear();
+                writer.Forget();
+                writer.words["Z"] = plan.moves[entryIndex].retract;
+                writer.words[script.rotaryWord] = plan.moves[entryIndex].to;
+                writer.Section("index");
+                writer.words.clear();
+                writer.Forget();
+            }
+
             char speed[32];
             std::snprintf(speed, sizeof(speed), "%.0f", operation.feeds.spindleRpm);
             writer.values["SPINDLE"] = speed;
             writer.words.clear();
             writer.Section("operation start");
 
-            // Every point from the work zero.
-            auto place = [&](const Vec3& local) { return WorldToFrame(workZero, FramePointToWorld(entry.frame, local)); };
+            // Every point from the work zero, turned back by the rotary angle.
+            auto place = [&](const Vec3& local) {
+                return MachinePoint(workZero, reach.rotary, angle, FramePointToWorld(entry.frame, local));
+            };
             Vec3 at;
             Vec3 atLocal;       // the same, in the operation's frame
             bool haveAt = false;
