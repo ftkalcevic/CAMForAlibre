@@ -84,6 +84,33 @@ namespace
         return static_cast<IUnknown*>(QI<IUnknownPtr>(a)) == static_cast<IUnknown*>(QI<IUnknownPtr>(b));
     }
 
+    // Copies opened apart while a ConfigurationCopies lives: one per part file and
+    // configuration, closed unsaved when the outermost ConfigurationCopies ends.
+    struct CachedCopy
+    {
+        std::wstring path;              // lower case, back slashes
+        std::wstring configuration;
+        IADSessionPtr copy;
+        IADDesignSessionPtr design;     // null if the copy couldn't be put in the configuration
+    };
+    struct CopyCache
+    {
+        int depth = 0;
+        std::vector<CachedCopy> copies;
+        size_t served = 0;
+    };
+    CopyCache& Copies()
+    {
+        static CopyCache cache;
+        return cache;
+    }
+    std::wstring CopyPathKey(std::wstring path)
+    {
+        for (wchar_t& c : path)
+            c = (c == L'/') ? L'\\' : static_cast<wchar_t>(towlower(c));
+        return path;
+    }
+
     // An occurrence read in its own configuration. Occurrences of one part file share
     // its session, which shows only its active configuration, and Alibre gives no other
     // way into another configuration's shape (its IADConfiguration::GetDesignSession
@@ -94,6 +121,8 @@ namespace
     // configuration, so faces and edges are found there by the keys picked. Unsaved edits
     // to the part aren't seen. If Alibre hands back the session already open, or the file
     // can't be opened, the shared session is read as before (the active shape).
+    // While a ConfigurationCopies lives, the copy is shared (CopyCache) and closed when
+    // that ends, not by this.
     class ConfigurationScope
     {
     public:
@@ -125,6 +154,24 @@ namespace
                     return;
                 }
 
+                CopyCache& cache = Copies();
+                const std::wstring key = CopyPathKey(path);
+                if (cache.depth > 0)
+                {
+                    for (const CachedCopy& cached : cache.copies)
+                    {
+                        if (cached.path != key || cached.configuration != ownName)
+                            continue;
+                        ++cache.served;
+                        if (cached.design != nullptr)
+                        {
+                            m_session = cached.design;
+                            m_changed = true;
+                        }
+                        return;     // read as it shows if that copy failed (logged then)
+                    }
+                }
+
                 const ULONGLONG start = GetTickCount64();
                 IADSessionPtr copy = theApp.m_pRoot->OpenFileEx(_bstr_t(path.c_str()), VARIANT_FALSE);
                 if (copy == nullptr)
@@ -140,7 +187,28 @@ namespace
                         m_name.c_str(), path.c_str(), activeName.c_str());
                     return;
                 }
-                m_copy = copy;
+                for (const CachedCopy& cached : cache.copies)
+                {
+                    if (SameObject(copy, cached.copy))
+                    {
+                        // A copy already open in another configuration: switching it would
+                        // change what was read from it. Left to the cache to close.
+                        Log(L"[config] %s: opening %s again gave the copy already open in %s, so it's read as it "
+                            L"shows (%s)", m_name.c_str(), path.c_str(), cached.configuration.c_str(),
+                            activeName.c_str());
+                        return;
+                    }
+                }
+                CachedCopy* pCached = nullptr;
+                if (cache.depth > 0)
+                {
+                    cache.copies.push_back({ key, ownName, copy, nullptr });
+                    pCached = &cache.copies.back();
+                }
+                else
+                {
+                    m_copy = copy;
+                }
                 IADDesignSessionPtr design = QI<IADDesignSessionPtr>(copy);
                 IADConfigurationsPtr configurations = (design != nullptr) ? design->GetConfigurations() : nullptr;
                 IADConfigurationPtr wanted;
@@ -163,6 +231,8 @@ namespace
                 copyActive = design->GetActiveConfiguration();
                 m_session = design;
                 m_changed = true;
+                if (pCached != nullptr)
+                    pCached->design = design;
                 Log(L"[config] %s uses configuration %s, the part shows %s: read from %s opened apart, now %s, in %llu ms",
                     m_name.c_str(), ownName.c_str(), activeName.c_str(), path.c_str(),
                     copyActive != nullptr ? BstrText(copyActive->GetName()).c_str() : L"(none)",
@@ -2304,6 +2374,10 @@ struct PartSurfaces::Impl
         IADSurfacePtr surface;
         size_t part = 0;
     };
+    // Parts read in another configuration than their active one: the copies opened
+    // apart, kept open for ClosestPoint. Declared before faces, so the faces and
+    // surfaces are released before the copies close.
+    std::vector<std::unique_ptr<ConfigurationScope>> configurations;
     std::vector<Face> faces;
     std::vector<PartToAssembly> parts;
     std::vector<camcore::AnalyticSurface> analytic;     // one a face
@@ -2328,6 +2402,7 @@ bool PartSurfaces::Read(IADSession* pAssembly, const std::wstring& leaveOutPath,
     m_impl->faces.clear();
     m_impl->parts.clear();
     m_impl->analytic.clear();
+    m_impl->configurations.clear();
     const ULONGLONG start = GetTickCount64();
     try
     {
@@ -2355,6 +2430,16 @@ bool PartSurfaces::Read(IADSession* pAssembly, const std::wstring& leaveOutPath,
             const PartToAssembly toAssembly(occurrence, assemblyMm);
             const size_t partIndex = m_impl->parts.size();
             m_impl->parts.push_back(toAssembly);
+
+            // In the occurrence's own configuration: the file opened apart when it isn't
+            // the part's active one, kept open while these faces are used.
+            auto configuration = std::make_unique<ConfigurationScope>(occurrence);
+            const bool apart = configuration->Changed();
+            if (apart)
+            {
+                design = configuration->Session();
+                m_impl->configurations.push_back(std::move(configuration));
+            }
 
             // Each face's facets, about 0.05 mm from its surface, in the part's units.
             const double partMm = MillimetresPerModelUnit(design);
@@ -2443,14 +2528,16 @@ bool PartSurfaces::Read(IADSession* pAssembly, const std::wstring& leaveOutPath,
                     triangles.push_back(toAssembly.Point(p));
                 faces.insert(faces.end(), points.size() / 3, -1);
                 partTriangles = points.size() / 3;
-                Log(L"[surfaces] %s read whole: %zu triangles", name.c_str(), partTriangles);
+                Log(L"[surfaces] %s read whole: %zu triangles%s", name.c_str(), partTriangles,
+                    apart ? L" (its configuration, read apart)" : L"");
             }
             else
             {
                 Log(L"[surfaces] %s: %zu faces (%zu planes, %zu spheres, cylinders, cones or tori and %zu splines "
-                    L"worked out here, %zu others asked of Alibre), %zu triangles",
+                    L"worked out here, %zu others asked of Alibre), %zu triangles%s",
                     name.c_str(), partFaces, planes, analyticFaces, splineFaces,
-                    partFaces - planes - analyticFaces - splineFaces, partTriangles);
+                    partFaces - planes - analyticFaces - splineFaces, partTriangles,
+                    apart ? L" (its configuration, read apart)" : L"");
             }
             if (partTriangles > 0)
                 ++read;
@@ -2589,4 +2676,36 @@ std::vector<PickedGeometry> ListSketches(IADSession* pAssembly)
     }
     Log(L"[sketch] %zu sketches with lines, arcs or circles", result.size());
     return result;
+}
+
+// ConfigurationCopies
+
+ConfigurationCopies::ConfigurationCopies()
+{
+    ++Copies().depth;
+}
+
+ConfigurationCopies::~ConfigurationCopies()
+{
+    CopyCache& cache = Copies();
+    if (--cache.depth > 0)
+        return;
+    const size_t opened = cache.copies.size();
+    for (CachedCopy& cached : cache.copies)
+    {
+        cached.design = nullptr;
+        try
+        {
+            cached.copy->Close(VARIANT_FALSE);
+        }
+        catch (const _com_error& error)
+        {
+            Log(L"[config] the copy of %s couldn't be closed: hr=0x%08X", cached.path.c_str(),
+                static_cast<unsigned>(error.Error()));
+        }
+    }
+    if (opened > 0 || cache.served > 0)
+        Log(L"[config] %zu copies opened apart, %zu more reads served from them; closed", opened, cache.served);
+    cache.copies.clear();
+    cache.served = 0;
 }

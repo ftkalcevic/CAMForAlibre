@@ -31,9 +31,6 @@ these belong in the spec (`docs\SPEC.md`) once they're made.
 - Inch display units
 - Tool holder from a model: pick an Alibre part (or file) as the holder's shape, used in the simulation in place of the plain cylinder
 - Pictures on the dialog tabs showing what each parameter means, where it helps
-- Part configurations (parts used in a configuration other than their active one are now read from their saved file, opened in the background)
-  - 🟡 Parallel and Waterline Finishing's true-surface reading (`PartSurfaces`) still reads each part's active configuration, so their exact refinement can be off on such parts; selecting listed features in the view (`FindFeature`) likewise
-  - ⚪ Cache the background copies: each feature opens the part file once (about 0.2 s), so a Generate with many features on such parts is slower
 - Performance
   - Spline faces are now read as NURBS (`GetBSplineCurvesData`) and worked out
     by CamCore. A face whose data can't be read that way (several surfaces in

@@ -1692,6 +1692,8 @@ std::vector<CCamTabCommand::HighlightGroup> CCamTabCommand::HighlightedFeatures(
 
 void CCamTabCommand::UpdateHighlights()
 {
+    // Parts in another configuration open their file once for all of this.
+    const ConfigurationCopies configurationCopies;
     // Read again only when the features change.
     const std::vector<HighlightGroup> groups = HighlightedFeatures();
     bool same = groups.size() == m_highlighted.size();
@@ -2279,6 +2281,7 @@ bool CCamTabCommand::PrepareSimulationPart()
         // Every visible part, less an imported stock's own part.
         CWaitCursor wait;
         m_simulationPartsRead = true;
+        const ConfigurationCopies configurationCopies;
         const std::wstring leaveOut = (m_job.stock.kind == camcore::StockKind::Imported)
                                           ? FromUtf8(m_job.stock.partPath)
                                           : std::wstring();
@@ -2788,6 +2791,8 @@ void CCamTabCommand::GenerateOperations(const std::vector<StepRef>& refs)
 
 void CCamTabCommand::GenerateTargets(const std::vector<StepRef>& targets)
 {
+    // Parts in another configuration open their file once for all of this.
+    const ConfigurationCopies configurationCopies;
     // The clearance plane can depend on the parts' size, which may have changed.
     ReadModelSize();
     EnsureStockShape();
@@ -4191,6 +4196,8 @@ bool CCamTabCommand::ApplyOperationStep(camcore::SequenceStep step)
 void CCamTabCommand::OnOperationDialogGenerate(COperationDlg* pDialog)
 {
     AFX_MANAGE_STATE(AfxGetStaticModuleState());
+    // Parts in another configuration open their file once for all of this.
+    const ConfigurationCopies configurationCopies;
 
     if (pDialog != m_pOperationDlg)
         return;

@@ -15202,6 +15202,204 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > <local-command-stdout>Compacted </local-command-stdout>
 
+### 🤖 Claude
+
+> I've added the two loose ends to [TODO.md](TODO.md:34) under a new Part configurations item:
+>
+> - 🟡 **Medium:** Parallel and Waterline Finishing still read the exact surfaces from each part's active configuration. On a part used in another configuration, that exact pass could use the wrong shape. Selecting listed features in the view has the same gap.
+> - ⚪ **Low:** caching the part files opened in the background. Each feature opens the file once, about 0.2 s, so this only slows Generate when it has many features on such parts.
+>
+> I put the first at medium because it could give a wrong result, while the second only costs time. Change either priority if you see it differently.
+>
+> `Discussion.md` is rebuilt. Nothing is committed.
+
+### 🧑 Frank · 20:32
+
+> Plan both fixes.  I don't think I have enough usage to finish both this week.
+
+### 🤖 Claude
+
+> I've read the code for both fixes. Next I'll write the plan.
+
+> Plan:
+>
+> # Part configurations: finishing surfaces and a copy cache
+>
+> ## Context
+>
+> A part occurrence can use a configuration other than its part's active one. Such a part is now read from its saved file, opened in the background (`ConfigurationScope`, `addon\GeometryReader.cpp`). Frank tested this on `New Config.ad_asm` and `lam Arm staker CAM`.
+>
+> Two loose ends are in `TODO.md`. Frank's usage is short this week, so this is two independent fixes, each small enough to build, install and test by itself.
+>
+> 1. **Fix A (🟡):** finishing's true-surface reading still uses each part's active configuration.
+> 2. **Fix B (⚪):** each feature opens the part file once, about 0.2 s each.
+>
+> Do A first. B builds on A's ownership change, but each can ship alone.
+>
+> ## Fix A: true surfaces in the occurrence's configuration
+>
+> **Problem:**
+> - `PartSurfaces::Read` reads `occurrence->GetDesignSession()`, which is the active shape.
+> - It keeps each face's `IADFacePtr` and `IADSurfacePtr` for `ClosestPoint` (Alibre calls during Generate) and for the analytic and NURBS reading.
+> - On a mirrored or other configuration, the facets and surfaces are the wrong shape. The coarse triangles from `ReadAssemblyPartFacets` don't have this problem, because they go through the scope.
+>
+> **Change (`addon\GeometryReader.cpp` only):**
+> 1. In `PartSurfaces::Impl`, add `std::vector<std::unique_ptr<ConfigurationScope>> configurations;`.
+>    - Declare it **before** `faces`, so faces and surfaces are released before the copies close.
+>    - `Read` clears `faces` and `analytic` first, then `configurations`.
+> 2. In the occurrence loop, make a `ConfigurationScope` for each occurrence.
+>    - Read from `scope->Session()` instead of `occurrence->GetDesignSession()`: bodies, faces, `GetFacetData` as the fallback, and `MillimetresPerModelUnit(design)`.
+>    - Keep the scope in `configurations` only when `Changed()`, so the copy stays open for `ClosestPoint`. Otherwise drop it, which costs nothing.
+>    - `PartToAssembly` still comes from the occurrence, since the transform is the assembly's.
+>    - Path and leave-out checks stay on the shared session's path, which is the same file.
+> 3. Append ` (configuration X, read apart)` to the `[surfaces]` per-part log line when the part was read apart.
+>
+> **Selecting listed features in the view (`FindFeature`): no code change, verify only.**
+> - Alibre's own picks on such an occurrence return the shared session's face. That is why `ReadSelectedPick` has to rebind.
+> - Keys are the same in every configuration, so `NewTargetProxy(occurrence, shared face)` is what Alibre itself uses.
+> - A face that exists only in the non-active configuration can't be selected this way at all. That case already logs and is skipped.
+> - Remove the `FindFeature` clause from the TODO line if Frank's test shows selection works.
+>
+> **Docs:**
+> - CLAUDE.md configuration entry: `PartSurfaces` now uses the scope.
+> - TODO.md: drop the 🟡 item.
+> - Help (Parallel/Waterline Finishing): one sentence saying configured parts are read in their own configuration.
+> - Run BuildDiscussion.
+>
+> ## Fix B: cache the background copies
+>
+> **Problem:** every `BindFeature` with a scope, `ReadOccurrenceTriangles` and (after A) `PartSurfaces` opens and closes the file. This happens per feature in Generate, per feature in `UpdateHighlights` (CamTabCommand.cpp:1730), and per part in Compare.
+>
+> **Change:**
+> 1. Add a public RAII class `ConfigurationCopies` to `addon\GeometryReader.h/.cpp` (Claude's choice of design):
+>    - While one exists (it nests by a depth count), opened copies are kept in a file-scope map keyed by (lower-case path, configuration name).
+>    - When the outermost one ends, every copy is closed with `Close(VARIANT_FALSE)`, logged as `[config] closed n copies`.
+> 2. Change `ConfigurationScope`:
+>    - When a batch is active, take the copy from the map, or open it and add it.
+>    - In that case, don't close it in the destructor.
+>    - With no batch, behave exactly as now.
+>    - If `OpenFileEx` hands back an already cached copy (`SameObject` against the map's entries, e.g. a second configuration of the same file), don't switch it: log and fall back to the shared session for that occurrence, as now.
+> 3. Create a `ConfigurationCopies` at the top of:
+>    - `CCamTabCommand::GenerateTargets`
+>    - `OnOperationDialogGenerate`
+>    - `UpdateHighlights`
+>    - `Simulate` / `RestartSimulation` (the part facets for Compare)
+>    - `ComputeRemainingStock`
+>
+>    It lives only for that call, so unsaved part edits are picked up by the next Generate, the same as now.
+> 4. Log one line at the end of each batch: `[config] n copies opened, m reads served from them`.
+>
+> **Docs:**
+> - CLAUDE.md: replace the "a cache would help" sentence.
+> - TODO.md: drop the ⚪ item.
+> - Run BuildDiscussion.
+>
+> ## Verification
+>
+> **Build:** Release. `CamCoreTests` is unaffected (add-on only), but run it anyway.
+>
+> **Install:** close Alibre first.
+>
+> **Fix A, Frank tests:**
+> 1. On `New Config.ad_asm`, add Parallel Finishing with a ball mill over the Square occurrence and Generate.
+>    - The log's `[surfaces]` line for `New Config<1>` says it was read apart in Square.
+>    - `[generate] true surface` refines most points.
+>    - The toolpath follows the Square shape.
+> 2. Repeat with Waterline Finishing.
+> 3. With the operation's dialog open, choose a listed face on the Square occurrence. It selects or highlights in the view (the `FindFeature` check).
+> 4. Close the assembly afterwards. No Alibre prompt to save the part, and no hang.
+>
+> **Fix B, Frank tests:**
+> 1. Generate an operation with several features on the Square occurrence.
+>    - Exactly one `[config] ... read from ... opened apart` line per part and configuration.
+>    - The batch summary line.
+>    - Generate is noticeably quicker.
+> 2. Select the operation in the tree (the highlights). The same single open.
+> 3. Simulate with Compare on `lam Arm staker CAM`. Too much removed is still correct.
+> 4. Edit and save the part, then Generate again. The change is seen.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> Anonymous namespaces in one file share scope, so `ConfigurationScope` is visible. Building Release.
+
+> Both fixes are planned in `C:\Users\Frank Tkalcevic\.claude\plans\silly-napping-dahl.md`. Fix A was the smaller one, so I built and installed it. Fix B is planned but not started, so it can wait for next week. The Release build passes all 420 tests, but Fix A hasn't been tried in Alibre yet.
+>
+> **Fix A: finishing reads the occurrence's configuration** (`addon\GeometryReader.cpp`)
+> - Parallel and Waterline Finishing with a ball mill now read each part's faces and exact surfaces in that occurrence's configuration. A part in another configuration is read from its saved file, opened in the background as the other readers do.
+> - That background copy stays open for the whole Generate, because the exact-surface step keeps asking Alibre about those faces until Generate ends.
+> - I left the selecting of listed features in the view (`FindFeature`) unchanged. When you click a face on such a part, Alibre gives back the face from the part's active configuration, and faces keep the same key in every configuration, so it should already select the right face. Your test 3 checks this.
+> - I updated the help (Parallel Finishing), `CLAUDE.md` and `TODO.md`. The 🟡 item in `TODO.md` now says "verify in Alibre".
+>
+> **Fix B: keep the background copies open** (planned, not started)
+> - Each Generate, highlight refresh or Compare would open each part file once and close it at the end, instead of once per feature.
+> - It doesn't depend on Fix A being tested first.
+>
+> **To test:**
+> 1. On `New Config.ad_asm`, run Parallel Finishing with a ball mill over the Square occurrence and Generate. The log's `[surfaces]` line for `New Config<1>` should end with "(its configuration, read apart)". The toolpath should follow the Square shape.
+> 2. Repeat with Waterline Finishing.
+> 3. With the operation's dialog open, click a listed face on the Square occurrence. It should select or highlight in the view.
+> 4. Close the assembly. There should be no prompt to save the part, and Alibre shouldn't hang.
+> 5. Check the Parallel Finishing help: it has a new sentence about part configurations.
+>
+> Nothing is committed. Please copy the log into the repo after testing.
+
+### 🧑 Frank · 20:49
+
+> finishing operations worked correctly on different configurations.  Lets start fix b.
+
+### 🤖 Claude
+
+> Adding the cache's scope to the Generate, highlight and part-reading entry points.
+
+> Fix B is built and all 420 tests pass, but it isn't installed: the administrator prompt was cancelled, so Alibre still has the Fix A build. To install it yourself, run this with Alibre closed:
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File deploy\install.ps1
+> ```
+>
+> **What changed:**
+> - **The cache:** Generate, an operation dialog's Generate, the orange highlights and reading the parts for the simulation each open a part file at most once per configuration. Before, the file was opened for every feature. When the call finishes, the copies are closed without saving. A part you edit and save is still picked up by the next Generate.
+> - **Where it lives:** a new `ConfigurationCopies` class in `addon\GeometryReader.h`. The code that opens the background copy now looks there first. Without it, it opens and closes the file itself as before.
+> - **One limit:** if a part file is used in two configurations other than its active one, Alibre may hand back the copy already open when the file is opened again. That second occurrence is then read in the part's active configuration, with a log line saying so.
+> - **Docs:** I added a line to the help's Select Features section. In `CLAUDE.md`, Fix A is now marked as tested by you. `TODO.md` keeps one 🟡 item: checking that selecting listed features in the view works on such a part.
+>
+> **To test:**
+> 1. On `New Config.ad_asm`, Generate an operation with several features on the Square occurrence. The log should have one `[config] ... opened apart` line for that part, then `[config] 1 copies opened apart, n more reads served from them; closed`. Generate should be quicker.
+> 2. Select that operation in the tree to show the highlights. The file should again open only once.
+> 3. Simulate with Too much removed ticked on `lam Arm staker CAM`. It should still be correct.
+> 4. Edit the Square configuration, save the part, then Generate again. The change should be seen.
+> 5. With the dialog open, click a listed face on the Square occurrence. It should highlight in the view (the `FindFeature` check left in `TODO.md`).
+> 6. Check the help's Select Features section for the new line.
+>
+> Nothing is committed. Please copy the log into the repo after testing.
+
+### 🧑 Frank · 20:56
+
+> Yes, install
+
+### 🤖 Claude
+
+> Fix B is now installed, and the installed DLL matches the build. Start Alibre and run the tests from my last message:
+>
+> 1. On `New Config.ad_asm`, Generate with several features on the Square occurrence. The log should have one `[config] ... opened apart` line for the part, then the `copies opened apart ... closed` summary.
+> 2. Select the operation in the tree to show the highlights. The part file should open only once.
+> 3. Simulate with Too much removed on `lam Arm staker CAM`. It should still be correct.
+> 4. Edit the Square configuration, save the part, and Generate again. The change should be seen.
+> 5. With the dialog open, click a listed face on the Square occurrence. It should highlight in the view.
+> 6. Check the new line in the help's Select Features section.
+>
+> Nothing is committed. Please copy the log into the repo after testing.
+
+### 🧑 Frank · 21:03
+
+> All tests passed.  Logs copied
+
+### 🤖 Claude
+
+> The log shows the cache working: one Generate on `Rough 3` opened the part file once and reused it for 5 more reads. I'll mark both fixes as tested in the notes.
+
 ---
 
 # Side conversation

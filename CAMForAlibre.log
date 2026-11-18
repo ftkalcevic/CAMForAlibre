@@ -16877,3 +16877,633 @@
 20:28:35.286 [tab] saved on closing: ok
 20:28:35.297 [tab] window destroyed by Alibre
 20:28:36.411 AddOnUnload
+20:37:10.021 ==== CAMForAlibre loaded ====
+20:37:10.022 Alibre version: PRODUCTVERSION 27,0,1,27039
+20:37:56.584 [model] assembly 'New Config' path='D:/Documents/Drawings/Tools/heat set press2/New Config.AD_ASM' guid='71B046FF-DA50-4367-A04C-EE8C903223B5'
+20:37:56.585 [tab] status: Loaded New Config.cam.
+20:37:56.598 [machine] CNC Router: 9 tools. No tool selected.
+20:37:56.619 [tab] status: Loaded New Config.cam.
+20:37:56.661 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:37:56.662 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:37:56.825 [focus] tab gained focus
+20:37:56.827 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:37:56.839 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:37:56.865 [view] OnComplete
+20:37:56.867 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:37:56.878 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:38:09.998 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 156 ms
+20:38:10.016 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+20:38:10.032 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:38:19.131 [operation] editing a new operation
+20:38:22.806 [features] selected 0 of 0 features
+20:38:24.048 [pick] planar face, sense reversed=0
+20:38:24.052 [features] 1 selected: 1 features, 0 ignored
+20:38:25.732 [pick] planar face, sense reversed=0
+20:38:25.733 [pick] planar face, sense reversed=0
+20:38:25.744 [features] 2 selected: 2 features, 0 ignored
+20:38:27.342 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 94 ms
+20:38:27.343 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+20:38:27.354 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:38:27.365 [features] selected 0 of 0 features
+20:38:48.512 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:38:48.513 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:38:48.526 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:38:48.639 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 94 ms
+20:38:48.644 [facets] New Config<1>: face facets vt=5, 18 values, 2 triangles
+20:38:48.652 [facets] New Config<2>: face facets vt=5, 18 values, 2 triangles
+20:38:48.660 [generate] area from 2 faces and 0 loops
+20:38:48.774 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 93 ms
+20:38:48.779 [surfaces] New Config<1>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles (its configuration, read apart)
+20:38:48.787 [surfaces] New Config<2>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles
+20:38:48.796 [surfaces] read 2 of 2 parts, 0 faces, 24 triangles, in 125 ms
+20:38:48.806 [generate] waterline: flat faces at 0.000000 (frame Z), stock 0.000 to -5.000
+20:38:48.818 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:38:48.983 [generate] roughing: 0 moves, in 172 ms
+20:38:48.984 [generate] true surface: 0 of 0 points moved onto it, 0 asked of Alibre, 0 more taking the middle of their neighbours
+20:38:48.994 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 0 side contacts, 0 unsettled, 0 off the face, 0 too far
+20:38:49.003 [generate] laps: 0 points put back between their neighbours, 0 thin fingers and loops cut off, simplified by height from 0 to 0 points; 0 turn-backs, 0 zigzags and 0 wobbles left
+20:38:49.014 [generate] Waterline Finishing 1 from its dialog: There's nothing to finish: no part comes within reach in the area between the top and the bottom.
+20:38:49.021 [tab] status: Unsaved changes.
+20:38:49.068 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:39:37.920 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:39:37.921 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:39:37.932 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:39:38.044 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 94 ms
+20:39:38.045 [facets] New Config<1>: face facets vt=5, 18 values, 2 triangles
+20:39:38.057 [facets] New Config<2>: face facets vt=5, 18 values, 2 triangles
+20:39:38.065 [generate] area from 2 faces and 0 loops
+20:39:38.168 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 94 ms
+20:39:38.169 [surfaces] New Config<1>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles (its configuration, read apart)
+20:39:38.180 [surfaces] New Config<2>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles
+20:39:38.189 [surfaces] read 2 of 2 parts, 0 faces, 24 triangles, in 125 ms
+20:39:38.199 [generate] waterline: flat faces at 0.000000 (frame Z), stock 0.000 to -5.000
+20:39:38.209 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:39:38.374 [generate] roughing: 0 moves, in 172 ms
+20:39:38.374 [generate] true surface: 0 of 0 points moved onto it, 0 asked of Alibre, 0 more taking the middle of their neighbours
+20:39:38.384 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 0 side contacts, 0 unsettled, 0 off the face, 0 too far
+20:39:38.394 [generate] laps: 0 points put back between their neighbours, 0 thin fingers and loops cut off, simplified by height from 0 to 0 points; 0 turn-backs, 0 zigzags and 0 wobbles left
+20:39:38.404 [generate] Waterline Finishing 1 from its dialog: There's nothing to finish: no part comes within reach in the area between the top and the bottom.
+20:39:38.412 [tab] status: Unsaved changes.
+20:39:38.480 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:41:43.057 [features] selected 1 of 1 features
+20:41:43.986 [features] selected 1 of 1 features
+20:41:43.987 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:41:48.443 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:41:48.443 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:41:48.455 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:41:48.463 [generate] area from 0 faces and 1 loops
+20:41:48.587 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 109 ms
+20:41:48.589 [surfaces] New Config<1>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles (its configuration, read apart)
+20:41:48.599 [surfaces] New Config<2>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles
+20:41:48.607 [surfaces] read 2 of 2 parts, 0 faces, 24 triangles, in 125 ms
+20:41:48.617 [generate] waterline: flat faces at 0.000000 (frame Z), stock 0.000 to -5.000
+20:41:48.629 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:41:49.238 [generate] roughing: 1189 moves, in 625 ms
+20:41:49.238 [generate] true surface: 0 of 0 points moved onto it, 0 asked of Alibre, 14651 more taking the middle of their neighbours
+20:41:49.250 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 0 side contacts, 0 unsettled, 0 off the face, 0 too far
+20:41:49.260 [generate] laps: 101 points put back between their neighbours, 0 thin fingers and loops cut off, simplified by height from 29864 to 1109 points; 0 turn-backs, 5 zigzags and 380 wobbles left
+20:41:49.274 [generate] arcs: 118 straight moves into 28 arcs; 22 more left out simplifying; 1189 moves to 1077
+20:41:49.294 [generate] Waterline Finishing 1 from its dialog: ok
+20:41:49.295 [tab] status: Unsaved changes.
+20:41:49.394 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:41:58.779 [operation] applied Waterline Finishing 1
+20:41:58.780 [tab] status: Unsaved changes.
+20:41:58.968 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:42:00.631 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 110 ms
+20:42:00.632 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+20:42:00.644 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:42:09.450 [operation] editing a new operation
+20:42:23.240 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:42:23.241 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:42:23.252 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:42:23.261 [generate] area from 0 faces and 1 loops
+20:42:23.370 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 94 ms
+20:42:23.372 [surfaces] New Config<1>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles (its configuration, read apart)
+20:42:23.383 [surfaces] New Config<2>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles
+20:42:23.391 [surfaces] read 2 of 2 parts, 0 faces, 24 triangles, in 110 ms
+20:42:23.400 [generate] waterline: flat faces at 0.000000 (frame Z), stock 0.000 to -5.000
+20:42:23.411 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:42:23.958 [generate] roughing: 9859 moves, in 563 ms
+20:42:23.958 [generate] true surface: 0 of 0 points moved onto it, 0 asked of Alibre, 0 more taking the middle of their neighbours
+20:42:23.968 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 0 side contacts, 0 unsettled, 0 off the face, 0 too far
+20:42:23.989 [generate] arcs: 8004 straight moves into 309 arcs; 618 more left out simplifying; 9859 moves to 1546
+20:42:24.006 [generate] Parallel Finishing 1 from its dialog: ok
+20:42:24.006 [tab] status: Unsaved changes.
+20:42:24.089 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:42:25.581 [operation] applied Parallel Finishing 1
+20:42:25.581 [tab] status: Unsaved changes.
+20:42:25.655 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:42:35.458 [view] OnTerminate: CAM graphics are no longer drawn
+20:42:36.747 [tab] warning about unsaved changes
+20:42:38.383 [tab] saved on closing: ok
+20:42:38.393 [tab] window destroyed by Alibre
+20:46:24.589 [model] assembly 'Rough 3' path='D:/Projects/alibre/camtest/examples/Rough 3.AD_ASM' guid='E1C520B0-9702-40A2-AC5A-273A4EC26891'
+20:46:24.708 [tab] status: Loaded Rough 3.cam.
+20:46:24.711 [machine] CNC Router: 9 tools. The selected tool isn't on this machine. Select another.
+20:46:24.738 [tab] status: Loaded Rough 3.cam.
+20:46:24.779 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:46:24.820 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:24.953 [focus] tab gained focus
+20:46:24.954 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:46:24.965 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:24.982 [view] OnComplete
+20:46:24.985 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:46:25.002 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:46:40.145 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:46:40.146 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:40.158 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:40.171 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:46:40.179 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:46:40.209 [fixtures] Fixtures 1: 2 parts read
+20:46:40.358 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 141 ms
+20:46:40.359 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:46:40.370 [generate] area from 1 faces and 0 loops
+20:46:40.500 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 109 ms
+20:46:40.514 [compare] Rough 3<1>: 896 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:46:40.515 [compare] Vice Jaw<1> is a fixture, left out
+20:46:40.525 [compare] Vice Base<1> is a fixture, left out
+20:46:40.534 [compare] read 1 of 3 parts, 896 triangles, in 156 ms
+20:46:40.544 [generate] waterline: flat faces at 54.853557 (frame Z), stock 64.612 to 44.683
+20:46:44.091 [generate] roughing: 14847 moves, in 3547 ms
+20:46:44.109 [fixtures] Waterline Roughing 1: 0 stretches lifted over fixtures
+20:46:44.127 [generate] arcs: 10466 straight moves into 854 arcs; 78 more left out simplifying; 14847 moves to 5157
+20:46:44.134 [generate] Waterline Roughing 1: ok
+20:46:44.140 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:44.264 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 110 ms
+20:46:44.265 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:46:44.278 [generate] area from 1 faces and 0 loops
+20:46:44.407 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 109 ms
+20:46:44.498 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:46:44.498 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:46:44.509 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 92.000000 4.000000
+20:46:44.523 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 96.000000 8.000000
+20:46:44.532 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 1104: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:46:44.540 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 368: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:46:44.549 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 96: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:46:44.558 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:46:44.601 [surfaces] Rough 3<1>: a spline, order 4 x 4, 92 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:46:44.602 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1865 triangles (its configuration, read apart)
+20:46:44.611 [surfaces] read 1 of 3 parts, 1 faces, 1865 triangles, in 328 ms
+20:46:44.627 [generate] waterline: flat faces at 59.977609, 59.968708, 59.962852, 59.953224 (frame Z), stock 64.612 to 44.683
+20:46:44.635 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:46:47.189 [generate] roughing: 24906 moves, in 2578 ms
+20:46:47.190 [generate] true surface: 101692 of 111142 points moved onto it, 0 asked of Alibre, 69697 more taking the middle of their neighbours
+20:46:47.201 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 9379 side contacts, 71 unsettled, 0 off the face, 0 too far
+20:46:47.209 [generate] laps: 341 points put back between their neighbours, 1 thin fingers and loops cut off, simplified by height from 140977 to 26093 points; 0 turn-backs, 13 zigzags and 8059 wobbles left
+20:46:50.319 [fixtures] Waterline Finishing 1: 36 stretches lifted over fixtures
+20:46:50.365 [generate] arcs: 4476 straight moves into 1445 arcs; 156 more left out simplifying; 18206 moves to 15019
+20:46:50.446 [generate] Waterline Finishing 1: ok
+20:46:50.451 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:50.576 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 109 ms
+20:46:50.577 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:46:50.590 [generate] area from 1 faces and 0 loops
+20:46:50.721 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 125 ms
+20:46:50.813 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:46:50.814 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:46:50.825 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 92.000000 4.000000
+20:46:50.835 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 96.000000 8.000000
+20:46:50.844 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 1104: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:46:50.853 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 368: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:46:50.866 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 96: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:46:50.875 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:46:50.919 [surfaces] Rough 3<1>: a spline, order 4 x 4, 92 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:46:50.921 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1865 triangles (its configuration, read apart)
+20:46:50.930 [surfaces] read 1 of 3 parts, 1 faces, 1865 triangles, in 328 ms
+20:46:50.946 [generate] waterline: flat faces at 59.977609, 59.968708, 59.962852, 59.953224 (frame Z), stock 64.612 to 44.683
+20:46:50.953 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:46:52.024 [generate] roughing: 5474 moves, in 1078 ms
+20:46:52.024 [generate] true surface: 59573 of 59581 points moved onto it, 0 asked of Alibre, 57470 more taking the middle of their neighbours
+20:46:52.038 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 6 side contacts, 2 unsettled, 0 off the face, 0 too far
+20:46:52.631 [fixtures] Parallel Finishing 1: 23 stretches lifted over fixtures
+20:46:52.635 [generate] arcs: 4553 straight moves into 337 arcs; 422 more left out simplifying; 5571 moves to 933
+20:46:52.660 [generate] Parallel Finishing 1: ok
+20:46:52.680 [tab] status: Unsaved changes.
+20:46:56.051 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:46:56.052 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:56.064 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:46:56.074 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:46:56.102 [fixtures] Fixtures 1: 2 parts read
+20:46:56.116 [simulate] 3 operations, 25296 moves, 1001 x 399 x 1041 cells of 0.05 mm (divided), 0 mixed bricks, ready in 15 ms
+20:46:56.188 [turn view] off
+20:46:56.203 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:46:56.248 [draw] 1 renders in 5 ms: preparing meshes 0 ms, Alibre's DrawMesh 2 ms, 6556 triangles in the last
+20:47:07.331 [simulate] timing, run: 3078 ms in all; cutting 2245 ms (9135 pieces), collision checks 6 ms, measuring the load 491 ms, meshing 13 ms, joining 13 ms, comparing 0 ms (1 updates), other 310 ms; 184474 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 6235 mixed bricks
+20:47:07.331 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01771 mm/tooth, up to 180 degrees and 9.28 mm deep, up to 8.29 cm3/min, 0.0968 kW (4% of 2.4 kW), 26 N (worst at move 139; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:07.341 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.01943 mm/tooth, up to 180 degrees and 4.68 mm deep, up to 3.75 cm3/min, 0.0438 kW (2% of 2.4 kW), 15 N (worst at move 7720; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:07.643 [draw] 4 renders in 298 ms: preparing meshes 6 ms, Alibre's DrawMesh 33 ms, 186306 triangles in the last
+20:47:13.380 [simulate] timing, run: 47 ms in all; cutting 0 ms (1 pieces), collision checks 0 ms, measuring the load 0 ms, meshing 1 ms, joining 15 ms, comparing 0 ms (1 updates), other 30 ms; 184292 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 6238 mixed bricks
+20:47:13.380 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01771 mm/tooth, up to 180 degrees and 9.28 mm deep, up to 8.29 cm3/min, 0.0968 kW (4% of 2.4 kW), 26 N (worst at move 139; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:13.392 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.01943 mm/tooth, up to 180 degrees and 5.17 mm deep, up to 3.75 cm3/min, 0.0438 kW (2% of 2.4 kW), 15 N (worst at move 7720; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:13.728 [draw] 1 renders in 316 ms: preparing meshes 6 ms, Alibre's DrawMesh 33 ms, 186124 triangles in the last
+20:47:22.122 [draw] 1 renders in 393 ms: preparing meshes 6 ms, Alibre's DrawMesh 112 ms, 186124 triangles in the last
+20:47:29.752 [simulate] timing, run: 6219 ms in all; cutting 4846 ms (16160 pieces), collision checks 1 ms, measuring the load 722 ms, meshing 42 ms, joining 91 ms, comparing 0 ms (1 updates), other 517 ms; 738160 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 8592 mixed bricks
+20:47:29.753 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01771 mm/tooth, up to 180 degrees and 9.28 mm deep, up to 8.29 cm3/min, 0.0968 kW (4% of 2.4 kW), 26 N (worst at move 139; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:29.764 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.01386 mm/tooth, up to 180 degrees and 13.99 mm deep, up to 7.09 cm3/min, 0.0827 kW (3% of 2.4 kW), 29 N (worst at move 7720; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:29.774 [simulate] load, Parallel Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02339 mm/tooth, up to 180 degrees and 3.37 mm deep, up to 2.1 cm3/min, 0.0244 kW (1% of 2.4 kW), 9 N (worst at move 23920; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:47:30.403 [draw] 1 renders in 603 ms: preparing meshes 51 ms, Alibre's DrawMesh 191 ms, 739992 triangles in the last
+20:47:32.838 [draw] 1 renders in 505 ms: preparing meshes 20 ms, Alibre's DrawMesh 161 ms, 739992 triangles in the last
+20:47:34.150 [draw] 1 renders in 558 ms: preparing meshes 22 ms, Alibre's DrawMesh 160 ms, 739992 triangles in the last
+20:47:36.554 [draw] 1 renders in 454 ms: preparing meshes 21 ms, Alibre's DrawMesh 112 ms, 739992 triangles in the last
+20:47:37.652 [draw] 1 renders in 473 ms: preparing meshes 19 ms, Alibre's DrawMesh 113 ms, 739992 triangles in the last
+20:47:43.241 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 125 ms
+20:47:43.255 [compare] Rough 3<1>: 896 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:47:43.256 [compare] Vice Jaw<1> is a fixture, left out
+20:47:43.267 [compare] Vice Base<1> is a fixture, left out
+20:47:43.276 [compare] read 1 of 3 parts, 896 triangles, in 156 ms
+20:47:43.491 [compare] parts in the grid: 276001058 cells, 719258 triangles to draw, in 203 ms
+20:47:43.727 [draw] 2 renders in 336 ms: preparing meshes 41 ms, Alibre's DrawMesh 281 ms, 772954 triangles in the last
+20:47:50.633 [focus] tab lost focus
+20:47:50.633 [tab] stopping the view (tab lost focus)
+20:47:50.644 [view] OnTerminate: CAM graphics are no longer drawn
+20:47:50.658 [tab] view Terminate hr=0x00000000
+20:48:05.645 [focus] tab gained focus
+20:48:05.646 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:48:05.658 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:05.674 [view] OnComplete
+20:48:05.676 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:48:05.686 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:48:12.475 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:48:12.476 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:12.488 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:12.498 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:48:12.509 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:48:12.540 [fixtures] Fixtures 1: 2 parts read
+20:48:12.542 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:48:12.551 [generate] area from 1 faces and 0 loops
+20:48:12.566 [compare] Rough 3<1>: 476 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:48:12.574 [compare] Vice Jaw<1> is a fixture, left out
+20:48:12.584 [compare] Vice Base<1> is a fixture, left out
+20:48:12.592 [compare] read 1 of 3 parts, 476 triangles, in 31 ms
+20:48:12.601 [generate] waterline: flat faces at none (frame Z), stock 64.612 to 44.683
+20:48:15.691 [generate] roughing: 12792 moves, in 3093 ms
+20:48:15.707 [fixtures] Waterline Roughing 1: 0 stretches lifted over fixtures
+20:48:15.719 [generate] arcs: 10171 straight moves into 781 arcs; 60 more left out simplifying; 12792 moves to 3342
+20:48:15.726 [generate] Waterline Roughing 1: ok
+20:48:15.732 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:15.743 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:48:15.751 [generate] area from 1 faces and 0 loops
+20:48:15.864 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:48:15.864 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:48:15.879 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 78.000000 4.000000
+20:48:15.896 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 82.000000 8.000000
+20:48:15.906 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 936: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:48:15.913 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 312: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:48:15.923 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 82: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:48:15.931 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:48:15.974 [surfaces] Rough 3<1>: a spline, order 4 x 4, 78 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:48:15.976 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1297 triangles
+20:48:15.986 [surfaces] read 1 of 3 parts, 1 faces, 1297 triangles, in 234 ms
+20:48:16.009 [generate] waterline: flat faces at 59.136027, 58.027898, 58.008676, 57.981886, 57.969018, 55.370111 (frame Z), stock 64.612 to 44.683
+20:48:16.015 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:48:18.070 [generate] roughing: 25089 moves, in 2078 ms
+20:48:18.071 [generate] true surface: 90880 of 101099 points moved onto it, 0 asked of Alibre, 67695 more taking the middle of their neighbours
+20:48:18.081 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 10176 side contacts, 43 unsettled, 0 off the face, 0 too far
+20:48:18.090 [generate] laps: 625 points put back between their neighbours, 4 thin fingers and loops cut off, simplified by height from 137131 to 26106 points; 0 turn-backs, 24 zigzags and 8380 wobbles left
+20:48:21.246 [fixtures] Waterline Finishing 1: 38 stretches lifted over fixtures
+20:48:21.292 [generate] arcs: 4449 straight moves into 1456 arcs; 280 more left out simplifying; 17838 moves to 14565
+20:48:21.359 [generate] Waterline Finishing 1: ok
+20:48:21.362 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:21.373 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:48:21.386 [generate] area from 1 faces and 0 loops
+20:48:21.501 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:48:21.501 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:48:21.514 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 78.000000 4.000000
+20:48:21.524 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 82.000000 8.000000
+20:48:21.538 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 936: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:48:21.547 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 312: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:48:21.556 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 82: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:48:21.565 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:48:21.608 [surfaces] Rough 3<1>: a spline, order 4 x 4, 78 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:48:21.610 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1297 triangles
+20:48:21.620 [surfaces] read 1 of 3 parts, 1 faces, 1297 triangles, in 219 ms
+20:48:21.637 [generate] waterline: flat faces at 59.136027, 58.027898, 58.008676, 57.981886, 57.969018, 55.370111 (frame Z), stock 64.612 to 44.683
+20:48:21.647 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:48:22.633 [generate] roughing: 5643 moves, in 1000 ms
+20:48:22.633 [generate] true surface: 60022 of 60026 points moved onto it, 0 asked of Alibre, 58202 more taking the middle of their neighbours
+20:48:22.646 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 3 side contacts, 1 unsettled, 0 off the face, 0 too far
+20:48:24.082 [fixtures] Parallel Finishing 1: 54 stretches lifted over fixtures
+20:48:24.087 [generate] arcs: 4399 straight moves into 261 arcs; 488 more left out simplifying; 5817 moves to 1191
+20:48:24.126 [generate] Parallel Finishing 1: ok
+20:48:24.148 [tab] status: Unsaved changes.
+20:48:29.405 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:48:29.406 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:29.418 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:48:29.428 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:48:29.456 [fixtures] Fixtures 1: 2 parts read
+20:48:29.470 [simulate] 3 operations, 22559 moves, 1001 x 399 x 1041 cells of 0.05 mm (divided), 0 mixed bricks, ready in 16 ms
+20:48:29.544 [turn view] off
+20:48:29.552 [compare] Rough 3<1>: 476 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:48:29.555 [compare] Vice Jaw<1> is a fixture, left out
+20:48:29.567 [compare] Vice Base<1> is a fixture, left out
+20:48:29.576 [compare] read 1 of 3 parts, 476 triangles, in 31 ms
+20:48:29.767 [compare] parts in the grid: 274764906 cells, 448834 triangles to draw, in 172 ms
+20:48:29.938 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:48:29.980 [draw] 1 renders in 4 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 6556 triangles in the last
+20:48:40.229 [simulate] timing, run: 8438 ms in all; cutting 6511 ms (22559 pieces), collision checks 2 ms, measuring the load 1075 ms, meshing 26 ms, joining 29 ms, comparing 43 ms (1 updates), other 752 ms; 490006 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 7833 mixed bricks
+20:48:40.230 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01828 mm/tooth, up to 180 degrees and 7.99 mm deep, up to 7.39 cm3/min, 0.0862 kW (4% of 2.4 kW), 23 N (worst at move 147; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:48:40.241 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.01359 mm/tooth, up to 180 degrees and 13.68 mm deep, up to 7.46 cm3/min, 0.087 kW (4% of 2.4 kW), 31 N (worst at move 5137; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:48:40.251 [simulate] load, Parallel Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02434 mm/tooth, up to 180 degrees and 3.56 mm deep, up to 1.68 cm3/min, 0.0197 kW (1% of 2.4 kW), 7 N (worst at move 20896; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:48:40.379 [draw] 2 renders in 109 ms: preparing meshes 15 ms, Alibre's DrawMesh 86 ms, 535532 triangles in the last
+20:48:43.173 [draw] 1 renders in 103 ms: preparing meshes 14 ms, Alibre's DrawMesh 84 ms, 535532 triangles in the last
+20:48:44.269 [draw] 2 renders in 186 ms: preparing meshes 28 ms, Alibre's DrawMesh 148 ms, 535532 triangles in the last
+20:48:45.447 [draw] 2 renders in 190 ms: preparing meshes 30 ms, Alibre's DrawMesh 150 ms, 535532 triangles in the last
+20:48:46.529 [draw] 2 renders in 199 ms: preparing meshes 32 ms, Alibre's DrawMesh 153 ms, 535532 triangles in the last
+20:48:47.892 [draw] 2 renders in 184 ms: preparing meshes 29 ms, Alibre's DrawMesh 145 ms, 535532 triangles in the last
+20:48:49.749 [view] OnTerminate: CAM graphics are no longer drawn
+20:48:54.763 [tab] warning about unsaved changes
+20:48:56.935 AddOnUnload
+20:57:04.547 ==== CAMForAlibre loaded ====
+20:57:04.548 Alibre version: PRODUCTVERSION 27,0,1,27039
+20:57:32.893 [model] assembly 'Rough 3' path='D:/Projects/alibre/camtest/examples/Rough 3.AD_ASM' guid='E1C520B0-9702-40A2-AC5A-273A4EC26891'
+20:57:32.975 [tab] status: Loaded Rough 3.cam.
+20:57:32.979 [machine] CNC Router: 9 tools. The selected tool isn't on this machine. Select another.
+20:57:33.005 [tab] status: Loaded Rough 3.cam.
+20:57:33.048 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:57:33.183 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:33.476 [focus] tab gained focus
+20:57:33.476 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:57:33.492 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:33.521 [view] OnComplete
+20:57:33.524 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:57:33.543 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:57:36.070 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:57:36.071 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:36.083 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:36.100 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:57:36.105 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:57:36.135 [fixtures] Fixtures 1: 2 parts read
+20:57:36.142 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:57:36.146 [generate] area from 1 faces and 0 loops
+20:57:36.161 [compare] Rough 3<1>: 476 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:57:36.164 [compare] Vice Jaw<1> is a fixture, left out
+20:57:36.173 [compare] Vice Base<1> is a fixture, left out
+20:57:36.188 [compare] read 1 of 3 parts, 476 triangles, in 32 ms
+20:57:36.197 [generate] waterline: flat faces at none (frame Z), stock 64.612 to 44.683
+20:57:39.336 [generate] roughing: 12792 moves, in 3141 ms
+20:57:39.356 [fixtures] Waterline Roughing 1: 0 stretches lifted over fixtures
+20:57:39.369 [generate] arcs: 10171 straight moves into 781 arcs; 60 more left out simplifying; 12792 moves to 3342
+20:57:39.376 [generate] Waterline Roughing 1: ok
+20:57:39.381 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:39.391 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:57:39.398 [generate] area from 1 faces and 0 loops
+20:57:39.522 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:57:39.522 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:57:39.533 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 78.000000 4.000000
+20:57:39.543 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 82.000000 8.000000
+20:57:39.553 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 936: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:57:39.562 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 312: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:57:39.570 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 82: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:57:39.579 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:57:39.616 [surfaces] Rough 3<1>: a spline, order 4 x 4, 78 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:57:39.618 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1297 triangles
+20:57:39.628 [surfaces] read 1 of 3 parts, 1 faces, 1297 triangles, in 219 ms
+20:57:39.644 [generate] waterline: flat faces at 59.136027, 58.027898, 58.008676, 57.981886, 57.969018, 55.370111 (frame Z), stock 64.612 to 44.683
+20:57:39.650 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:57:41.702 [generate] roughing: 25089 moves, in 2062 ms
+20:57:41.702 [generate] true surface: 90880 of 101099 points moved onto it, 0 asked of Alibre, 67695 more taking the middle of their neighbours
+20:57:41.713 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 10176 side contacts, 43 unsettled, 0 off the face, 0 too far
+20:57:41.722 [generate] laps: 625 points put back between their neighbours, 4 thin fingers and loops cut off, simplified by height from 137131 to 26106 points; 0 turn-backs, 24 zigzags and 8380 wobbles left
+20:57:44.846 [fixtures] Waterline Finishing 1: 38 stretches lifted over fixtures
+20:57:44.892 [generate] arcs: 4449 straight moves into 1456 arcs; 280 more left out simplifying; 17838 moves to 14565
+20:57:44.968 [generate] Waterline Finishing 1: ok
+20:57:44.971 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:44.991 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:57:44.998 [generate] area from 1 faces and 0 loops
+20:57:45.113 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:57:45.114 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:57:45.129 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 78.000000 4.000000
+20:57:45.143 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 82.000000 8.000000
+20:57:45.152 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 936: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:57:45.161 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 312: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:57:45.170 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 82: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:57:45.178 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:57:45.216 [surfaces] Rough 3<1>: a spline, order 4 x 4, 78 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:57:45.217 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1297 triangles
+20:57:45.227 [surfaces] read 1 of 3 parts, 1 faces, 1297 triangles, in 219 ms
+20:57:45.244 [generate] waterline: flat faces at 59.136027, 58.027898, 58.008676, 57.981886, 57.969018, 55.370111 (frame Z), stock 64.612 to 44.683
+20:57:45.250 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:57:46.238 [generate] roughing: 5643 moves, in 1000 ms
+20:57:46.239 [generate] true surface: 60022 of 60026 points moved onto it, 0 asked of Alibre, 58202 more taking the middle of their neighbours
+20:57:46.250 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 3 side contacts, 1 unsettled, 0 off the face, 0 too far
+20:57:47.698 [fixtures] Parallel Finishing 1: 54 stretches lifted over fixtures
+20:57:47.702 [generate] arcs: 4399 straight moves into 261 arcs; 488 more left out simplifying; 5817 moves to 1191
+20:57:47.740 [generate] Parallel Finishing 1: ok
+20:57:47.759 [tab] status: Unsaved changes.
+20:57:51.689 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:57:51.690 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:51.701 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:57:51.712 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:57:51.741 [fixtures] Fixtures 1: 2 parts read
+20:57:51.755 [simulate] 3 operations, 22559 moves, 1001 x 399 x 1041 cells of 0.05 mm (divided), 0 mixed bricks, ready in 16 ms
+20:57:51.823 [turn view] off
+20:57:51.840 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:57:52.213 [draw] 1 renders in 308 ms: preparing meshes 0 ms, Alibre's DrawMesh 3 ms, 6556 triangles in the last
+20:57:53.528 [draw] 2 renders in 594 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 6556 triangles in the last
+20:57:57.324 [simulate] timing, run: 2468 ms in all; cutting 1651 ms (5895 pieces), collision checks 4 ms, measuring the load 319 ms, meshing 11 ms, joining 9 ms, comparing 0 ms (1 updates), other 473 ms; 139128 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 5331 mixed bricks
+20:57:57.325 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01828 mm/tooth, up to 180 degrees and 7.99 mm deep, up to 7.39 cm3/min, 0.0862 kW (4% of 2.4 kW), 23 N (worst at move 147; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:57:57.336 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02256 mm/tooth, up to 180 degrees and 5.50 mm deep, up to 3.97 cm3/min, 0.0463 kW (2% of 2.4 kW), 16 N (worst at move 5137; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:57:57.816 [draw] 1 renders in 460 ms: preparing meshes 4 ms, Alibre's DrawMesh 21 ms, 140960 triangles in the last
+20:58:03.295 [draw] 1 renders in 473 ms: preparing meshes 5 ms, Alibre's DrawMesh 21 ms, 140960 triangles in the last
+20:58:12.426 [simulate] timing, run: 6110 ms in all; cutting 4764 ms (16664 pieces), collision checks 1 ms, measuring the load 736 ms, meshing 26 ms, joining 50 ms, comparing 0 ms (1 updates), other 532 ms; 490006 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 7833 mixed bricks
+20:58:12.427 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01828 mm/tooth, up to 180 degrees and 7.99 mm deep, up to 7.39 cm3/min, 0.0862 kW (4% of 2.4 kW), 23 N (worst at move 147; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:58:12.437 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.01359 mm/tooth, up to 180 degrees and 13.68 mm deep, up to 7.46 cm3/min, 0.087 kW (4% of 2.4 kW), 31 N (worst at move 5137; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:58:12.446 [simulate] load, Parallel Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02434 mm/tooth, up to 180 degrees and 3.56 mm deep, up to 1.68 cm3/min, 0.0197 kW (1% of 2.4 kW), 7 N (worst at move 20896; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:58:13.118 [draw] 1 renders in 648 ms: preparing meshes 19 ms, Alibre's DrawMesh 104 ms, 491838 triangles in the last
+20:58:15.765 [draw] 1 renders in 703 ms: preparing meshes 15 ms, Alibre's DrawMesh 164 ms, 491838 triangles in the last
+20:58:16.827 [draw] 1 renders in 605 ms: preparing meshes 15 ms, Alibre's DrawMesh 79 ms, 491838 triangles in the last
+20:58:19.368 [draw] 2 renders in 627 ms: preparing meshes 28 ms, Alibre's DrawMesh 153 ms, 491838 triangles in the last
+20:58:21.390 [compare] Rough 3<1>: 476 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:58:21.391 [compare] Vice Jaw<1> is a fixture, left out
+20:58:21.402 [compare] Vice Base<1> is a fixture, left out
+20:58:21.413 [compare] read 1 of 3 parts, 476 triangles, in 31 ms
+20:58:21.600 [compare] parts in the grid: 274764906 cells, 448834 triangles to draw, in 188 ms
+20:58:21.977 [draw] 2 renders in 610 ms: preparing meshes 28 ms, Alibre's DrawMesh 154 ms, 535532 triangles in the last
+20:58:26.146 [draw] 1 renders in 111 ms: preparing meshes 14 ms, Alibre's DrawMesh 90 ms, 535532 triangles in the last
+20:58:28.646 [draw] 1 renders in 121 ms: preparing meshes 19 ms, Alibre's DrawMesh 97 ms, 625532 triangles in the last
+20:58:30.737 [draw] 1 renders in 115 ms: preparing meshes 19 ms, Alibre's DrawMesh 91 ms, 581838 triangles in the last
+20:58:37.888 [focus] tab lost focus
+20:58:37.888 [tab] stopping the view (tab lost focus)
+20:58:37.906 [view] OnTerminate: CAM graphics are no longer drawn
+20:58:37.919 [tab] view Terminate hr=0x00000000
+20:58:43.146 [focus] tab gained focus
+20:58:43.147 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:58:43.157 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:58:43.173 [view] OnComplete
+20:58:43.176 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:58:43.187 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:58:48.895 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:58:48.896 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:58:48.909 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:58:48.919 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:58:48.929 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:58:48.958 [fixtures] Fixtures 1: 2 parts read
+20:58:49.129 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 172 ms
+20:58:49.130 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:58:49.141 [generate] area from 1 faces and 0 loops
+20:58:49.162 [compare] Rough 3<1>: 896 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:58:49.163 [compare] Vice Jaw<1> is a fixture, left out
+20:58:49.172 [compare] Vice Base<1> is a fixture, left out
+20:58:49.181 [compare] read 1 of 3 parts, 896 triangles, in 32 ms
+20:58:49.191 [generate] waterline: flat faces at 54.853557 (frame Z), stock 64.612 to 44.683
+20:58:52.660 [generate] roughing: 14847 moves, in 3469 ms
+20:58:52.677 [fixtures] Waterline Roughing 1: 0 stretches lifted over fixtures
+20:58:52.695 [generate] arcs: 10466 straight moves into 854 arcs; 78 more left out simplifying; 14847 moves to 5157
+20:58:52.703 [generate] Waterline Roughing 1: ok
+20:58:52.707 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:58:52.717 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:58:52.724 [generate] area from 1 faces and 0 loops
+20:58:52.831 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:58:52.831 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:58:52.840 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 92.000000 4.000000
+20:58:52.854 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 96.000000 8.000000
+20:58:52.863 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 1104: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:58:52.872 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 368: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:58:52.883 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 96: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:58:52.891 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:58:52.935 [surfaces] Rough 3<1>: a spline, order 4 x 4, 92 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:58:52.936 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1865 triangles (its configuration, read apart)
+20:58:52.945 [surfaces] read 1 of 3 parts, 1 faces, 1865 triangles, in 203 ms
+20:58:52.962 [generate] waterline: flat faces at 59.977609, 59.968708, 59.962852, 59.953224 (frame Z), stock 64.612 to 44.683
+20:58:52.969 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:58:55.508 [generate] roughing: 24906 moves, in 2563 ms
+20:58:55.508 [generate] true surface: 101692 of 111142 points moved onto it, 0 asked of Alibre, 69697 more taking the middle of their neighbours
+20:58:55.520 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 9379 side contacts, 71 unsettled, 0 off the face, 0 too far
+20:58:55.528 [generate] laps: 341 points put back between their neighbours, 1 thin fingers and loops cut off, simplified by height from 140977 to 26093 points; 0 turn-backs, 13 zigzags and 8059 wobbles left
+20:58:58.605 [fixtures] Waterline Finishing 1: 36 stretches lifted over fixtures
+20:58:58.653 [generate] arcs: 4476 straight moves into 1445 arcs; 156 more left out simplifying; 18206 moves to 15019
+20:58:58.731 [generate] Waterline Finishing 1: ok
+20:58:58.733 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:58:58.752 [facets] Rough 3<1>: face facets vt=5, 18 values, 2 triangles
+20:58:58.760 [generate] area from 1 faces and 0 loops
+20:58:58.858 [surfaces] Rough 3<1>: spline surfaceOrderUV vt 3, 2: 4.000000 4.000000
+20:58:58.859 [surfaces] Rough 3<1>: spline surfaceInfo vt 3, 5: 0.000000 0.000000 0.000000 0.000000 0.000000
+20:58:58.870 [surfaces] Rough 3<1>: spline surfaceNumControlPointsUV vt 3, 2: 92.000000 4.000000
+20:58:58.880 [surfaces] Rough 3<1>: spline surfaceNoOfKnotsUV vt 3, 2: 96.000000 8.000000
+20:58:58.888 [surfaces] Rough 3<1>: spline surfaceControlPoints vt 5, 1104: 2.500000 1.500000 5.000000 2.500000 1.333333 3.333333 2.500000 1.166667 1.666667 2.500000 1.000000 0.000000 ...
+20:58:58.898 [surfaces] Rough 3<1>: spline surfaceWeights vt 5, 368: 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 ...
+20:58:58.912 [surfaces] Rough 3<1>: spline surfaceKnotVectorU vt 5, 96: 0.000000 0.000000 0.000000 0.000000 0.035117 0.035117 0.052676 0.052676 0.070234 0.070234 0.092687 0.092687 ...
+20:58:58.921 [surfaces] Rough 3<1>: spline surfaceKnotVectorV vt 5, 8: 0.000000 0.000000 0.000000 0.000000 1.000000 1.000000 1.000000 1.000000
+20:58:58.964 [surfaces] Rough 3<1>: a spline, order 4 x 4, 92 x 4 control points, fits its facets read with the knot vectors as given, the control points v fastest
+20:58:58.966 [surfaces] Rough 3<1>: 6 faces (5 planes, 0 spheres, cylinders, cones or tori and 1 splines worked out here, 0 others asked of Alibre), 1865 triangles (its configuration, read apart)
+20:58:58.976 [surfaces] read 1 of 3 parts, 1 faces, 1865 triangles, in 204 ms
+20:58:58.997 [generate] waterline: flat faces at 59.977609, 59.968708, 59.962852, 59.953224 (frame Z), stock 64.612 to 44.683
+20:58:59.004 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+20:59:00.095 [generate] roughing: 5474 moves, in 1125 ms
+20:59:00.096 [generate] true surface: 59573 of 59581 points moved onto it, 0 asked of Alibre, 57470 more taking the middle of their neighbours
+20:59:00.109 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 6 side contacts, 2 unsettled, 0 off the face, 0 too far
+20:59:00.707 [fixtures] Parallel Finishing 1: 23 stretches lifted over fixtures
+20:59:00.711 [generate] arcs: 4553 straight moves into 337 arcs; 422 more left out simplifying; 5571 moves to 933
+20:59:00.735 [generate] Parallel Finishing 1: ok
+20:59:00.752 [tab] status: Unsaved changes.
+20:59:00.777 [config] 1 copies opened apart, 5 more reads served from them; closed
+20:59:02.851 [model] assembly extents (-50.000, -3.317, -213.059) to (50.000, 64.612, 16.941) mm
+20:59:02.851 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:59:02.866 [fixtures] Vice Base<1>: 20 triangles, clearance 2.000 mm
+20:59:02.876 [fixtures] Vice Jaw<1>: 12 triangles, clearance 2.000 mm
+20:59:02.905 [fixtures] Fixtures 1: 2 parts read
+20:59:02.920 [simulate] 3 operations, 25296 moves, 1001 x 399 x 1041 cells of 0.05 mm (divided), 0 mixed bricks, ready in 0 ms
+20:59:02.995 [turn view] off
+20:59:03.114 [config] Rough 3<1> uses configuration 1, the part shows 2: read from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT opened apart, now 1, in 125 ms
+20:59:03.126 [compare] Rough 3<1>: 896 triangles, from D:/Projects/alibre/camtest/examples/Rough 3.AD_PRT, transform determinant 1.000, box (-25.00, 44.68, -63.06) to (25.00, 64.50, -13.06)
+20:59:03.126 [compare] Vice Jaw<1> is a fixture, left out
+20:59:03.136 [compare] Vice Base<1> is a fixture, left out
+20:59:03.147 [compare] read 1 of 3 parts, 896 triangles, in 156 ms
+20:59:03.159 [config] 1 copies opened apart, 0 more reads served from them; closed
+20:59:03.373 [compare] parts in the grid: 276001058 cells, 719258 triangles to draw, in 203 ms
+20:59:03.569 [stock] Rough 3<1> extents (-25.010, 44.683, -63.069) to (25.010, 64.612, -13.049) mm
+20:59:03.787 [draw] 1 renders in 137 ms: preparing meshes 20 ms, Alibre's DrawMesh 111 ms, 718400 triangles in the last
+20:59:16.690 [simulate] timing, run: 9187 ms in all; cutting 7098 ms (25296 pieces), collision checks 2 ms, measuring the load 1235 ms, meshing 34 ms, joining 44 ms, comparing 38 ms (1 updates), other 736 ms; 738160 triangles to draw, 1001 x 399 x 1041 cells of 0.05 mm (divided), 8592 mixed bricks
+20:59:16.691 [simulate] load, Waterline Roughing 1: Highest 500% (0.025 mm/tooth), average 0.01771 mm/tooth, up to 180 degrees and 9.28 mm deep, up to 8.29 cm3/min, 0.0968 kW (4% of 2.4 kW), 26 N (worst at move 139; target 0.005 mm, 24000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:59:16.701 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.01386 mm/tooth, up to 180 degrees and 13.99 mm deep, up to 7.09 cm3/min, 0.0827 kW (3% of 2.4 kW), 29 N (worst at move 7720; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:59:16.711 [simulate] load, Parallel Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02339 mm/tooth, up to 180 degrees and 3.37 mm deep, up to 2.1 cm3/min, 0.0244 kW (1% of 2.4 kW), 9 N (worst at move 23920; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:59:16.964 [draw] 1 renders in 231 ms: preparing meshes 21 ms, Alibre's DrawMesh 204 ms, 790024 triangles in the last
+21:01:48.861 [draw] 1 renders in 158 ms: preparing meshes 25 ms, Alibre's DrawMesh 125 ms, 790024 triangles in the last
+21:01:52.787 [view] OnTerminate: CAM graphics are no longer drawn
+21:01:57.287 [tab] warning about unsaved changes
+21:01:58.829 [tab] saved on closing: ok
+21:01:58.838 [tab] window destroyed by Alibre
+21:02:14.155 [model] assembly 'New Config' path='D:/Documents/Drawings/Tools/heat set press2/New Config.AD_ASM' guid='71B046FF-DA50-4367-A04C-EE8C903223B5'
+21:02:14.167 [tab] status: Loaded New Config.cam.
+21:02:14.173 [machine] CNC Router: 9 tools. No tool selected.
+21:02:14.195 [tab] status: Loaded New Config.cam.
+21:02:14.220 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:14.221 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:14.396 [focus] tab gained focus
+21:02:14.397 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:14.407 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:14.421 [view] OnComplete
+21:02:14.427 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+21:02:14.440 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+21:02:17.869 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:17.870 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:17.881 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:18.028 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 93 ms
+21:02:18.037 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+21:02:18.040 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+21:02:18.051 [generate] 2 areas, at Z 0.000
+21:02:18.061 [generate] arcs: 0 straight moves into 0 arcs; 0 more left out simplifying; 68 moves to 68
+21:02:18.070 [generate] Profiling 1: ok
+21:02:18.081 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:18.090 [generate] area from 0 faces and 1 loops
+21:02:18.101 [surfaces] New Config<1>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles (its configuration, read apart)
+21:02:18.111 [surfaces] New Config<2>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles
+21:02:18.120 [surfaces] read 2 of 2 parts, 0 faces, 24 triangles, in 15 ms
+21:02:18.129 [generate] waterline: flat faces at 0.000000 (frame Z), stock 0.000 to -5.000
+21:02:18.142 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+21:02:18.745 [generate] roughing: 1189 moves, in 609 ms
+21:02:18.745 [generate] true surface: 0 of 0 points moved onto it, 0 asked of Alibre, 14651 more taking the middle of their neighbours
+21:02:18.756 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 0 side contacts, 0 unsettled, 0 off the face, 0 too far
+21:02:18.766 [generate] laps: 101 points put back between their neighbours, 0 thin fingers and loops cut off, simplified by height from 29864 to 1109 points; 0 turn-backs, 5 zigzags and 380 wobbles left
+21:02:18.778 [generate] arcs: 118 straight moves into 28 arcs; 22 more left out simplifying; 1189 moves to 1077
+21:02:18.783 [generate] Waterline Finishing 1: ok
+21:02:18.796 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:18.806 [generate] area from 0 faces and 1 loops
+21:02:18.816 [surfaces] New Config<1>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles (its configuration, read apart)
+21:02:18.825 [surfaces] New Config<2>: 6 faces (6 planes, 0 spheres, cylinders, cones or tori and 0 splines worked out here, 0 others asked of Alibre), 12 triangles
+21:02:18.835 [surfaces] read 2 of 2 parts, 0 faces, 24 triangles, in 16 ms
+21:02:18.845 [generate] waterline: flat faces at 0.000000 (frame Z), stock 0.000 to -5.000
+21:02:18.857 [generate] input saved for replaying: C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\last-finishing.json
+21:02:19.379 [generate] roughing: 9859 moves, in 531 ms
+21:02:19.379 [generate] true surface: 0 of 0 points moved onto it, 0 asked of Alibre, 0 more taking the middle of their neighbours
+21:02:19.390 [generate] true surface: kept the triangles' answer for 0 with no closest point, 0 with the centre on the surface, 0 side contacts, 0 unsettled, 0 off the face, 0 too far
+21:02:19.408 [generate] arcs: 8004 straight moves into 309 arcs; 618 more left out simplifying; 9859 moves to 1546
+21:02:19.409 [generate] Parallel Finishing 1: ok
+21:02:19.433 [tab] status: Unsaved changes.
+21:02:19.437 [config] 1 copies opened apart, 2 more reads served from them; closed
+21:02:23.916 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:23.917 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:23.931 [simulate] 3 operations, 3729 moves, 1839 x 1604 x 100 cells of 0.05 mm (divided), 0 mixed bricks, ready in 0 ms
+21:02:24.008 [turn view] off
+21:02:24.105 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 94 ms
+21:02:24.107 [compare] New Config<1>: 12 triangles, from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT, transform determinant 1.000, box (-0.00, 0.00, 0.00) to (20.00, 20.00, 5.00)
+21:02:24.118 [compare] New Config<2>: 12 triangles, from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT, transform determinant 1.000, box (31.93, 0.18, 0.00) to (51.93, 40.18, 5.00)
+21:02:24.127 [compare] read 2 of 2 parts, 24 triangles, in 125 ms
+21:02:24.140 [config] 1 copies opened apart, 0 more reads served from them; closed
+21:02:24.209 [compare] parts in the grid: 48000000 cells, 2548 triangles to draw, in 63 ms
+21:02:24.414 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+21:02:24.552 [draw] 2 renders in 236 ms: preparing meshes 24 ms, Alibre's DrawMesh 143 ms, 24240 triangles in the last
+21:02:26.401 [draw] 1 renders in 64 ms: preparing meshes 0 ms, Alibre's DrawMesh 2 ms, 24240 triangles in the last
+21:02:30.167 [simulate] timing, run: 1859 ms in all; cutting 1358 ms (3729 pieces), collision checks 0 ms, measuring the load 378 ms, meshing 3 ms, joining 1 ms, comparing 14 ms (1 updates), other 105 ms; 9344 triangles to draw, 1839 x 1604 x 100 cells of 0.05 mm (divided), 700 mixed bricks
+21:02:30.167 [simulate] load, Profiling 1: Highest 556% (0.02778 mm/tooth), average 0.02379 mm/tooth, up to 180 degrees and 5.00 mm deep, up to 5.15 cm3/min (worst at move 2; target 0.005 mm, 18000 rpm, 2 teeth, Kc 0, spindle 2400 W)
+21:02:30.178 [simulate] load, Waterline Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02209 mm/tooth, up to 180 degrees and 4.05 mm deep, up to 0.434 cm3/min (worst at move 246; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 0, spindle 2400 W)
+21:02:30.187 [simulate] load, Parallel Finishing 1: Highest 100% (0.02778 mm/tooth), average 0.02772 mm/tooth, up to 95 degrees and 5.00 mm deep, up to 7.15 cm3/min (worst at move 1273; target 0.0277778 mm, 18000 rpm, 2 teeth, Kc 0, spindle 2400 W)
+21:02:30.274 [draw] 9 renders in 590 ms: preparing meshes 3 ms, Alibre's DrawMesh 23 ms, 9344 triangles in the last
+21:02:33.809 [draw] 1 renders in 67 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 9344 triangles in the last
+21:02:39.086 [draw] 1 renders in 5 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 9344 triangles in the last
+21:02:40.120 [draw] 1 renders in 4 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 9344 triangles in the last
+21:02:41.163 [draw] 23 renders in 169 ms: preparing meshes 4 ms, Alibre's DrawMesh 95 ms, 9344 triangles in the last
+21:02:42.170 [draw] 54 renders in 212 ms: preparing meshes 8 ms, Alibre's DrawMesh 50 ms, 9344 triangles in the last
+21:02:43.173 [draw] 34 renders in 145 ms: preparing meshes 6 ms, Alibre's DrawMesh 38 ms, 9344 triangles in the last
+21:02:44.464 [draw] 11 renders in 51 ms: preparing meshes 2 ms, Alibre's DrawMesh 13 ms, 9344 triangles in the last
+21:02:52.342 [draw] 2 renders in 8 ms: preparing meshes 0 ms, Alibre's DrawMesh 2 ms, 9344 triangles in the last
+21:02:53.481 [draw] 1 renders in 4 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 9344 triangles in the last
+21:02:59.082 [draw] 1 renders in 3 ms: preparing meshes 0 ms, Alibre's DrawMesh 0 ms, 0 triangles in the last
+21:03:01.050 [draw] 1 renders in 4 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 9344 triangles in the last
+21:03:02.618 [draw] 1 renders in 5 ms: preparing meshes 0 ms, Alibre's DrawMesh 2 ms, 11892 triangles in the last
+21:03:03.649 [draw] 1 renders in 5 ms: preparing meshes 0 ms, Alibre's DrawMesh 1 ms, 9344 triangles in the last
+21:03:05.186 [draw] 2 renders in 10 ms: preparing meshes 0 ms, Alibre's DrawMesh 3 ms, 9344 triangles in the last
+21:03:08.689 [view] OnTerminate: CAM graphics are no longer drawn
+21:03:09.885 [tab] warning about unsaved changes
+21:03:11.713 [tab] saved on closing: ok
+21:03:11.723 [tab] window destroyed by Alibre
+21:03:13.015 AddOnUnload

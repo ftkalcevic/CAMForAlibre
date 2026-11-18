@@ -117,6 +117,20 @@ bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutP
                             std::vector<camcore::Vec3>& triangles, std::wstring& problem,
                             const OccurrenceKeys& leaveOutKeys = {}, std::vector<size_t>* partStarts = nullptr);
 
+// While one of these lives (they nest), a part read in another configuration than
+// its active one keeps the copy of its file opened apart for that configuration, and
+// later reads of the same file and configuration use it; the copies are closed,
+// unsaved, when the outermost one ends. Create one for the length of a Generate, a
+// highlight refresh or reading the parts, never longer, so saved part edits are seen.
+class ConfigurationCopies
+{
+public:
+    ConfigurationCopies();
+    ~ConfigurationCopies();
+    ConfigurationCopies(const ConfigurationCopies&) = delete;
+    ConfigurationCopies& operator=(const ConfigurationCopies&) = delete;
+};
+
 // Every visible part's faces, each read with its own facets and kept with its
 // true surface, so a tool's contacts can be moved onto the surface.
 class PartSurfaces
