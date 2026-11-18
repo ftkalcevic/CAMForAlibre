@@ -5,6 +5,7 @@
 #include "AdaptiveClearing.h"
 
 #include "PathBuilder.h"
+#include "PlungeRoughToolpath.h"    // SquaredDistanceTransform
 
 #include <algorithm>
 #include <cmath>
@@ -337,27 +338,41 @@ namespace camcore
         // Entry and exit are at every level, or only into the first and out of the last.
         ToolpathResult result;
 
-        // Adaptive clearing of each area, worked out once: the boundary is the
-        // material, and the tool's centre may go the overtravel past it.
+        // Adaptive clearing of each area, worked out once. As with the passes, the
+        // tool's centre goes the overtravel past the boundary: the material is the
+        // boundary grown by the overtravel less the tool's radius. Where that grows
+        // it, the centre may go a radius further, in air, to start and link.
         std::vector<std::vector<AdaptiveCut>> adaptiveCuts(areas.size());
         if (facing.adaptive)
         {
+            const double radius = input.tool->diameter / 2.0;
+            const double grow = (std::max)(0.0, overtravel - radius);
+            const double reach = (grow > 0.0) ? overtravel + radius : overtravel;
             for (size_t a = 0; a < areas.size(); ++a)
             {
                 const Area& area = areas[a];
                 double xLow = 0.0, xHigh = 0.0, yLow = 0.0, yHigh = 0.0;
                 PathExtent(*area.pBoundary, { 1.0, 0.0, 0.0 }, xLow, xHigh);
                 PathExtent(*area.pBoundary, { 0.0, 1.0, 0.0 }, yLow, yHigh);
-                const double cell = AdaptiveCell(input.tool->diameter, step, xHigh - xLow + 2.0 * overtravel,
-                                                 yHigh - yLow + 2.0 * overtravel);
+                const double cell = AdaptiveCell(input.tool->diameter, step, xHigh - xLow + 2.0 * reach,
+                                                 yHigh - yLow + 2.0 * reach);
                 AdaptiveSettings adaptive;
-                adaptive.toolRadius = input.tool->diameter / 2.0;
+                adaptive.toolRadius = radius;
                 adaptive.optimalLoad = step;
                 adaptive.climb = facing.direction != CutDirection::Conventional;
                 adaptive.ramp = facing.rampEntry;
                 adaptive.simplify = input.simplifyTolerance;
-                adaptiveCuts[a] = AdaptiveClear(
-                    AdaptiveGridFromOutlines({ *area.pBoundary }, cell, -overtravel, adaptive.toolRadius), adaptive).cuts;
+                AdaptiveGrid grid = AdaptiveGridFromOutlines({ *area.pBoundary }, cell, -reach, radius);
+                if (grow > 0.0)
+                {
+                    std::vector<double> d(grid.material.size());
+                    for (size_t q = 0; q < d.size(); ++q)
+                        d[q] = grid.material[q] ? 0.0 : 1e12;
+                    SquaredDistanceTransform(d, grid.nx, grid.ny);
+                    for (size_t q = 0; q < d.size(); ++q)
+                        grid.material[q] = (std::sqrt(d[q]) * cell <= grow) ? 1 : 0;
+                }
+                adaptiveCuts[a] = AdaptiveClear(std::move(grid), adaptive).cuts;
             }
         }
 

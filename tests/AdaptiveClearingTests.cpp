@@ -374,6 +374,55 @@ TEST_CASE("facing with adaptive clearing starts from outside the boundary when t
     CHECK(left < 1.0);
 }
 
+TEST_CASE("facing with adaptive clearing clears out to the overtravel")
+{
+    // A 12 mm circle with 20 mm of overtravel and a 4 mm tool: the centre goes
+    // 20 mm past the circle, as the passes do, so 24 mm round the middle is cleared.
+    SequenceStep step;
+    step.type = StepType::Facing;
+    step.clearance.mode = ClearanceMode::AbsoluteZ;
+    step.clearance.absoluteZ = 10;
+    step.cutLevels.totalDepth = 0;
+    step.cutLevels.roughDepth = 0;
+    step.cutLevels.finishDepth = 0;
+    step.facing.adaptive = true;
+    step.facing.stepDistance = { true, 25.0, 1.0 };
+    step.facing.overtravel = { false, 50.0, 20.0 };
+    std::vector<Vec3> circle;
+    for (int k = 0; k < 64; ++k)
+    {
+        const double a = 2.0 * 3.14159265358979 * k / 64.0;
+        circle.push_back({ 6.0 * std::cos(a), 6.0 * std::sin(a), 0.0 });
+    }
+    step.boundaries = { PathFromPoints(circle) };
+    Tool tool = FlatTool(4.0);
+    FacingToolpathInput input;
+    input.operation = &step;
+    input.tool = &tool;
+    const ToolpathResult result = GenerateFacingToolpath(input);
+    REQUIRE(result.ok);
+
+    double furthestCut = 0.0, furthest = 0.0;
+    for (const ToolpathMove& move : result.toolpath.moves)
+    {
+        if (move.to.z > 1e-9)
+            continue;
+        const double r = std::hypot(move.to.x, move.to.y);
+        furthest = (std::max)(furthest, r);
+        if (move.kind == MoveKind::Feed)
+            furthestCut = (std::max)(furthestCut, r);
+    }
+    std::printf("adaptive facing to the overtravel: %zu moves, centre out to %.2f\n", result.toolpath.moves.size(),
+                furthest);
+    CHECK(furthestCut > 25.5);              // out to the overtravel, 26
+    CHECK(furthest < 28.0 + 0.5);           // a radius further at most, in air
+
+    // The square inside the cleared circle is cut right through.
+    Engagement engagement;
+    const double left = CutAndMeasure(result.toolpath, { { -16, -16, 0 }, { 16, 16, 1 } }, 4.0, 1.0, engagement);
+    CHECK(left < 1.0);
+}
+
 TEST_CASE("waterline roughing with adaptive clearing leaves the part alone")
 {
     // A 40 x 30 x 10 stock, its footprint as the area, and a 20 x 14 x 6 block in the middle.

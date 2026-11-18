@@ -14050,6 +14050,85 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > On 16 cores, voxel cutting is now 2–5 times faster with the same cells. Next I'll update the docs and install.
 
+> Voxel cutting now uses all cores, and it's 2 to 5 times faster with exactly the same cells. All 400 tests pass and it's installed, but it isn't tested in Alibre yet and nothing is committed.
+>
+> **How it works:** `CutMove` hands out one row of columns to each core, since no two rows share a cell. Each row is checked with the same steps and tests as before, against the stock as it was before the move. One thread then clears what the rows found and marks the changed areas for redrawing. Small moves aren't worth handing out, so they stay on one core.
+>
+> **Checking it:** the old one-core version is kept as `CutMoveOneCore`. A new test compares the two after every move: each tool type, the tool pointing up, down, tilted and sideways, on divided and undivided stock. It checks the cells removed, the cells left, and which areas get redrawn.
+>
+> **Timing tests on your 16 cores:**
+>
+> | Test | Before | Now |
+> |---|---|---|
+> | Facing, 0.05 mm | 1.5 s | 0.55 s |
+> | Ball finishing pass, 0.05 mm | 32.8 s | 6.6 s |
+> | Ball finishing pass, 0.1 mm | 4.8 s | 2.7 s |
+>
+> Short moves gain less. Collision checks still run on one core, but they were only about 40 ms in your run.
+>
+> `CLAUDE.md` is updated. The help didn't change, because nothing on screen changed.
+>
+> **To test:**
+> 1. Run the same 9,047-move job on voxels at 0.05 mm with To End. It took 9.5 s before. The `[simulate] timing, run:` line should show much less time cutting.
+> 2. Compare the result with how it looked before, with Not enough / Too much removed shown: the volumes should match.
+> 3. Try a tilted operation (Rotate or a tilted Set Origin) and a thread mill on voxels: they should cut as before.
+> 4. Rewind, Step, Play and Save STL should work as before.
+> 5. Copy the log into the project folder again so I can read the new timing lines.
+
+### 🧑 Frank · 15:45
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> There is an issue with surfacing.  I select a circle.  I want to fact that surface, and extending it 20mm - making a 12mm diam, 20+12+20 = 52mm dia.  The diameter only seems to extend by +5.  in assembly test 4th, facing 1, overtravel distance is set to 25, but it doesn't overtrave 55mm
+
+### 🤖 Claude
+
+> Facing 1 and 2 use adaptive clearing, so I'm checking how the overtravel reaches it.
+
+> Now the change and a test.
+
+> The centre now reaches 26 mm, the 6 mm circle plus the 20 mm Overtravel, and the square inside is cleared. Next I'll run the full test suite, then update the help and docs and install.
+
+> All 401 tests pass. Alibre is open, so I can't install yet. Next, the help and the docs.
+
+> Adaptive facing now clears out to the Overtravel. Before, it only cleared the picked circle.
+>
+> **Why it happened:** Facing 1 and Facing 2 in `4th test` have Use Adaptive Clearing ticked. Adaptive clearing only treated the area inside the picked boundary as material to cut. It used the Overtravel only as room the tool could move in, so it never cut out there. With your 4 mm tool, the tool's centre went 2 mm past the circle and its edge 4 mm past, which is the roughly +5 you saw. The Linear passes without adaptive already used the Overtravel the way you expected.
+>
+> **The fix** ([FacingToolpath.cpp](core/FacingToolpath.cpp)): the area to cut now grows by the Overtravel less the tool's radius. The tool's centre goes the Overtravel past the boundary all round, as the help describes and as the Linear passes do. For your 10 mm circle (Facing 2) with 25 mm of Overtravel, the centre goes out to 5 + 25 = 30 mm from the middle. That clears about 64 mm across, counting the tool's edge. To start and to move between passes in air, the tool may go up to one tool radius further.
+>
+> When the Overtravel is a tool radius or less, which includes the default 50%, nothing changes.
+>
+> A new test checks a 12 mm circle with 20 mm of Overtravel and a 4 mm tool: the centre reaches 26 mm out, and a simulated cut leaves nothing inside the cleared area. All 401 tests pass. The help's Overtravel entry, `docs\SPEC.md` and `CLAUDE.md` are updated. The Claude doc that the spec copies wasn't updated, so the two now differ. The change is built in Release but not installed, because Alibre is open. Nothing is committed.
+>
+> **To test, after installing:**
+> 1. Open `4th test` and generate Facing 2. The toolpath should spread out to about 30 mm from the circle's centre, not 7 mm.
+> 2. Simulate it. The faced area should cover the Overtravel all round.
+> 3. Set the Overtravel to 50% and generate again. It should be as before, clearing just the circle.
+> 4. Untick Use Adaptive Clearing and generate. The Linear passes should be as before.
+> 5. The help changed: check the Overtravel entry under the Facing tab.
+
+### 🧑 Frank · 15:55
+
+> Alibre closed
+
+### 🤖 Claude
+
+> The fix is installed. The add-on in the Alibre add-ons folder is the 3:51 pm build, and the help page was updated with it. Start Alibre again to load it.
+>
+> **To test:**
+> 1. Open `4th test` and generate Facing 2. The toolpath should spread out to about 30 mm from the circle's centre, not 7 mm.
+> 2. Simulate it. The faced area should cover the Overtravel all round.
+> 3. Set the Overtravel to 50% and generate again. It should be as before, clearing just the circle.
+> 4. Untick Use Adaptive Clearing and generate. The Linear passes should be as before.
+> 5. The help changed: check the Overtravel entry under the Facing tab.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 15:56
+
+> fixed
+
 ---
 
 # Side conversation
