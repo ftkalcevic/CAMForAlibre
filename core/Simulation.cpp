@@ -286,7 +286,7 @@ namespace camcore
         }
     }
 
-    void VoxelStock::FillMesh(const std::vector<Vec3>& triangles)
+    void VoxelStock::FillMesh(const std::vector<Vec3>& triangles, const std::vector<size_t>& solids)
     {
         // Start empty.
         if (m_divide)
@@ -300,9 +300,25 @@ namespace camcore
             std::fill(m_pool.begin(), m_pool.end(), 0);
         }
 
+        // Each solid on its own, its cells added to those already filled.
+        std::vector<size_t> starts = solids;
+        if (starts.empty() || starts.front() != 0)
+            starts.insert(starts.begin(), 0);
+        starts.push_back(triangles.size());
+        for (size_t s = 0; s + 1 < starts.size(); ++s)
+        {
+            if (starts[s + 1] > starts[s])
+                FillSolid(triangles, starts[s], (std::min)(starts[s + 1], triangles.size()));
+        }
+        Settle();
+        MarkAllDirty();
+    }
+
+    void VoxelStock::FillSolid(const std::vector<Vec3>& triangles, size_t begin, size_t end)
+    {
         // The triangles crossing each row of column centres.
         std::vector<std::vector<int>> rows(static_cast<size_t>(m_ny));
-        for (size_t t = 0; t + 2 < triangles.size(); t += 3)
+        for (size_t t = begin; t + 2 < end; t += 3)
         {
             const Vec3& a = triangles[t];
             const Vec3& b = triangles[t + 1];
@@ -365,8 +381,6 @@ namespace camcore
                 }
             }
         }
-        Settle();
-        MarkAllDirty();
     }
 
     std::uint64_t VoxelStock::SpanMask(int w, int k0, int k1)
@@ -1971,6 +1985,18 @@ namespace camcore
         m_moveStarts.assign(m_moves.size() + 1, 0.0);
         for (size_t m = 0; m < m_moves.size(); ++m)
             m_moveStarts[m + 1] = m_moveStarts[m] + m_moves[m].seconds;
+        m_loads.assign(m_moves.size(), MoveLoad());
+        m_operationLoads.assign(m_operations.size(), OperationLoad());
+    }
+
+    const MoveLoad* Simulation::CurrentLoad() const
+    {
+        if (m_loads.empty())
+            return nullptr;
+        size_t at = (std::min)(m_position, m_loads.size() - 1);
+        if (at == m_position && m_into <= 0.0 && at > 0)
+            --at;       // nothing of this move cut yet: the one before
+        return &m_loads[at];
     }
 
     double Simulation::ElapsedSeconds() const
@@ -2036,8 +2062,9 @@ namespace camcore
         return &m_operations[m_moves[at].operation];
     }
 
-    SimWarning Simulation::CutPiece(const SimMove& move, const Vec3& a, const Vec3& b)
+    SimWarning Simulation::CutPiece(size_t index, const Vec3& a, const Vec3& b)
     {
+        const SimMove& move = m_moves[index];
         const SimOperation& operation = m_operations[move.operation];
         const Vec3 toolAxis = move.ownAxis ? move.axis : operation.frame.zAxis;
         using Clock = std::chrono::steady_clock;
@@ -2118,15 +2145,61 @@ namespace camcore
             }
         }
 
+        // The tool's load, from the stock as it is before the piece.
+        const Clock::time_point loadStart = Clock::now();
+        m_timing.checkSeconds += std::chrono::duration<double>(loadStart - checkStart).count();
+        const double pieceLength = Length(b - a);
+        const bool measure = m_measureLoad && operation.load.present && !move.rapid && !move.dwell && !move.index &&
+                             move.feed > 0.0 && pieceLength > 1e-9;
+        ToolEngagement engagement;
+        if (measure)
+        {
+            StockTest inStock;
+            if (m_model == StockModel::TriDexel)
+            {
+                inStock = [this](const Vec3& p) {
+                    const double s = m_dexels.Spacing();
+                    const Vec3& lower = m_dexels.Lower();
+                    const int i = static_cast<int>(std::lround((p.x - lower.x) / s - 0.5));
+                    const int j = static_cast<int>(std::lround((p.y - lower.y) / s - 0.5));
+                    if (i < 0 || j < 0 || i >= m_dexels.Size(0) || j >= m_dexels.Size(1))
+                        return false;
+                    const double z = p.z - lower.z;
+                    return m_dexels.AnyStock(2, m_dexels.RayIndex(2, i, j), z, z + 1e-6);
+                };
+            }
+            else
+            {
+                inStock = [this](const Vec3& p) {
+                    const double c = m_stock.Cell();
+                    const Vec3& lower = m_stock.Lower();
+                    return m_stock.Filled(static_cast<int>(std::floor((p.x - lower.x) / c)),
+                                          static_cast<int>(std::floor((p.y - lower.y) / c)),
+                                          static_cast<int>(std::floor((p.z - lower.z) / c)));
+                };
+            }
+            engagement = MeasureEngagement(inStock, operation.profile, a, b, toolAxis, Spacing());
+        }
+
         // Each part of the tool, from its own tip, up or back down the axis.
         const Clock::time_point cutStart = Clock::now();
-        m_timing.checkSeconds += std::chrono::duration<double>(cutStart - checkStart).count();
-        bool cut = false;
+        m_timing.loadSeconds += std::chrono::duration<double>(cutStart - loadStart).count();
+        double removed = 0.0;       // mm^3
         const auto cutWith = [&](const ToolProfile& profile, const Vec3& pa, const Vec3& pb, const Vec3& axis) {
             if (m_model == StockModel::TriDexel)
-                return CutDexels(m_dexels, profile, pa, pb, axis) > kDexelTouch;
-            return CutMove(m_stock, profile, pa, pb, axis) > 0;
+            {
+                // The length taken off the rays of all three grids, each a spacing square.
+                const double length = CutDexels(m_dexels, profile, pa, pb, axis);
+                const double s = m_dexels.Spacing();
+                removed += length * s * s / 3.0;
+                return length > kDexelTouch;
+            }
+            const long long cells = CutMove(m_stock, profile, pa, pb, axis);
+            const double c = m_stock.Cell();
+            removed += static_cast<double>(cells) * c * c * c;
+            return cells > 0;
         };
+        bool cut = false;
         if (operation.parts.empty())
         {
             cut = cutWith(operation.profile, a, b, toolAxis);
@@ -2147,6 +2220,17 @@ namespace camcore
         m_timing.cutSeconds += secondsSince(cutStart);
         if (warning == SimWarning::None && move.rapid && cut && !m_ignoreCollisions)
             warning = SimWarning::RapidIntoStock;
+
+        if (measure && index < m_loads.size())
+        {
+            const MoveLoad load = LoadOf(engagement, operation.load, move.feed, removed, pieceLength);
+            CombineLoad(m_loads[index], load);
+            const double moveLength = Length(move.to - move.from);
+            const double seconds = (moveLength > 1e-9) ? move.seconds * pieceLength / moveLength : 0.0;
+            AddLoad(m_operationLoads[move.operation], load, seconds, index);
+            if (warning == SimWarning::None && m_stopOnOverload && load.percent > m_overloadPercent)
+                warning = SimWarning::ToolOverloaded;
+        }
         const Clock::time_point lateCheck = Clock::now();
         if (warning == SimWarning::None && narrowShank && touches(operation.shank))
             warning = SimWarning::ShankHitsStock;
@@ -2161,7 +2245,7 @@ namespace camcore
         {
             const SimMove& move = m_moves[m_position];
             // From where an Advance left it, if it stopped part way along.
-            const SimWarning warning = CutPiece(move, PointAlong(move, m_into), move.to);
+            const SimWarning warning = CutPiece(m_position, PointAlong(move, m_into), move.to);
             m_into = 0.0;
             ++m_position;
             ++done;
@@ -2200,7 +2284,7 @@ namespace camcore
             const Vec3 a = PointAlong(move, m_into);
             m_into += left;
             const Vec3 b = PointAlong(move, m_into);
-            const SimWarning warning = CutPiece(move, a, b);
+            const SimWarning warning = CutPiece(m_position, a, b);
             if (warning != SimWarning::None)
             {
                 m_warning = warning;
@@ -2242,6 +2326,8 @@ namespace camcore
         m_position = 0;
         m_into = 0.0;
         m_warning = SimWarning::None;
+        m_loads.assign(m_moves.size(), MoveLoad());
+        m_operationLoads.assign(m_operations.size(), OperationLoad());
     }
 
     void Simulation::SeekTo(size_t position)

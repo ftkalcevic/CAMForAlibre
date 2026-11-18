@@ -78,6 +78,10 @@ struct CamScene
     camcore::Vec3 simWarningFrom;
     camcore::Vec3 simWarningTo;
 
+    // The toolpath cut so far, in runs coloured by the tool's load: air, at most the
+    // chip load, over it, over the stop limit, and no chip load to judge by.
+    std::vector<std::vector<camcore::Vec3>> simLoadRuns[5];
+
     bool foreground = true;     // drawn over the model, rather than hidden by it
     double millimetresPerUnit = 10.0;
 };

@@ -14499,6 +14499,605 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > shapes and boundary settings tested
 
+### 🤖 Claude
+
+> I've marked the typed shapes and the Boundary settings as tested by you in `CLAUDE.md`. Everything in the cut boundary plan is now built and tested: sketches, typed shapes with spinners and the live preview, and Boundary Shape and Offset.
+>
+> Nothing is committed yet, and the copy of `CAMForAlibre.log` in the repo is still marked as changed.
+
+### 🧑 Frank · 17:52
+
+> During simulation, can you calculate the load on the tool?  The chip load per tooth?
+
+### 🤖 Claude
+
+> Questions:
+> - Each cutting move can measure its engagement before it cuts: how far round the tool the stock is, and the depth along the flutes. From that come the actual chip load per tooth (feed / (rpm x flutes), thinned for small engagement angles) and the removal rate. Where should these show?
+>   - Simulation dialog line (Recommended): A Load line under the Tool line showing the current move's chip load, engagement angle, depth of cut and removal rate, plus the tool's chip load for comparison.
+>   - Per-operation summary: The highest and average chip load and engagement for each operation, shown when it ends and written to the log.
+>   - Colour the toolpath by load: Draw the simulated toolpath green, amber or red by its chip load compared with the tool's.
+>   - Graph over time: A small chart in the dialog of chip load or engagement along the run.
+> - Should the simulation stop when a move overloads the tool, as it does for a rapid into the stock?
+>   - Warn, don't stop (Recommended): Show the move in red or mark it, but keep running.
+>   - Stop like a collision: Stop at a move whose chip load goes over the tool's by a set margin. Ignore collisions also turns this off.
+>   - No warning: Show the numbers only.
+> - Should it also estimate cutting power and force? That needs a specific cutting energy (W per cm^3/min, or Kc) for each material, which the materials don't have yet.
+>   - Not now (Recommended): Chip load, engagement, depth and removal rate only.
+>   - Add power and force: Add a cutting energy field to the material, with typical values, and show spindle power and tangential force.
+
+### 🧑 Frank · 17:54
+
+> Answers:
+> - Each cutting move can measure its engagement before it cuts: how far round the tool the stock is, and the depth along the flutes. From that come the actual chip load per tooth (feed / (rpm x flutes), thinned for small engagement angles) and the removal rate. Where should these show?
+>   **Simulation dialog line (Recommended),Per-operation summary,Colour the toolpath by load,Graph over time**
+> - Should the simulation stop when a move overloads the tool, as it does for a rapid into the stock?
+>   **Make it an option**
+> - Should it also estimate cutting power and force? That needs a specific cutting energy (W per cm^3/min, or Kc) for each material, which the materials don't have yet.
+>   **Add power and force**
+
+### 🤖 Claude
+
+> The plan is written, built on your answers. I'm passing it to you for approval.
+
+> Plan:
+>
+> # Tool load during simulation
+>
+> ## Context
+>
+> Frank asked whether the simulation can work out the load on the tool, including the chip load per tooth. The simulation already cuts each move against the stock (`CutMove` counts the voxel cells it removes; `CutDexels` gives the length of dexel removed). The tool has `fluteCount` and `chipLoad`, the operation's feeds have `spindleRpm`, and each `SimMove` has its `feed`. So for every cutting move we can measure how the tool meets the stock and work out the load from that.
+>
+> **Frank's choices:**
+> - **Where it shows:** all four of these:
+>   - a Load line in the Simulation dialog
+>   - a summary for each operation
+>   - the simulated toolpath coloured by load
+>   - a graph over time
+> - **Overload:** stopping on overload is an option.
+> - **Power and force:** add them, with a cutting value per material.
+>
+> ## Method (new `core\ToolLoad.h/.cpp`, no Alibre)
+>
+> ### Measuring engagement
+>
+> `MeasureEngagement` measures each feed move before it cuts, while the stock is still as it was. It takes a stock test `std::function<bool(const Vec3&)>`:
+> - for voxels, from `VoxelStock::Filled`
+> - for dexels, from `TriDexelStock::Inside`
+>
+> It also takes the tool's profile, the move, the axis and the cell size.
+>
+> **Where it samples:**
+> - **Positions along the move:** the middle of the move, and every 2 mm along a longer one. The heaviest sample counts.
+> - **Heights:** at each position, heights from the tip up to the flute length, every cell. This is capped at 24 heights spread over the range where the stock is.
+> - **Points round the tool:** at each height, points round the front half of the tool every 5 degrees. Each point is at the tool's radius at that height, one cell ahead along the move's direction square to the axis.
+> - A point that's in the stock is **engaged**.
+>
+> **What it gives (`ToolEngagement`):**
+> - **Engagement angle:** the widest span of engaged angles at any height.
+> - **Axial depth:** the heights with any engaged point.
+> - **Radial width:** from the engagement angle.
+> - **Chip thickness factor:** the largest cos θ over the engaged angles, where θ is measured from straight ahead. Slotting gives 1. A side cut of 25% of the diameter gives sin 60°. This is the usual radial chip thinning, and it works for any shape of engagement.
+> - **Plunge:** a move mostly along the axis counts as a plunge. Its chip load is the axial feed per tooth, and the engagement is the stock under the tip.
+>
+> ### Load per move (`MoveLoad`)
+>
+> Worked out from the engagement:
+> - **Feed per tooth:** fz = feed / (rpm × flutes).
+> - **Chip thickness:** h = fz × the factor above.
+> - **Removal rate:** the move's removed volume × feed / length. The volume comes from `CutMove`'s count × cell³, or `CutDexels`' length × spacing². This is exact, not estimated.
+> - **Power:** P = Kc × removal rate. Kc is the material's specific cutting force (N/mm²) and the rate is in mm³/s.
+> - **Tangential force:** F = P / v, where v is the cutting speed from the effective diameter (the engaged height's diameter, which matters for a ball mill).
+> - **Load %:** h divided by the tool's chip load × the material's chip load factor. This is the same target the feeds calculator uses, without its thinning.
+>
+> **Special cases:**
+> - Drills report feed per revolution against the tool's chip load per revolution.
+> - Thread mills are measured with their outline profile.
+> - A tool with no chip load set gets the numbers but no load %: the colours are off and Stop is greyed.
+>
+> ### Summary per operation (`OperationLoad`)
+>
+> For each operation:
+> - the highest load % and chip thickness
+> - the average chip thickness, weighted by time over the cutting moves
+> - the highest engagement angle, depth, removal rate, power and force
+> - the move where the highest load happens
+>
+> ## Simulation (`core\Simulation`)
+>
+> **`SimOperation::load` (`ToolLoadSetup`):**
+> - rpm, flutes, drill or not
+> - chip load target (mm)
+> - the material's Kc (0 means unknown, so power and force aren't shown)
+> - tool diameter
+> - whether the target is set
+>
+> **Measuring in `CutPiece`:**
+> - It measures before cutting each feed piece, on both stock models.
+> - Rapids, dwells and index moves aren't measured.
+> - Results go in `m_loads` (one `MoveLoad` per move, with a part move's pieces combined by taking the heaviest) and in `m_operationLoads`.
+> - `Rewind` and `SeekTo` clear them.
+> - The time it takes is added to `SimTiming` (`loadSeconds`) and logged with the rest.
+>
+> **Stopping on overload:**
+> - `SetStopOnOverload(bool, percent)` adds `SimWarning::ToolOverloaded`.
+> - It stops after a move whose load % is over the limit.
+> - Ignore collisions doesn't turn it off, since it's a separate option.
+>
+> **Accessors:** `MoveLoads()`, `OperationLoads()`, `CurrentLoad()`.
+>
+> ## Material: specific cutting force
+>
+> - `Material::cuttingForce`, in N/mm², one per material, 0 means not set.
+> - The materials format goes up to version 3. Version 2 files load with 0.
+> - `CMaterialDlg` gets a Specific Cutting Force row.
+> - `TypicalMaterial` gets a typical value (Claude's): aluminium 700, brass 800, mild steel 2000, stainless 2500, plastics 150, wood 60.
+> - The calculator dialog could show power later. That isn't part of this plan.
+>
+> ## Add-on
+>
+> **`addon\SimulationDialog` (`IDD_SIMULATION` grows; new IDs from 13616):**
+> - **Load line** (`IDC_SIM_LOAD`) under the Tool line, for the current move. For example:
+>   `Chip 0.032 of 0.050 mm/tooth (64%), engaged 72°, depth 3.0 mm, 2.1 cm³/min, 0.35 kW, 120 N`
+>   - "Air" when nothing is engaged.
+>   - Plunges and drills are worded as such.
+> - **Graph** (`IDC_SIM_LOAD_GRAPH`, owner drawn):
+>   - load % over machining time for the current operation, filled in as it runs
+>   - lines at 100% and at the stop limit
+>   - a cursor at the current time
+>   - chip thickness in mm when the tool has no chip load
+> - **Summary** (`IDC_SIM_LOAD_SUMMARY`): the current operation's highest and average figures. It's also logged as `[simulate] load:` when each operation finishes.
+> - **Stop on overload** check box (`IDC_SIM_STOP_OVERLOAD`) and a percent box (`IDC_SIM_OVERLOAD_PCT`, default 150%, Claude's), kept in globals like `g_ignoreCollisions`. The warning text names the move and its load.
+>
+> **`CCamTabCommand::MakeSimOperation`:**
+> - fills `ToolLoadSetup` from the operation's feeds, the tool and the job's material (`FindMaterial`, `CuttingFor(tool.toolMaterial).chipLoadFactor`).
+>
+> **Drawing (`CamScene`):**
+> - `simLoadRuns[5]`: polylines of the moves simulated so far, coloured by load, drawn while simulating.
+>   - grey: air or rapid
+>   - green: up to 100%
+>   - amber: up to the stop limit
+>   - red: over it
+>   - blue: no target set
+> - Colours go in `DisplaySettings.h`.
+> - They're rebuilt incrementally from `m_loads` in `UpdateSimulationScene`.
+> - A Show ▸ Load colours check box (`IDC_SIM_SHOW_LOAD`, on by default) turns them off.
+>
+> ## Docs
+>
+> - **Help:** the Simulation section (the Load line, graph, summary, Stop on overload, Show Load colours), and the Material dialog's Specific Cutting Force row.
+> - `docs\SPEC.md`: a bullet for the tool load.
+> - `CLAUDE.md`
+> - `python tools\BuildDiscussion.py`
+>
+> ## Verification
+>
+> **`tests\ToolLoadTests.cpp`** (in `CamCoreTests.vcxproj`):
+> - a 6 mm flat mill slotting through a block: engagement 180°, factor 1, chip = fz, removal rate = 6 × depth × feed
+> - a 25% side cut: 60°, factor sin 60°
+> - air: zero
+> - a plunge
+> - a ball mill's effective diameter at a shallow depth
+> - power = Kc × rate
+> - stop on overload stops at the right move
+> - the same answers on voxels and tri-dexels within a cell
+>
+> **Release build:** `CamCoreTests` all pass. Timing: the `simulation timing*` test with load measuring on should add under about 20%.
+>
+> **Install** with Alibre closed. Then Frank simulates:
+> 1. Facing or Pocketing on `4th test`: the Load line, graph and colours.
+> 2. An adaptive pocket, where the load should be flat.
+> 3. Stop on overload at 100% on a slotting move.
+> 4. A material with and without a cutting force: the power and force appear and disappear.
+> 5. The help sections.
+>
+> ## Claude's choices unless Frank says otherwise
+>
+> - The default stop limit of 150%.
+> - The colour bands (green up to 100%, amber up to the limit).
+> - Sampling every 5 degrees and at most 24 heights.
+> - The typical Kc values.
+> - One Kc per material rather than one per tool material.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> I'm reading the simulation and feeds code, then I'll write the core load measuring.
+
+> Now writing the core load code (`core\ToolLoad`).
+
+> Now the edits to `core\Simulation.h`.
+
+> The core load measuring works: all 6 new tests pass on both voxels and tri-dexels. Next is the material's cutting force.
+
+> Writing the add-on side next: the material's cutting force, the dialog's Load group and graph, and the coloured toolpath.
+
+> Now the Simulation dialog itself.
+
+> The build is clean. Running the full test suite, including the check on source files:
+
+> Now the help, spec and CLAUDE.md.
+
+> Everything is built and documented. Before installing, I'll check whether Alibre is running.
+
+> Yes. The simulation now works out the load on the tool for every feed move, including the chip load per tooth. It's built and installed, but I haven't tried it in Alibre. All 417 core tests pass, including the new ones in `tests\ToolLoadTests.cpp`, on both voxels and tri-dexels.
+>
+> **How it measures:** before each move cuts, it tests points just outside the front half of the tool, at heights up the flutes, for stock. That gives:
+> - **Chip per tooth:** feed ÷ (rpm × flutes), thinned when the tool is only cutting on its side. A slot gets the full feed per tooth; a cut a quarter of the diameter wide gets about 0.87 of it.
+> - **Load %:** the chip against the tool's chip load × the material's chip load factor, lowered for a long tool the way the feeds calculator does.
+> - **Engagement:** how far round the tool it's cutting, plus the depth and width of cut.
+> - **Removal rate:** from what the move actually removed.
+> - **Power and force:** only when the material has a specific cutting force.
+> - **Plunges** are measured along the axis; **drills** in mm per revolution.
+>
+> **What you'll see:**
+> - **In the Simulation dialog,** a new Tool load group:
+>   - a Load line for the current move
+>   - a graph of the current operation's load over its machining time, with dotted lines at 100% and at the stop limit
+>   - a summary for the operation so far
+>   - **Stop when over** (off at first, 150%): stops the simulation like a collision warning, with its own warning. Ignore collisions doesn't turn it off.
+>   - **Colour the toolpath** (on at first)
+> - **In the view,** the toolpath cut so far is drawn over the stock in colour: green up to 100% of the chip load, amber over it, red over the stop limit, grey for air, blue when the tool has no chip load.
+> - **In the Material dialog,** a new **Specific cutting force (N/mm2)** field. Typical values fills it in too. The materials file goes up to format version 3, and older files still load.
+>
+> The values I picked myself: the 150% default, the colour bands, and the typical cutting forces (aluminium 700, brass 800, mild steel 2000, stainless 2500, plastics 150, hardwood 60, MDF 40). Tell me if you want different ones. I haven't timed how much the measuring slows the simulation in the timing tests; the log's timing line now shows it as "measuring the load".
+>
+> To test (Alibre is closed and the add-on is installed):
+> 1. Simulate a Facing or Pocketing operation whose tool has a chip load. Check the Load line, the graph and the coloured toolpath as it plays.
+> 2. Simulate an adaptive pocket. The load should stay fairly flat, apart from the entries.
+> 3. Tick Stop when over, set it to 100%, and simulate a slotting cut a little over the chip load. It should stop with "The tool is overloaded" and the move in red.
+> 4. In Machine ▸ Materials ▸ Edit, apply Typical values for aluminium and click OK. Simulate again: power (kW) and force (N) should appear. Clear the field and they go away.
+> 5. Simulate with a tool that has no chip load. Its moves should be blue, and the graph should show the chip in mm.
+> 6. Stop a run and check the log for the `[simulate] load,` lines and "measuring the load" in the timing line. Copy the log into the repo if you want me to look.
+> 7. The help changed: the Simulation section has a new Tool load entry, and the Material section has Specific cutting force. Use the ? buttons to check them.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 18:24
+
+> Looks good.  One issue, if i click "To op end", it completes the operation, but clears the load graph.  It would be good if it kept the graph before moving onto the next operation.
+
+### 🤖 Claude
+
+> Built cleanly. Updating the help to match, then installing if Alibre is closed.
+
+> Fixed. To Op End stops on the first move of the next operation, and that move hasn't cut anything yet. The graph was switching to the next operation, which had nothing to show. Now the graph and the "This operation" summary stay on the operation that just finished until the next one starts cutting. Step, Play or To End then moves them on.
+>
+> It's built and installed, and the help's Graph entry says so. I haven't tried it in Alibre.
+>
+> To test:
+> 1. Simulate a job with two or more operations and click To Op End. The graph and summary should still show the finished operation, with the cursor at the right-hand end.
+> 2. Click Step or Play. They should switch to the next operation once it starts cutting.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 18:28
+
+> Tests passed
+
+### 🤖 Claude
+
+> Good. I've marked tool load in the simulation as tested by you in Alibre in `CLAUDE.md`, including the graph staying on the finished operation after To Op End.
+>
+> Nothing is committed yet.
+
+### 🧑 Frank · 18:28
+
+> Was power required added?
+
+### 🤖 Claude
+
+> Yes, but only when the job's material has a **Specific cutting force** set. Older materials won't have one.
+>
+> - **Where it shows:** the Load line gives the current move's power in kW and the tangential force on the tool in N, e.g. `…, 2.1 cm3/min, 0.35 kW, 120 N`. The "This operation" summary and the log give each operation's highest power and force.
+> - **How to turn it on:** in Machine ▸ Materials ▸ Edit, type the value, or choose a material under Typical values and click Apply. Leave the field empty and the power and force aren't shown.
+> - **How it's worked out:** power = specific cutting force × removal rate. Force = power ÷ the cutting speed at the tool's widest diameter in contact.
+>
+> What it doesn't do yet: the machine has no spindle power setting, so nothing compares the power with what your spindle can deliver. The graph also shows chip load only, not power.
+>
+> If you'd like, I can add a spindle power (kW) setting to the Machine tab. The load would then show as a percentage of it, the graph could show power, and Stop when over could also stop when the spindle's power is exceeded.
+
+### 🧑 Frank · 18:31
+
+> Add power to the machine setting.
+
+### 🤖 Claude
+
+> Questions:
+> - With a spindle power (kW) on the Machine tab, what should the simulation do with it?
+>   - Show % of spindle (Recommended): The Load line and the operation summary give power as a percent of the spindle's, e.g. 0.35 kW (16% of 2.2 kW).
+>   - Stop when over spindle power: Stop when over also stops after a move needing more than the spindle's power, with its own warning.
+>   - Colour and graph by power: A move over the spindle's power is drawn red in the view and on the graph, even when its chip load is fine.
+
+### 🧑 Frank · 18:32
+
+> Answers:
+> - With a spindle power (kW) on the Machine tab, what should the simulation do with it?
+>   **Show % of spindle (Recommended),Colour and graph by power**
+
+### 🤖 Claude
+
+> Adding the spindle power to the machine file writer, then tests.
+
+> The build is clean and all 419 tests pass. Updating the help and docs:
+
+> The Machine tab now has a spindle power setting. It's built and installed, and all 419 core tests pass, including 2 new ones for spindle power. I haven't tried it in Alibre.
+>
+> - **Machine tab:** a **Power … kW** box sits beside Max spindle speed. Empty means not known, which is the default. Sim Options... has moved along to the Tool holder row to make room. The power is saved in the machine file only when it's set, so older machine files still load.
+> - **Load line:** when the material has a specific cutting force, it reads like `0.35 kW (16% of 2.2 kW)`. A move needing more than the spindle has adds "— more than the spindle's power".
+> - **Graph:** shows whichever is higher, the chip percent or the power percent. Its label says which it's measuring against.
+> - **Toolpath colours:** a move needing more than the spindle's power is drawn red, even when its chip load is fine.
+> - **Stop when over:** still goes by chip load only, since you didn't choose stopping on power.
+>
+> To test:
+> 1. On the Machine tab, enter your spindle's power (for example 2.2). Close and reopen the dialog; it should still be there.
+> 2. Give the job's material a specific cutting force, or apply Typical values. Simulate a heavy cut: the Load line should show the kW and the percent of the spindle.
+> 3. Set the power very low (for example 0.05) and simulate again. The cutting moves should turn red, and the Load line should say "more than the spindle's power".
+> 4. Clear the Power box. The percent goes away, and colours follow chip load alone.
+> 5. The help changed: the Machine tab has a Power entry, and the Tool load entry mentions spindle power. Check them with the ? buttons.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 18:42
+
+> Was the chip load graph suppose to disappear?
+
+### 🤖 Claude
+
+> Not entirely. It's a side effect of how I combined them. The graph now draws one bar per column at whichever is higher, the chip load percent or the spindle power percent. When the power percent is larger (very likely in test 3, with the power set very low), it takes over every bar. The scale also stretches to fit it, often to thousands of percent, so the chip load gets squashed flat or hidden. With the Power box empty, the graph should look exactly as it did before.
+>
+> That doesn't serve you well, because the chip load is the thing you'd want to watch. A better design is to show both:
+> - **Chip load:** drawn as bars, coloured green, amber or red as before.
+> - **Power:** drawn as a separate line over the bars on the same percent scale, red where it's over 100% of the spindle.
+> - **Scale:** capped so a huge power percent can't flatten the bars. The line would be clipped at the top, with its highest value given in the label.
+>
+> The coloured toolpath in the view would stay as it is: red when either one is over.
+>
+> If you saw the graph vanish with a normal power setting, not the very low test value, tell me. That would be a different problem.
+
+> The chip load disappeared because the graph now plots only the higher of the two percents. Your low test power setting made the power percent win everywhere and stretched the scale. Nothing is changed yet.
+
+### 🧑 Frank · 18:47
+
+> Yes, show both.  Check the chip load - it has always been a blue bar chart.
+
+### 🤖 Claude
+
+> Built. Now the help text, then install.
+
+> The graph now shows both, and it's built and installed. I haven't tried it in Alibre.
+>
+> **Why the bars were always blue:** that was the graph working as designed, not a bug. None of the tools in your three machine files has a chip load saved, so there's nothing to compare the chip with. The graph then draws the chip in mm, in blue. The Load line said "the tool has no chip load to compare with" for the same reason. Your materials also have no specific cutting force yet, so no power can be worked out.
+>
+> **To get the percent bars:** open Machine ▸ Tools ▸ Edit and enter a value in the tool's **Chip load** box, for example 0.05 mm for a 6 mm carbide end mill in aluminium. The bars then show percent and turn green, amber or red.
+>
+> **What the graph shows now:**
+> - **Bars:** chip load only, coloured by the chip alone. As a percent when the tool has a chip load, otherwise in mm, in blue.
+> - **Purple line:** the power as a percent of the spindle's. It appears when the machine has a spindle Power and the material has a specific cutting force.
+>   - With percent bars, the line uses the same scale. If it's off the top it's clipped there, and the label gives its highest value.
+>   - With mm bars, it uses its own scale up to 300%, with its 100% marked by a dotted purple line.
+> - **Label:** for example `Chip, % of the chip load (up to 85%); power, % of the spindle (up to 40%)`.
+>
+> The coloured toolpath in the view hasn't changed: it's red when either the chip or the power is over its limit.
+>
+> To test:
+> 1. Give a tool a chip load. Simulate with it: the bars should be percents, coloured green, amber or red.
+> 2. Give the material a specific cutting force (or apply Typical values) and keep your 2.4 kW spindle. A purple line should appear over the bars.
+> 3. Set the spindle power very low. The line should clip at the top with its highest in the label, while the bars stay readable.
+> 4. Remove the tool's chip load. The bars should go back to blue in mm, with the line on its own scale and a dotted purple 100% line.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:00
+
+> I'm getting blue chip load.  No power line.  I'm testing "lam Arm staker CAM.ad_asm", Facing 2, currently loaded.  chip load is in the calculator and not stored.  power is being displayed as text, but no graph
+
+### 🤖 Claude
+
+> Your 2.4 kW is saved on **CNC Router 4th Axis**. Your two **CNC Router** machines have no power set. I'm checking which machine the job uses. Meanwhile, a decision about the chip load:
+
+> Questions:
+> - The Simulation compares chips with the tool's saved chip load. You type it in the Feeds Calculator, which doesn't save it on the tool, so there's nothing to compare against (blue bars). What should it do?
+>   - Calculator saves it (Recommended): The Feeds Calculator's chip load is saved on the tool when you click OK, so the simulation and the calculator use the same value from then on.
+>   - Save it on the operation: The calculator's chip load is kept with the operation's Feeds & Speeds, so each operation can have its own target.
+>   - Use the programmed feed: With no chip load on the tool, compare with the operation's own feed per tooth (feed / (rpm x flutes)), so 100% means the full programmed chip.
+
+### 🧑 Frank · 19:09
+
+> Answers:
+> - The Simulation compares chips with the tool's saved chip load. You type it in the Feeds Calculator, which doesn't save it on the tool, so there's nothing to compare against (blue bars). What should it do?
+>   **Use the programmed feed**
+
+### 🤖 Claude
+
+> Built, and all 419 tests pass. Now the machine check:
+
+> Updating the help and docs. Alibre is open with your job, so I'll install once you've closed it.
+
+> **Blue chip load:** as you chose, a tool with no saved chip load is now compared with the chip the operation was programmed for. That's its Cut feed (a drill's Plunge feed) ÷ (rpm × flutes). The Load line shows it as, for example, `Chip 0.03 of 0.05 mm/tooth programmed (60%)`, and the graph's label says "% of the programmed chip". A slot at the cut feed reads 100%, and a light side cut reads less because of chip thinning. A tool that has its own chip load still uses that. It's built and all 419 tests pass, but it isn't installed yet, because Alibre is open.
+>
+> **No power line:** your 2.4 kW is saved on the **CNC Router 4th Axis** machine. Your two **CNC Router** machines have no spindle power. The last machine used is one of the CNC Router ones, so `lam Arm staker CAM` probably uses that. I couldn't find the job file to confirm. The material does have a cutting force, which is why the kW appears as text, but with no spindle power there's no percent and no line. To get the line, open Machine on that job's machine and enter the spindle's Power. If the Load line already shows "(…% of 2.4 kW)", the machine is set and I've missed something, so tell me.
+>
+> The help, spec and `CLAUDE.md` are updated. After installing, test with Facing 2:
+> 1. With no chip load on the tool, the bars should be percents of the programmed chip, coloured green, amber or red, and labelled "programmed".
+> 2. With Power set on the job's machine, the purple power line should appear over the bars, and the Load line should show "(…% of … kW)".
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:15
+
+> Alibre closed
+
+### 🤖 Claude
+
+> It's installed, and the add-on and help match the build. You can start Alibre again.
+>
+> To test with `lam Arm staker CAM`, Facing 2:
+> 1. Simulate with the tool's chip load left empty.
+>    - The Load line should read "… mm/tooth programmed (…%)".
+>    - The graph's bars should be percents, labelled "% of the programmed chip", and coloured green, amber or red rather than blue.
+> 2. Open Machine and enter the spindle's Power on the job's machine (probably CNC Router), then simulate again.
+>    - The Load line should add "(…% of … kW)".
+>    - A purple power line should appear over the graph's bars.
+> 3. Give the tool a Chip load in its Tool dialog. The bars should switch to comparing with that, and "programmed" should go away.
+> 4. Check the help: open the Simulation's ? and look at Tool load.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:18
+
+> The power text is not visible.  I only see 2 lines of information, is it clipped?
+
+### 🤖 Claude
+
+> Yes, it was clipped. The load line had room for only two lines, and with "programmed" and the spindle percent added, the power and force ran onto a third line that didn't show.
+>
+> What I've changed:
+> - **More room:** the load line and the "This operation" summary are now three lines tall each. The controls below them moved down, and the dialog is 16 units taller.
+> - **Shorter wording:** the load line now reads like `Chip 0.03 of 0.05 mm/tooth programmed (60%), engaged 72 deg, 3.00 deep x 1.50 wide, 2.1 cm3/min, 0.35 kW (15% of 2.4 kW), 120 N`.
+>
+> It's built and installed, and all 419 tests pass. I haven't seen it in Alibre.
+>
+> To test:
+> 1. Simulate Facing 2. The load line should end with the kW (and its percent of the spindle, if the job's machine has a Power) and the force in N.
+> 2. The summary under the graph should also show "up to … kW …, … N" in full.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:31
+
+> In the same assembly file, I have 3 parts, and the mirror of each part.  When I create the toolpaths in "Pocketing 1" and "Facing 1", the tool paths are correct, but the "Too much removed" simulation option is showing valid removed stock as "too much removed".  It has something to do with the mirrored parts.
+
+### 🤖 Claude
+
+> Now the change: fill each part separately, plus the logging.
+
+> It builds. Updating the docs, then installing if Alibre is closed.
+
+> The installed files didn't match the build on that check. The elevated install may still have been running, so I'll check again.
+
+> The install didn't happen: the installed add-on is still the 7:19 build. Retrying once, as an earlier retry worked:
+
+> It failed at the elevation step, which usually means the administrator prompt was cancelled or didn't appear. Please run the install yourself and accept the prompt:
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File D:\Projects\alibre\AlibreCAM\deploy\install.ps1
+> ```
+>
+> **What changed** (built, all 420 core tests pass, not installed yet):
+>
+> 1. **Each part in its own configuration.** All occurrences of one part file share a single design session, which shows only its active configuration. So all three occurrences got the same shape: your two default parts were most likely filled with the mirrored shape, or the other way round. That put "part" exactly where your correct toolpaths cut, which showed as Too much removed. Each occurrence is now read through its own configuration (`IADOccurrence::GetConfiguration`):
+>    - from that configuration's own design session, if it has one
+>    - if that turns out to be the same shared session, the part is briefly switched to the occurrence's configuration for the read, then switched straight back
+>
+>    These calls are in the 27.0.1 headers but unproven in Alibre.
+> 2. **Overlapping parts.** Parts are now filled into the simulation's grid one at a time. Where two parts overlap, the overlap counts as part; before, it counted as empty.
+> 3. **Logging.** Each part logs a `[compare]` line with its configuration, how it was read, its file, whether its transform mirrors it, and its box.
+>
+> Not covered yet: the finishing operations' true-surface reading and feature picking still read the shared session. Your Pocketing and Facing toolpaths don't use either.
+>
+> To test after installing, on `lam Arm staker CAM`:
+> 1. Simulate Pocketing 1 and Facing 1 and tick Show ▸ Part. The green parts should match the model, mirrored one included.
+> 2. Tick Too much removed. The red over the valid cuts should be gone.
+> 3. Check that Alibre doesn't now mark the part as changed, or show it in a different configuration. That would come from the switch-and-restore.
+> 4. Copy the log into the repo so I can see the `[compare]` lines and which way each part was read.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:43
+
+> Try to reinstall again
+
+### 🤖 Claude
+
+> The reinstall worked this time: the installed add-on and help now match the build. You can start Alibre.
+>
+> To test on `lam Arm staker CAM`:
+> 1. Simulate Pocketing 1 and Facing 1, then tick Show ▸ Part. The green parts should line up with the model, the mirrored one included.
+> 2. Tick Too much removed. The red should be gone from the valid cuts.
+> 3. Check that Alibre doesn't mark the mirrored part as changed or show it in a different configuration afterwards. That could happen if the add-on has to switch the part's configuration to read it and back.
+> 4. Copy the log into the repo. Each part's `[compare]` line says which configuration it was read in, how it was read, and whether it's mirrored.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:45
+
+> The same configuration issue is occurring when selecting features.  In example "New Config.ad_asm",
+
+### 🤖 Claude
+
+> Picking has the same cause. A picked face or edge is bound again, and read, through the part's shared design session, so it comes back in that session's active configuration rather than the occurrence's. I'll look at where picks are bound and read.
+
+> Writing the shared configuration scope, then using it at pick time and when reading picked features again:
+
+> It builds. Updating the docs:
+
+> Picking had the same cause as Compare. Each picked face or edge was read through the part's shared design session, so it came back in that session's active configuration, not the one the occurrence uses. It now reads them in the occurrence's own configuration. It's built and installed, and all 420 core tests pass, but I haven't tried it in Alibre, and these configuration calls are unproven there.
+>
+> - **At pick time** (Select Features, Set Origin picks, the Pick buttons): the clicked face or edge is found again by its key in the occurrence's configuration, then read.
+> - **When read again** (the orange outlines, Generate's boundaries, Plunge Roughing's face facets): it's found in that configuration too.
+> - **How it's done:** through the configuration's own design session if it has one. Otherwise the part is switched to that configuration for the read and switched back straight after. Each case is logged as a `[config]` line.
+>
+> Not covered yet:
+> - finishing operations' true-surface reading
+> - selecting listed features in Alibre's view
+> - a part's own design planes and points
+>
+> Your message looked cut off after "New Config.ad_asm", so I may have missed part of what you saw. Tell me if so.
+>
+> To test with `New Config.ad_asm`:
+> 1. Run Select Features and pick faces and edges on the occurrence that uses a non-active configuration. The orange outline should sit where you clicked.
+> 2. Generate. The boundary and toolpath should follow that occurrence's shape.
+> 3. Pick an edge on it with Set Origin. The origin should land on the edge you see.
+> 4. Check that Alibre doesn't mark the part as changed or show it in a different configuration afterwards.
+> 5. If anything's off, copy the log into the repo. The `[config]` lines show which way each read went.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:53
+
+> That didn't work.  Part "New Config<2> - Rectangle" worked fine.  Part "New Config<1> - Square" allows me to select the top face, but when I try to create a profiling toolpath, i get the error - "Profiling 1 - A feature can't be found in the model. It may have been deleted"
+
+### 🤖 Claude
+
+> I need the log to see which way the reads went. First I'll check whether I can read it directly.
+
+### 🧑 Frank · 19:54
+
+> I've copied the log
+
+### 🤖 Claude
+
+> Thanks. Reading the log first:
+
+> Now the fallback to switching the shared session:
+
+> It builds. Compare's facet reading has the same own-session route, so I'll make it fall back to switching too, if the configuration's own session gives no facets:
+
+> Your log showed why it failed. For `New Config<1>`, which uses **Square** while the part's active configuration is **Rectangle**, Alibre gives a separate design session for the Square configuration. The add-on was looking up the picked face's key in that session and never found it. So Generate said "A feature can't be found", even though picking itself seemed to work. `New Config<2>` uses the active configuration and never went that way.
+>
+> **The fix:** when a face or edge can't be found in that session, the add-on switches the part's shared session to the occurrence's configuration (Square), finds and reads the face there, then switches straight back to Rectangle. This now happens at pick time and in Generate. Compare's facet reading also switches like this if the configuration's own session gives no facets. It's built and installed, but I haven't tried it in Alibre. Whether Alibre allows the switch and restores cleanly is still unproven.
+>
+> I also added fuller logging. Each read now logs each occurrence's configuration and the part's active one, whether the face was found by its key, and any switch with the configuration it actually landed on.
+>
+> To test with `New Config.ad_asm`:
+> 1. Generate Profiling 1 with the Square top face already in the list. If it still says "can't be found", pick the face again and generate once more. Its saved key may come from the failed lookup.
+> 2. The toolpath should follow the square, not the rectangle.
+> 3. Afterwards, check that the part still shows Rectangle where it did before and isn't marked as changed.
+> 4. If anything's wrong, copy the log again. The `[config]` lines will show where it stopped.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 19:59
+
+> Not good.  If I select the "Square" config, the face starts flickering and the application becomes unresponsive. I have to use task manager to kill it (infinite loop?).  Rectangle is fine
+
+### 🤖 Claude
+
+> Switching the configuration while you pick is what hangs it. Every switch makes Alibre rebuild and redraw the part, which counts as a selection change. That starts the next read, which switches again, so it never stops. I'll take switching out completely, so Square can't hang Alibre again. I'll also log what the Square configuration's own session holds, so we can find its faces another way without switching.
+
+> It builds, with no configuration switching left anywhere. Updating the docs so they match what it does now:
+
 ---
 
 # Side conversation

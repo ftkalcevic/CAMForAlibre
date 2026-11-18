@@ -62,6 +62,7 @@ namespace camcore
         std::string name;
         double surfaceSpeed[kToolMaterialCount];    // m/min, by ToolMaterial
         double chipLoadFactor;                      // percent
+        double cuttingForce;                        // N/mm^2, specific cutting force
     };
     const std::vector<TypicalMaterial>& TypicalMaterials();
 }

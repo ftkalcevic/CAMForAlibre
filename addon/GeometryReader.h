@@ -111,9 +111,11 @@ bool ReadFaceFacets(IADSession* pAssembly, const camcore::PickedGeometry& featur
 // leaveOutPath (an imported stock's) and the occurrences in leaveOutKeys (fixtures).
 // Each part is read from its occurrence's own session, or from its file if that
 // fails. Returns false and sets problem if no part could be read.
+// partStarts, if given, gets where each part starts in triangles, so each can be
+// filled as a closed solid of its own.
 bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutPath,
                             std::vector<camcore::Vec3>& triangles, std::wstring& problem,
-                            const OccurrenceKeys& leaveOutKeys = {});
+                            const OccurrenceKeys& leaveOutKeys = {}, std::vector<size_t>* partStarts = nullptr);
 
 // Every visible part's faces, each read with its own facets and kept with its
 // true surface, so a tool's contacts can be moved onto the surface.

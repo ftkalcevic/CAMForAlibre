@@ -52,6 +52,9 @@ protected:
     afx_msg void OnSaveStl();
     afx_msg void OnShowChanged();
     afx_msg void OnRealTimeChanged();
+    afx_msg void OnStopOverload();
+    afx_msg void OnOverloadPercentChanged();
+    afx_msg void OnDrawItem(int id, LPDRAWITEMSTRUCT pDraw);
 
     DECLARE_MESSAGE_MAP()
 
@@ -67,6 +70,8 @@ private:
     void ShowResolution();      // greys the slider while Auto divide is on, and Auto divide for tri-dexels
     void SetStops();            // the slider's stops for the stock model
     void Restart();             // the stock again at the chosen resolution, cut to the same move
+    void ApplyOverload();       // Stop when over, and its percent, to the simulation
+    void DrawLoadGraph(CDC& dc, const CRect& rect);
 
     CCamTabCommand* m_pTab;
     CSliderCtrl m_position;
@@ -82,4 +87,5 @@ private:
     ULONGLONG m_runStarted = 0; // when the run or play began, for the timing line
     std::wstring m_note;
     std::wstring m_saved;       // what the last Save STL did
+    bool m_ready = false;       // the controls are filled, so their changes are the user's
 };

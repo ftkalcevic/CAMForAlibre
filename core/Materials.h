@@ -14,8 +14,9 @@
 
 namespace camcore
 {
-    // Version 2 added each material's cutting values per tool material.
-    constexpr int kMaterialsFormatVersion = 2;
+    // Version 2 added each material's cutting values per tool material, version 3 its
+    // specific cutting force.
+    constexpr int kMaterialsFormatVersion = 3;
 
     // How a material is cut with tools of one tool material, for the feeds calculator.
     struct MaterialCutting
@@ -36,6 +37,10 @@ namespace camcore
         std::string name;
         MaterialCutting cutting[kToolMaterialCount];    // by ToolMaterial
 
+        // The specific cutting force (Kc), N/mm^2: the simulation's power and force
+        // come from it. 0 is not known.
+        double cuttingForce = 0.0;
+
         const MaterialCutting& CuttingFor(ToolMaterial material) const { return cutting[static_cast<int>(material)]; }
         MaterialCutting& CuttingFor(ToolMaterial material) { return cutting[static_cast<int>(material)]; }
     };
@@ -48,7 +53,7 @@ namespace camcore
     // Returns a sentence for each problem. Empty means the list is valid.
     // Every material needs an ID and a name, and names and IDs are unique
     // (names ignoring case). A cutting value that's set needs a surface speed
-    // over 0 and a chip load factor from 1 to 500%.
+    // over 0 and a chip load factor from 1 to 500%. The cutting force can't be negative.
     std::vector<std::string> ValidateMaterials(const MaterialList& list);
 
     const Material* FindMaterial(const MaterialList& list, const std::string& id);

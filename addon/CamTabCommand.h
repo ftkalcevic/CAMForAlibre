@@ -156,6 +156,7 @@ public:
         bool notEnough = false;
         bool tooMuch = false;
         bool fixtures = true;   // the current operation's fixtures, shaded over the stock
+        bool load = true;       // the toolpath cut so far, coloured by the tool's load
     };
     void SetSimulationShow(const SimulationShow& show);
     std::wstring SimulationCompareText() const;     // the volumes, or why the parts can't be compared
@@ -425,11 +426,15 @@ private:
     camcore::Simulation m_simulation;
     camcore::StockBox m_simulationBox;                  // the stock it started from, to start again
     SimulationShow m_simulationShow;
+    void UpdateLoadRuns();                      // the scene's toolpath coloured by load, when it's moved on
+    size_t m_loadRunsPosition = SIZE_MAX;       // where the coloured toolpath was built to
+    double m_loadRunsLimit = -1.0;              // and the stop limit it was banded by
     bool m_simulationTurnsWork = false;
     double m_viewAngle = 0.0;           // degrees the view has been turned about the rotary axis (0 to 360)
     int m_viewTurnWay = 0;              // how ViewTransform takes a turn: 0 not known, 1 before it, 2 after it
     void TurnViewToSimulation();
     std::vector<camcore::Vec3> m_simulationPartTriangles;   // all the parts, in assembly mm, read once
+    std::vector<size_t> m_simulationPartStarts;             // where each part starts in them
     bool m_simulationPartsRead = false;
     std::wstring m_simulationPartProblem;
     camcore::VoxelStock m_simulationPart;               // the parts in the simulation's grid

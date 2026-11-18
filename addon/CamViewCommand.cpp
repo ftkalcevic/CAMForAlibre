@@ -378,6 +378,23 @@ void CCamViewCommand::DrawScene(IADAddOnCanvasDisplay* pCanvas, const CamScene& 
             const __int64 segment = AddSegment(pCanvas, L"Fixtures", kFixtureColour, 1.0f, true);
             DrawMesh(pCanvas, segment, *scene.simFixtureMesh, unit);
         }
+        // The toolpath cut so far, by the tool's load, over the stock.
+        const DisplayColour loadColours[5] = { kSimLoadAirColour, kSimLoadUnderColour, kSimLoadOverColour,
+                                               kSimLoadOverloadedColour, kSimLoadNoTargetColour };
+        for (int band = 0; band < 5; ++band)
+        {
+            if (scene.simLoadRuns[band].empty())
+                continue;
+            const __int64 segment = AddSegment(pCanvas, L"Tool load", loadColours[band], kSimLoadLineWeight, true);
+            for (const std::vector<Vec3>& run : scene.simLoadRuns[band])
+            {
+                std::vector<float> points;
+                points.reserve(run.size() * 3);
+                for (const Vec3& point : run)
+                    AddPoint(points, point, unit);
+                DrawPolyline(pCanvas, segment, points);
+            }
+        }
         if (scene.simToolShown)
             DrawTool(pCanvas, scene, unit);
         if (scene.simWarning)

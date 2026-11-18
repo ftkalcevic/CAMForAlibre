@@ -67,6 +67,15 @@ const DisplayColour kSimNotEnoughColour = { 245, 170, 30, 255 };
 const DisplayColour kSimTooMuchColour = { 220, 20, 20, 255 };
 const float kSimWarningLineWeight = 4.0f;
 
+// The simulated toolpath coloured by the tool's load: air, at most the chip load,
+// over it, over the stop limit, and no chip load on the tool.
+const DisplayColour kSimLoadAirColour = { 160, 160, 160, 255 };
+const DisplayColour kSimLoadUnderColour = { 0, 170, 60, 255 };
+const DisplayColour kSimLoadOverColour = { 240, 160, 0, 255 };
+const DisplayColour kSimLoadOverloadedColour = { 220, 0, 0, 255 };
+const DisplayColour kSimLoadNoTargetColour = { 60, 120, 230, 255 };
+const float kSimLoadLineWeight = 2.5f;
+
 // The stock, drawn as its edges.
 const DisplayColour kStockColour = { 0, 160, 160, 255 };
 const float kStockLineWeight = 1.5f;

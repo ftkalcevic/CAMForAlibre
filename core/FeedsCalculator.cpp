@@ -101,13 +101,13 @@ namespace camcore
         // Surface speeds for HSS, cobalt HSS, carbide and coated carbide: conservative starting points.
         static const std::vector<TypicalMaterial> materials =
         {
-            { "Aluminium", { 90, 110, 300, 400 }, 100 },
-            { "Brass", { 60, 75, 200, 250 }, 80 },
-            { "Mild steel", { 25, 30, 100, 150 }, 50 },
-            { "Stainless steel", { 12, 15, 60, 90 }, 40 },
-            { "Acrylic and plastics", { 100, 100, 300, 300 }, 100 },
-            { "Hardwood", { 300, 300, 500, 500 }, 100 },
-            { "MDF", { 300, 300, 600, 600 }, 120 },
+            { "Aluminium", { 90, 110, 300, 400 }, 100, 700 },
+            { "Brass", { 60, 75, 200, 250 }, 80, 800 },
+            { "Mild steel", { 25, 30, 100, 150 }, 50, 2000 },
+            { "Stainless steel", { 12, 15, 60, 90 }, 40, 2500 },
+            { "Acrylic and plastics", { 100, 100, 300, 300 }, 100, 150 },
+            { "Hardwood", { 300, 300, 500, 500 }, 100, 60 },
+            { "MDF", { 300, 300, 600, 600 }, 120, 40 },
         };
         return materials;
     }

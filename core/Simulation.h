@@ -15,6 +15,7 @@
 #include "Stock.h"
 #include "ToolLibrary.h"
 #include "Toolpath.h"
+#include "ToolLoad.h"
 #include "TriDexel.h"
 
 namespace camcore
@@ -64,8 +65,11 @@ namespace camcore
         void FillAll();
 
         // Fills the cells inside a closed triangle mesh (three points to a
-        // triangle), by counting its crossings up each column.
-        void FillMesh(const std::vector<Vec3>& triangles);
+        // triangle), by counting its crossings up each column. Several closed
+        // meshes that may overlap (parts) are filled each on its own and joined:
+        // solids holds where each starts in triangles (a point index, a multiple of
+        // 3); empty is one mesh. Counted together, an overlap would read as outside.
+        void FillMesh(const std::vector<Vec3>& triangles, const std::vector<size_t>& solids = {});
 
         int SizeX() const { return m_nx; }
         int SizeY() const { return m_ny; }
@@ -133,6 +137,7 @@ namespace camcore
         std::uint64_t FullWord(int i, int j, int w) const;     // what a full brick's word holds
         std::int32_t Split(size_t brick);
         void SetMask(int i, int j, int w, std::uint64_t mask);
+        void FillSolid(const std::vector<Vec3>& triangles, size_t begin, size_t end);   // adds one closed mesh's cells
         void MergeBrick(size_t brick);
         void MarkDirty(int i, int j, int k);
 
@@ -266,6 +271,7 @@ namespace camcore
         HolderHitsStock,    // the tool holder touched stock
         ToolHitsFixture,    // the tool or its shank touched a fixture
         HolderHitsFixture,  // the tool holder touched a fixture
+        ToolOverloaded,     // a move's chip load went over the limit (SetStopOnOverload)
     };
 
     // A fixture (work holding) as cells, in assembly mm: filled where its part is.
@@ -377,6 +383,9 @@ namespace camcore
         // The machine's X, Y and Z in the assembly while it runs (the work zero's
         // axes turned by its rotary angle), for timing moves by each axis's limits.
         Frame machine;
+
+        // For the tool's load: the spindle speed, flutes, chip load and the material.
+        ToolLoadSetup load;
     };
 
     // Where the cutting's time went, summed since the last ResetTiming, in seconds:
@@ -386,6 +395,7 @@ namespace camcore
         double checkSeconds = 0.0;
         double cutSeconds = 0.0;
         size_t pieces = 0;          // moves or parts of moves cut
+        double loadSeconds = 0.0;   // measuring the tool's load
     };
 
     // Steps through the operations' moves, cutting the stock.
@@ -477,6 +487,28 @@ namespace camcore
         void SetIgnoreCollisions(bool ignore) { m_ignoreCollisions = ignore; }
         bool IgnoreCollisions() const { return m_ignoreCollisions; }
 
+        // Measuring the tool's load on each feed move, for operations whose load is
+        // present (off unless asked for; Rest Machining doesn't need it). Kept when started again.
+        void SetMeasureLoad(bool measure) { m_measureLoad = measure; }
+
+        // Stops after a move whose chip load is over this percent of the target (an
+        // operation with no target never stops). Not turned off by ignoring collisions.
+        void SetStopOnOverload(bool stop, double percent)
+        {
+            m_stopOnOverload = stop;
+            m_overloadPercent = percent;
+        }
+
+        bool StopsOnOverload() const { return m_stopOnOverload; }
+        double OverloadPercent() const { return m_overloadPercent; }
+
+        // Each move's load (by move; not measured until it's cut), and each operation's so far.
+        const std::vector<MoveLoad>& MoveLoads() const { return m_loads; }
+        const std::vector<OperationLoad>& OperationLoads() const { return m_operationLoads; }
+
+        // The load of the move the tool is on: the one part cut, or the last one done.
+        const MoveLoad* CurrentLoad() const;
+
         // Time spent cutting, for finding what's slow.
         const SimTiming& Timing() const { return m_timing; }
         void ResetTiming() { m_timing = SimTiming(); }
@@ -485,7 +517,7 @@ namespace camcore
         Vec3 AxisAfter(size_t move) const;     // the tool's axis once the move is done
         // Cuts one move's piece from a to b with the holder, shank and rapid checks,
         // returning the warning (None for none).
-        SimWarning CutPiece(const SimMove& move, const Vec3& a, const Vec3& b);
+        SimWarning CutPiece(size_t index, const Vec3& a, const Vec3& b);
         Vec3 PointAlong(const SimMove& move, double seconds) const;
 
         StockModel m_model = StockModel::Voxels;
@@ -503,5 +535,10 @@ namespace camcore
         std::string m_warningFixture;
         bool m_ignoreCollisions = false;
         SimTiming m_timing;
+        bool m_measureLoad = false;
+        bool m_stopOnOverload = false;
+        double m_overloadPercent = 150.0;
+        std::vector<MoveLoad> m_loads;
+        std::vector<OperationLoad> m_operationLoads;
     };
 }

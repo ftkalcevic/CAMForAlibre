@@ -66,6 +66,9 @@ namespace camcore
         double travelZ = 100.0;
 
         double maxSpindleRpm = 24000.0;
+        // The spindle's power in kW, for the simulation's tool load; 0 is not known.
+        // Saved only when set, so the file's version stays.
+        double spindlePower = 0.0;
         // For the simulation's times. Files without them take their old rapid rate
         // (rapidRate, mm/min) as each linear axis's velocity, in mm/s.
         MotionLimits motion;

@@ -160,6 +160,9 @@ BOOL CMaterialDlg::OnInitDialog()
         }
     }
 
+    if (m_material.cuttingForce > 0.0)
+        SetDlgItemText(IDC_MATDLG_KC, FormatNumber(m_material.cuttingForce).c_str());
+
     m_typical.SubclassDlgItem(IDC_MATDLG_TYPICAL, this);
     for (const TypicalMaterial& typical : TypicalMaterials())
         m_typical.AddString(FromUtf8(typical.name).c_str());     // kept in order: no CBS_SORT
@@ -205,6 +208,7 @@ void CMaterialDlg::OnApplyTypical()
         SetDlgItemText(IDC_MATDLG_SPEED_0 + i, FormatNumber(typical.surfaceSpeed[i]).c_str());
         SetDlgItemText(IDC_MATDLG_FACTOR_0 + i, FormatNumber(typical.chipLoadFactor).c_str());
     }
+    SetDlgItemText(IDC_MATDLG_KC, FormatNumber(typical.cuttingForce).c_str());
     UpdateFields();
 }
 
@@ -241,6 +245,23 @@ void CMaterialDlg::OnOK()
                 AppendProblem(problems, L"The " + title + box.what + L" must be a number.");
             else
                 *box.pValue = value;
+        }
+    }
+
+    // The specific cutting force: empty is not known.
+    {
+        CString text;
+        GetDlgItemText(IDC_MATDLG_KC, text);
+        text.Trim();
+        material.cuttingForce = 0.0;
+        if (!text.IsEmpty())
+        {
+            wchar_t* pEnd = nullptr;
+            const double value = wcstod(text, &pEnd);
+            if (pEnd == nullptr || *pEnd != L'\0')
+                AppendProblem(problems, L"The specific cutting force must be a number, or empty.");
+            else
+                material.cuttingForce = value;
         }
     }
 

@@ -62,6 +62,8 @@ namespace camcore
                 if (!(cutting.chipLoadFactor >= 1.0 && cutting.chipLoadFactor <= 500.0))
                     problems.push_back(what + " chip load factor must be from 1 to 500%.");
             }
+            if (!(material.cuttingForce >= 0.0))
+                problems.push_back(material.name + "'s specific cutting force can't be negative.");
         }
         return problems;
     }
@@ -131,6 +133,10 @@ namespace camcore
                         value.chipLoadFactor = entry.value().at("chipLoadFactor").get<double>();
                     }
                 }
+                // Versions 1 and 2 have no cutting force.
+                const auto force = item.find("cuttingForce");
+                if (force != item.end())
+                    material.cuttingForce = force->get<double>();
                 result.list.materials.push_back(material);
             }
         }
@@ -173,6 +179,8 @@ namespace camcore
             }
             if (!cutting.empty())
                 item["cutting"] = cutting;
+            if (material.cuttingForce > 0.0)
+                item["cuttingForce"] = material.cuttingForce;
             materials.push_back(item);
         }
         const json root =

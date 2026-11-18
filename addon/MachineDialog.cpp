@@ -57,7 +57,8 @@ namespace
                                         IDC_MACHINE_TRAVEL_LABEL, IDC_MACHINE_TRAVEL_X_LABEL, IDC_MACHINE_TRAVEL_X,
                                         IDC_MACHINE_TRAVEL_Y_LABEL, IDC_MACHINE_TRAVEL_Y, IDC_MACHINE_TRAVEL_Z_LABEL,
                                         IDC_MACHINE_TRAVEL_Z, IDC_MACHINE_SPINDLE_LABEL, IDC_MACHINE_SPINDLE,
-                                        IDC_MACHINE_SPINDLE_UNIT, IDC_MACHINE_SIM_OPTIONS, IDC_MACHINE_HOLDER_LABEL,
+                                        IDC_MACHINE_SPINDLE_UNIT, IDC_MACHINE_POWER_LABEL, IDC_MACHINE_POWER,
+                                        IDC_MACHINE_POWER_UNIT, IDC_MACHINE_SIM_OPTIONS, IDC_MACHINE_HOLDER_LABEL,
                                         IDC_MACHINE_HOLDER_DIA_LABEL, IDC_MACHINE_HOLDER_DIA,
                                         IDC_MACHINE_HOLDER_DEPTH_LABEL, IDC_MACHINE_HOLDER_DEPTH,
                                         IDC_MACHINE_HOLDER_UNIT, IDC_MACHINE_ARCS_LABEL, IDC_MACHINE_ARCS,
@@ -168,6 +169,7 @@ BEGIN_MESSAGE_MAP(CMachineDlg, CDialog)
     ON_EN_KILLFOCUS(IDC_MACHINE_TRAVEL_Y, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_TRAVEL_Z, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_SPINDLE, &CMachineDlg::OnMachineFieldChanged)
+    ON_EN_KILLFOCUS(IDC_MACHINE_POWER, &CMachineDlg::OnMachineFieldChanged)
     ON_BN_CLICKED(IDC_MACHINE_SIM_OPTIONS, &CMachineDlg::OnSimOptions)
     ON_EN_KILLFOCUS(IDC_MACHINE_HOLDER_DIA, &CMachineDlg::OnMachineFieldChanged)
     ON_EN_KILLFOCUS(IDC_MACHINE_HOLDER_DEPTH, &CMachineDlg::OnMachineFieldChanged)
@@ -304,6 +306,8 @@ void CMachineDlg::ShowMachine()
     CheckDlgButton(IDC_MACHINE_ARC_ZX, m_machine.arcs.zx ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_MACHINE_ARC_YZ, m_machine.arcs.yz ? BST_CHECKED : BST_UNCHECKED);
     SetDlgItemText(IDC_MACHINE_ARC_TOL, m_canEdit ? FormatNumber(m_machine.arcs.tolerance).c_str() : L"");
+    SetDlgItemText(IDC_MACHINE_POWER,
+                   (m_canEdit && m_machine.spindlePower > 0.0) ? FormatNumber(m_machine.spindlePower).c_str() : L"");
     for (int i = 0; i < 4; ++i)
     {
         if (kRotaryAxes[i] == m_machine.rotary)
@@ -344,6 +348,7 @@ void CMachineDlg::UpdateButtons()
     GetDlgItem(IDC_MACHINE_SIM_OPTIONS)->EnableWindow(edit);
     for (const NumberBox& box : kNumberBoxes)
         GetDlgItem(box.id)->EnableWindow(edit);
+    GetDlgItem(IDC_MACHINE_POWER)->EnableWindow(edit);
     GetDlgItem(IDC_MACHINE_ROTARY)->EnableWindow((m_canEdit && m_axes.GetCurSel() == 1) ? TRUE : FALSE);
     // The planes and tolerance only with arcs on.
     GetDlgItem(IDC_MACHINE_ARCS)->EnableWindow(edit);
@@ -410,6 +415,28 @@ bool CMachineDlg::ApplyMachineFields()
         changed.*box.field = value;
     }
 
+    // The spindle's power: empty is not known, otherwise a number not below 0.
+    {
+        CString text;
+        GetDlgItemText(IDC_MACHINE_POWER, text);
+        text.Trim();
+        double value = 0.0;
+        if (!text.IsEmpty())
+        {
+            wchar_t* pEnd = nullptr;
+            value = wcstod(text, &pEnd);
+            if (pEnd == nullptr || *pEnd != L'\0' || !(value >= 0.0))
+            {
+                MessageBox(L"The spindle power must be a number of kW, or empty if it isn't known.", L"CAMForAlibre",
+                           MB_OK | MB_ICONWARNING);
+                SetDlgItemText(IDC_MACHINE_POWER,
+                               m_machine.spindlePower > 0.0 ? FormatNumber(m_machine.spindlePower).c_str() : L"");
+                return false;
+            }
+        }
+        changed.spindlePower = value;
+    }
+
     // Arcs: the check boxes, and the tolerance more than 0 and at most 1 mm.
     changed.arcs.enabled = IsDlgButtonChecked(IDC_MACHINE_ARCS) == BST_CHECKED;
     changed.arcs.xy = IsDlgButtonChecked(IDC_MACHINE_ARC_XY) == BST_CHECKED;
@@ -434,6 +461,7 @@ bool CMachineDlg::ApplyMachineFields()
     if (changed.name == m_machine.name && changed.axes == m_machine.axes && changed.rotary == m_machine.rotary &&
         changed.travelX == m_machine.travelX && changed.travelY == m_machine.travelY &&
         changed.travelZ == m_machine.travelZ && changed.maxSpindleRpm == m_machine.maxSpindleRpm &&
+        changed.spindlePower == m_machine.spindlePower &&
         changed.holderDiameter == m_machine.holderDiameter && changed.holderDepth == m_machine.holderDepth &&
         changed.arcs == m_machine.arcs)
         return true;

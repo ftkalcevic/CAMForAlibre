@@ -110,6 +110,8 @@ namespace camcore
             problems.push_back(problem);
         if (!(machine.maxSpindleRpm > 0.0))
             problems.push_back("The spindle's maximum speed must be more than 0.");
+        if (!(machine.spindlePower >= 0.0))
+            problems.push_back("The spindle's power can't be negative.");
         if (!(machine.holderDiameter > 0.0) || !(machine.holderDepth > 0.0))
             problems.push_back("The tool holder's diameter and depth must be more than 0.");
         for (const std::string& problem : ValidateArcFitting(machine.arcs))
@@ -170,6 +172,9 @@ namespace camcore
             const auto spindle = root.find("maxSpindleRpm");
             if (spindle != root.end())
                 result.machine.maxSpindleRpm = spindle->get<double>();
+            const auto power = root.find("spindlePower");
+            if (power != root.end())
+                result.machine.spindlePower = power->get<double>();
             // Before the motion limits, one rapid rate for every axis.
             const auto rapid = root.find("rapidRate");
             if (rapid != root.end())
@@ -253,7 +258,7 @@ namespace camcore
             json tools = json::array();
             for (const Tool& tool : machine.tools.tools)
                 tools.push_back(ToolToJson(tool));
-            const json root =
+            json root =
             {
                 { "format", kFormatName },
                 { "formatVersion", kMachineFormatVersion },
@@ -280,6 +285,8 @@ namespace camcore
                     { "tolerance", machine.arcs.tolerance } } },
                 { "tools", tools }
             };
+            if (machine.spindlePower > 0.0)
+                root["spindlePower"] = machine.spindlePower;
             text = root.dump(2) + "\n";
         }
         catch (const std::exception& problem)

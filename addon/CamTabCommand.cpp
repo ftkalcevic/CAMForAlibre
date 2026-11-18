@@ -1939,6 +1939,11 @@ bool CCamTabCommand::MakeSimOperation(const StepRef& ref, camcore::SimOperation&
     operation.holder = camcore::HolderOf(tool, m_machine.holderDiameter, m_machine.holderDepth);
     operation.frame = frame.frame;
     operation.toolpath = pStep->toolpath;
+    operation.load = camcore::LoadSetupFor(tool, pStep->feeds.spindleRpm,
+                                           camcore::FindMaterial(m_materials, m_job.materialId),
+                                           m_machine.spindlePower,
+                                           tool.type == camcore::ToolType::Drill ? pStep->feeds.plunge
+                                                                                 : pStep->feeds.cut);
     return true;
 }
 
@@ -2158,6 +2163,7 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
         const ULONGLONG start = GetTickCount64();
         m_simulationBox = box;
         m_simulationTriangles = triangles;
+        m_simulation.SetMeasureLoad(true);
         m_simulation.Start(box, triangles, operations,
                            CSimulationDlg::ChosenResolution(SimulationStops(CSimulationDlg::ChosenModel())),
                            m_machine.motion);
@@ -2167,6 +2173,7 @@ void CCamTabCommand::SimulateOperations(std::vector<StepRef> refs)
     m_simulationChunks.assign(static_cast<size_t>(m_simulation.ChunkCount()), camcore::StockMesh());
     m_simulationMesh = camcore::StockMesh();
     m_simulationPartTriangles.clear();
+    m_simulationPartStarts.clear();
     m_simulationPartsRead = false;
     m_simulationPartProblem.clear();
     ClearSimulationCompare();
@@ -2276,7 +2283,7 @@ bool CCamTabCommand::PrepareSimulationPart()
                                           ? FromUtf8(m_job.stock.partPath)
                                           : std::wstring();
         ReadAssemblyPartFacets(GetSession(), leaveOut, m_simulationPartTriangles, m_simulationPartProblem,
-                               FixtureKeys());
+                               FixtureKeys(), &m_simulationPartStarts);
     }
     if (m_simulationPartTriangles.empty())
         return false;
@@ -2284,7 +2291,7 @@ bool CCamTabCommand::PrepareSimulationPart()
     CWaitCursor wait;
     const ULONGLONG start = GetTickCount64();
     m_simulation.ResetPartGrid(m_simulationPart);
-    m_simulationPart.FillMesh(m_simulationPartTriangles);
+    m_simulationPart.FillMesh(m_simulationPartTriangles, m_simulationPartStarts);
     m_simulationPartMesh = camcore::MeshStock(m_simulationPart);
     m_simulationPartReady = true;
     m_simulationCompareStale = true;
@@ -2393,6 +2400,48 @@ void CCamTabCommand::UpdateSimulationScene()
         m_scene.simWarningFrom = move.from;
         m_scene.simWarningTo = move.to;
     }
+    UpdateLoadRuns();
+}
+
+void CCamTabCommand::UpdateLoadRuns()
+{
+    // The moves cut so far, joined into runs of the same band, rebuilt when the
+    // simulation has moved on (or back) or the stop limit has changed.
+    const size_t position = m_simulation.Position();
+    const double limit = m_simulation.OverloadPercent();
+    if (!m_simulationShow.load)
+    {
+        for (auto& runs : m_scene.simLoadRuns)
+            runs.clear();
+        m_loadRunsPosition = SIZE_MAX;
+        return;
+    }
+    if (position == m_loadRunsPosition && limit == m_loadRunsLimit)
+        return;
+    m_loadRunsPosition = position;
+    m_loadRunsLimit = limit;
+    for (auto& runs : m_scene.simLoadRuns)
+        runs.clear();
+    const std::vector<camcore::SimMove>& moves = m_simulation.Moves();
+    const std::vector<camcore::MoveLoad>& loads = m_simulation.MoveLoads();
+    int lastSlot = -1;
+    size_t lastMove = SIZE_MAX;
+    for (size_t m = 0; m < position && m < loads.size(); ++m)
+    {
+        const camcore::LoadBand band = camcore::BandOf(loads[m], limit);
+        if (band == camcore::LoadBand::NotCutting)
+        {
+            lastSlot = -1;
+            continue;
+        }
+        const int slot = static_cast<int>(band) - static_cast<int>(camcore::LoadBand::Air);
+        auto& runs = m_scene.simLoadRuns[slot];
+        if (slot != lastSlot || lastMove + 1 != m)
+            runs.push_back({ moves[m].from });
+        runs.back().push_back(moves[m].to);
+        lastSlot = slot;
+        lastMove = m;
+    }
 }
 
 void CCamTabCommand::ResetSimulationTiming()
@@ -2409,15 +2458,29 @@ void CCamTabCommand::LogSimulationTiming(const wchar_t* run, ULONGLONG wallMilli
     // The rest of the wall time is the dialog, the timer's waits and Alibre's
     // redraws, which the [draw] lines time.
     const camcore::SimTiming& timing = m_simulation.Timing();
-    const double counted =
-        timing.cutSeconds + timing.checkSeconds + m_simMeshSeconds + m_simJoinSeconds + m_simCompareSeconds;
+    const double counted = timing.cutSeconds + timing.checkSeconds + timing.loadSeconds + m_simMeshSeconds +
+                           m_simJoinSeconds + m_simCompareSeconds;
     Log(L"[simulate] timing, %s: %llu ms in all; cutting %.0f ms (%zu pieces), collision checks %.0f ms, "
-        L"meshing %.0f ms, joining %.0f ms, comparing %.0f ms (%zu updates), other %.0f ms; "
-        L"%zu triangles to draw, %s",
+        L"measuring the load %.0f ms, meshing %.0f ms, joining %.0f ms, comparing %.0f ms (%zu updates), "
+        L"other %.0f ms; %zu triangles to draw, %s",
         run, wallMilliseconds, timing.cutSeconds * 1000.0, timing.pieces, timing.checkSeconds * 1000.0,
-        m_simMeshSeconds * 1000.0, m_simJoinSeconds * 1000.0, m_simCompareSeconds * 1000.0, m_simSceneUpdates,
+        timing.loadSeconds * 1000.0, m_simMeshSeconds * 1000.0, m_simJoinSeconds * 1000.0,
+        m_simCompareSeconds * 1000.0, m_simSceneUpdates,
         (std::max)(0.0, static_cast<double>(wallMilliseconds) - counted * 1000.0), m_simulationMesh.TriangleCount(),
         SimulationGridText().c_str());
+
+    // Each operation's load so far.
+    const std::vector<camcore::OperationLoad>& loads = m_simulation.OperationLoads();
+    for (size_t o = 0; o < loads.size() && o < m_simulation.Operations().size(); ++o)
+    {
+        if (!loads[o].any)
+            continue;
+        const camcore::SimOperation& operation = m_simulation.Operations()[o];
+        Log(L"[simulate] load, %s: %s (worst at move %zu; target %g mm, %g rpm, %d teeth, Kc %g, spindle %g W)",
+            FromUtf8(operation.name).c_str(), FromUtf8(camcore::OperationLoadText(loads[o], operation.load)).c_str(),
+            loads[o].worstMove, operation.load.chipLoadTarget, operation.load.rpm, operation.load.teeth,
+            operation.load.cuttingForce, operation.load.spindlePower);
+    }
 }
 
 void CCamTabCommand::OnSimulationChanged()
@@ -2680,6 +2743,7 @@ void CCamTabCommand::OnSimulationDialogDone(CSimulationDlg* pDialog)
     m_scene.simMesh = nullptr;
     ClearSimulationCompare();
     m_simulationPartTriangles.clear();
+    m_simulationPartStarts.clear();
     RebuildScene();
 }
 
@@ -2697,9 +2761,13 @@ void CCamTabCommand::CloseSimulationDialog()
     m_scene.simMesh = nullptr;
     m_scene.simFixtureMesh = nullptr;
     m_simulationFixtureMeshes.clear();
+    for (auto& runs : m_scene.simLoadRuns)
+        runs.clear();
+    m_loadRunsPosition = SIZE_MAX;
     m_scene.simulating = false;
     ClearSimulationCompare();
     m_simulationPartTriangles.clear();
+    m_simulationPartStarts.clear();
 }
 
 void CCamTabCommand::GenerateOperations(const std::vector<StepRef>& refs)

@@ -6,6 +6,8 @@
 #include "ModelReader.h"
 #include "Log.h"
 
+#include <set>
+#include <memory>
 #include <cmath>
 #include <limits>
 
@@ -73,6 +75,160 @@ namespace
     // The world transform is by rows, with the translation in the fourth row,
     // and works in the assembly's units. No occurrence means the item belongs to
     // the assembly itself, so it's already in assembly coordinates.
+    IDispatchPtr BindKey(IADSession* pSession, const camcore::PersistentKey& key, ADObjectType type);
+    std::wstring BstrText(const _bstr_t& text);
+    void ReadFacetArray(SAFEARRAY* pFacets, std::vector<Vec3>& points);
+
+    bool SameObject(IUnknown* a, IUnknown* b)
+    {
+        return static_cast<IUnknown*>(QI<IUnknownPtr>(a)) == static_cast<IUnknown*>(QI<IUnknownPtr>(b));
+    }
+
+    // Logs, once per part, what a configuration's own session holds next to the part's
+    // shared one: their facets' boxes, faces, and whether a wanted key is among them.
+    // For finding faces in a configuration Alibre doesn't show, without switching it
+    // (switching made Alibre redraw, fire a selection change and loop: Frank's report).
+    void ProbeConfigurationSession(const std::wstring& name, IADDesignSession* pOwn, IADDesignSession* pShared,
+                                   const camcore::PersistentKey& wanted)
+    {
+        static std::set<std::wstring> probed;
+        if (!probed.insert(name).second)
+            return;
+        const auto describe = [&](const wchar_t* what, IADDesignSession* pSession) {
+            try
+            {
+                IADPartSessionPtr part = QI<IADPartSessionPtr>(pSession);
+                if (part == nullptr)
+                {
+                    Log(L"[config probe] %s, %s: not a part session", name.c_str(), what);
+                    return;
+                }
+                std::vector<Vec3> points;
+                SAFEARRAY* pFacets = part->GetFacetData();
+                ReadFacetArray(pFacets, points);
+                if (pFacets != nullptr)
+                    SafeArrayDestroy(pFacets);
+                Vec3 lo{}, hi{};
+                for (size_t i = 0; i < points.size(); ++i)
+                {
+                    const Vec3& v = points[i];
+                    lo = (i == 0) ? v : Vec3{ (std::min)(lo.x, v.x), (std::min)(lo.y, v.y), (std::min)(lo.z, v.z) };
+                    hi = (i == 0) ? v : Vec3{ (std::max)(hi.x, v.x), (std::max)(hi.y, v.y), (std::max)(hi.z, v.z) };
+                }
+                long faces = 0;
+                int matches = 0;
+                std::wstring firstKey;
+                IADBodiesPtr bodies = part->GetBodies();
+                const long bodyCount = (bodies != nullptr) ? bodies->GetCount() : 0;
+                for (long b = 0; b < bodyCount; ++b)
+                {
+                    IADFacesPtr bodyFaces = bodies->GetItem(b)->GetFaces();
+                    const long count = (bodyFaces != nullptr) ? bodyFaces->GetCount() : 0;
+                    for (long f = 0; f < count; ++f)
+                    {
+                        const camcore::PersistentKey key = TakeKey(bodyFaces->GetItem(f)->GetKey());
+                        if (firstKey.empty())
+                            firstKey = FromUtf8(key.hex.substr(0, 48));
+                        if (key.hex == wanted.hex)
+                            ++matches;
+                        ++faces;
+                    }
+                }
+                Log(L"[config probe] %s, %s: %zu triangles, box (%.3f, %.3f, %.3f) to (%.3f, %.3f, %.3f) model units; "
+                    L"%ld bodies, %ld faces, %d with the wanted key; first face key %s",
+                    name.c_str(), what, points.size() / 3, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, bodyCount, faces,
+                    matches, firstKey.c_str());
+            }
+            catch (const _com_error& error)
+            {
+                Log(L"[config probe] %s, %s: hr=0x%08X", name.c_str(), what, static_cast<unsigned>(error.Error()));
+            }
+        };
+        Log(L"[config probe] %s: wanted key %s (%zu bytes)", name.c_str(), FromUtf8(wanted.hex.substr(0, 48)).c_str(),
+            wanted.hex.size() / 2);
+        describe(L"its configuration's own session", pOwn);
+        describe(L"the part's shared session", pShared);
+    }
+
+    // An occurrence read in its own configuration. Occurrences of one part file share
+    // its session, which shows one configuration (its active one). An occurrence using
+    // another has a session of its own for it (IADConfiguration::GetDesignSession); faces
+    // and edges are looked for there first. The part is never switched to another
+    // configuration: that made Alibre redraw, fire a selection change, and loop.
+    class ConfigurationScope
+    {
+    public:
+        explicit ConfigurationScope(IADOccurrence* pOccurrence)
+        {
+            if (pOccurrence == nullptr)
+                return;
+            m_design = pOccurrence->GetDesignSession();
+            m_session = m_design;
+            if (m_design == nullptr)
+                return;
+            try
+            {
+                m_name = BstrText(pOccurrence->GetName());
+                IADConfigurationPtr own = pOccurrence->GetConfiguration();
+                IADConfigurationPtr active = m_design->GetActiveConfiguration();
+                if (own == nullptr || active == nullptr || BstrText(own->GetName()) == BstrText(active->GetName()))
+                    return;
+                IADDesignSessionPtr ownSession = own->GetDesignSession();
+                if (ownSession != nullptr && !SameObject(ownSession, m_design))
+                {
+                    m_session = ownSession;
+                    m_changed = true;
+                }
+                Log(L"[config] %s: uses configuration %s, the part shows %s; %s", m_name.c_str(),
+                    BstrText(own->GetName()).c_str(), BstrText(active->GetName()).c_str(),
+                    m_changed ? L"read from the configuration's own session" : L"it has no session of its own");
+            }
+            catch (const _com_error& error)
+            {
+                Log(L"[config] its configuration couldn't be read: hr=0x%08X", static_cast<unsigned>(error.Error()));
+            }
+        }
+
+        ConfigurationScope(const ConfigurationScope&) = delete;
+        ConfigurationScope& operator=(const ConfigurationScope&) = delete;
+
+        IADDesignSession* Session() const { return m_session; }
+        IADDesignSession* Shared() const { return m_design; }
+        bool Changed() const { return m_changed; }
+        const std::wstring& Name() const { return m_name; }
+
+        // A face or edge as it is in this configuration: found again by its key in the
+        // configuration's own session; failing that, the one selected is kept.
+        IDispatchPtr Rebind(IDispatch* pTarget) const
+        {
+            if (!m_changed || pTarget == nullptr)
+                return pTarget;
+            SAFEARRAY* pKey = nullptr;
+            if (IADFacePtr face = QI<IADFacePtr>(pTarget))
+                pKey = face->GetKey();
+            else if (IADEdgePtr edge = QI<IADEdgePtr>(pTarget))
+                pKey = edge->GetKey();
+            if (pKey == nullptr)
+                return pTarget;
+            const camcore::PersistentKey key = TakeKey(pKey);
+            IADSessionPtr session = QI<IADSessionPtr>(m_session);
+            IDispatchPtr bound = (session != nullptr) ? BindKey(session, key, ADObjectType_AD_TOPOLOGY) : nullptr;
+            if (bound == nullptr)
+            {
+                Log(L"[config] %s: the selected item isn't found by its key in the configuration's own session; "
+                    L"kept as selected", m_name.c_str());
+                ProbeConfigurationSession(m_name, m_session, m_design, key);
+            }
+            return (bound != nullptr) ? bound : IDispatchPtr(pTarget);
+        }
+
+    private:
+        IADDesignSessionPtr m_design;
+        IADDesignSessionPtr m_session;
+        std::wstring m_name;
+        bool m_changed = false;
+    };
+
     class PartToAssembly
     {
     public:
@@ -381,7 +537,8 @@ bool ReadSelectedPick(IADSession* pAssembly, PickFilter filter, PickedGeometry& 
         IDispatchPtr item = selected->GetItem(_variant_t(0L));
         IADTargetProxyPtr proxy = QI<IADTargetProxyPtr>(item);
         IADOccurrencePtr occurrence = (proxy != nullptr) ? proxy->GetOccurrence() : nullptr;
-        IDispatchPtr target = (proxy != nullptr) ? proxy->GetTarget() : item;
+        const ConfigurationScope configuration(occurrence);
+        IDispatchPtr target = configuration.Rebind((proxy != nullptr) ? proxy->GetTarget() : item);
         if (target == nullptr)
         {
             problem = AllowedText(filter);
@@ -554,7 +711,8 @@ bool ReadSelectedLocate(IADSession* pAssembly, camcore::LocatedGeometry& located
         IDispatchPtr item = selected->GetItem(_variant_t(0L));
         IADTargetProxyPtr proxy = QI<IADTargetProxyPtr>(item);
         IADOccurrencePtr occurrence = (proxy != nullptr) ? proxy->GetOccurrence() : nullptr;
-        IDispatchPtr target = (proxy != nullptr) ? proxy->GetTarget() : item;
+        const ConfigurationScope configuration(occurrence);
+        IDispatchPtr target = configuration.Rebind((proxy != nullptr) ? proxy->GetTarget() : item);
         if (target == nullptr)
         {
             problem = allowed;
@@ -640,7 +798,8 @@ namespace
         // Part items come as proxies. The assembly's own design points may not.
         IADTargetProxyPtr proxy = QI<IADTargetProxyPtr>(pItem);
         IADOccurrencePtr occurrence = (proxy != nullptr) ? proxy->GetOccurrence() : nullptr;
-        IDispatchPtr target = (proxy != nullptr) ? proxy->GetTarget() : IDispatchPtr(pItem);
+        const ConfigurationScope configuration(occurrence);
+        IDispatchPtr target = configuration.Rebind((proxy != nullptr) ? proxy->GetTarget() : IDispatchPtr(pItem));
         if (target == nullptr)
             return false;
 
@@ -782,8 +941,10 @@ namespace
 {
     // The feature's occurrence and face or edge, found again by their keys.
     // Design points have no key to find them by.
+    // With configuration given, the face or edge is found in the occurrence's own
+    // configuration (ConfigurationScope), kept until configuration is reset, to read it.
     bool BindFeature(IADSession* pAssembly, const PickedGeometry& feature, IADOccurrencePtr& occurrence,
-                     IDispatchPtr& target)
+                     IDispatchPtr& target, std::unique_ptr<ConfigurationScope>* configuration = nullptr)
     {
         if (feature.kind == PickKind::DesignPoint || feature.kind == PickKind::Sketch)
             return false;
@@ -794,8 +955,36 @@ namespace
 
         // Face and edge keys belong to the part.
         IADSessionPtr part = QI<IADSessionPtr>(occurrence->GetDesignSession());
+        if (configuration != nullptr)
+        {
+            *configuration = std::make_unique<ConfigurationScope>(occurrence);
+            part = QI<IADSessionPtr>((*configuration)->Session());
+        }
         target = (part != nullptr) ? BindKey(part, feature.targetKey, ADObjectType_AD_TOPOLOGY) : nullptr;
-        return target != nullptr;
+        if (target == nullptr && configuration != nullptr && *configuration && (*configuration)->Changed())
+        {
+            // Not in the configuration's own session: the part's shared one, as before.
+            ProbeConfigurationSession((*configuration)->Name(), (*configuration)->Session(),
+                                      (*configuration)->Shared(), feature.targetKey);
+            part = QI<IADSessionPtr>(occurrence->GetDesignSession());
+            target = (part != nullptr) ? BindKey(part, feature.targetKey, ADObjectType_AD_TOPOLOGY) : nullptr;
+            Log(L"[config] %s's feature isn't in its configuration's own session; the part's shared session %s",
+                (*configuration)->Name().c_str(), target != nullptr ? L"has it (read from there)" : L"doesn't either");
+        }
+        if (target == nullptr)
+        {
+            // Not there: is it in the part's own session as it shows (another configuration)?
+            IADSessionPtr shared = QI<IADSessionPtr>(occurrence->GetDesignSession());
+            IDispatchPtr inShared = (shared != nullptr && shared != part)
+                                        ? BindKey(shared, feature.targetKey, ADObjectType_AD_TOPOLOGY)
+                                        : nullptr;
+            Log(L"[config] %s's %s couldn't be found by its key (%zu bytes) in %s%s",
+                BstrText(occurrence->GetName()).c_str(), FromUtf8(feature.targetName).c_str(),
+                feature.targetKey.hex.size() / 2, part == nullptr ? L"no session" : L"its configuration's session",
+                inShared != nullptr ? L"; it is in the part's shared session" : L"");
+            return false;
+        }
+        return true;
     }
 
     // The feature as something Alibre can select, or nothing if it can't be found.
@@ -1148,7 +1337,8 @@ bool ReadFeatureOutline(IADSession* pAssembly, const PickedGeometry& feature, st
 
         IADOccurrencePtr occurrence;
         IDispatchPtr target;
-        if (!BindFeature(pAssembly, feature, occurrence, target))
+        std::unique_ptr<ConfigurationScope> configuration;
+        if (!BindFeature(pAssembly, feature, occurrence, target, &configuration))
         {
             problem = L"A feature can't be found in the model. It may have been deleted.";
             return false;
@@ -1488,12 +1678,72 @@ namespace
         IADSessionPtr session = QI<IADSessionPtr>(design);
         const std::wstring path = (session != nullptr) ? BstrText(session->GetfilePath()) : std::wstring();
         std::vector<Vec3> points;
-        try
-        {
-            SAFEARRAY* pFacets = QI<IADPartSessionPtr>(design)->GetFacetData();
-            ReadFacetArray(pFacets, points);
+        const auto facetsOf = [&](IADDesignSession* pSession, std::vector<Vec3>& out) {
+            out.clear();
+            IADPartSessionPtr part = QI<IADPartSessionPtr>(pSession);
+            if (part == nullptr)
+                return;
+            SAFEARRAY* pFacets = part->GetFacetData();
+            ReadFacetArray(pFacets, out);
             if (pFacets != nullptr)
                 SafeArrayDestroy(pFacets);
+        };
+        try
+        {
+            // Occurrences of one part file share its session, which shows one configuration
+            // (its active one); an occurrence may use another (a mirrored one, say). Its own
+            // configuration's session is tried first; if that's the shared session showing
+            // another configuration, the session is switched to the occurrence's for the
+            // read and put straight back.
+            IADConfigurationPtr own;
+            IADConfigurationPtr active;
+            try
+            {
+                own = pOccurrence->GetConfiguration();
+                active = (design != nullptr) ? design->GetActiveConfiguration() : nullptr;
+            }
+            catch (const _com_error& error)
+            {
+                Log(L"%s %s: its configuration can't be read, hr=0x%08X", tag, name.c_str(),
+                    static_cast<unsigned>(error.Error()));
+            }
+            const std::wstring ownName = (own != nullptr) ? BstrText(own->GetName()) : std::wstring();
+            const std::wstring activeName = (active != nullptr) ? BstrText(active->GetName()) : std::wstring();
+            if (own == nullptr || active == nullptr || ownName == activeName)
+            {
+                facetsOf(design, points);
+                Log(L"%s %s: configuration %s (the part's active one), %zu triangles", tag, name.c_str(),
+                    ownName.c_str(), points.size() / 3);
+            }
+            else
+            {
+                IADDesignSessionPtr ownSession = own->GetDesignSession();
+                const bool shared = ownSession == nullptr ||
+                                    static_cast<IUnknown*>(QI<IUnknownPtr>(ownSession)) ==
+                                        static_cast<IUnknown*>(QI<IUnknownPtr>(design));
+                if (!shared)
+                {
+                    try
+                    {
+                        facetsOf(ownSession, points);
+                    }
+                    catch (const _com_error& error)
+                    {
+                        Log(L"%s %s: facets from configuration %s's own session failed, hr=0x%08X", tag, name.c_str(),
+                            ownName.c_str(), static_cast<unsigned>(error.Error()));
+                        points.clear();
+                    }
+                    Log(L"%s %s: configuration %s (the part's active one is %s), from its own session, %zu "
+                        L"triangles", tag, name.c_str(), ownName.c_str(), activeName.c_str(), points.size() / 3);
+                }
+                if (points.empty())
+                {
+                    // Never switched (that loops in Alibre): the part as it shows.
+                    facetsOf(design, points);
+                    Log(L"%s %s: configuration %s isn't readable on its own; read as the part shows (%s), %zu triangles",
+                        tag, name.c_str(), ownName.c_str(), activeName.c_str(), points.size() / 3);
+                }
+            }
         }
         catch (const _com_error& error)
         {
@@ -1562,10 +1812,12 @@ bool ReadFixtureMeshes(IADSession* pAssembly, const std::vector<camcore::Fixture
 }
 
 bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutPath, std::vector<Vec3>& triangles,
-                            std::wstring& problem, const OccurrenceKeys& leaveOutKeys)
+                            std::wstring& problem, const OccurrenceKeys& leaveOutKeys, std::vector<size_t>* partStarts)
 {
     triangles.clear();
     problem.clear();
+    if (partStarts != nullptr)
+        partStarts->clear();
     const ULONGLONG start = GetTickCount64();
     try
     {
@@ -1605,7 +1857,34 @@ bool ReadAssemblyPartFacets(IADSession* pAssembly, const std::wstring& leaveOutP
                 continue;
             }
             ++read;
-            Log(L"[compare] %s: %zu triangles", name.c_str(), (triangles.size() - before) / 3);
+            if (partStarts != nullptr)
+                partStarts->push_back(before);
+
+            // Where it landed, and whether its transform mirrors it (a negative determinant).
+            Vec3 lo = triangles[before], hi = triangles[before];
+            for (size_t p = before; p < triangles.size(); ++p)
+            {
+                const Vec3& v = triangles[p];
+                lo = { (std::min)(lo.x, v.x), (std::min)(lo.y, v.y), (std::min)(lo.z, v.z) };
+                hi = { (std::max)(hi.x, v.x), (std::max)(hi.y, v.y), (std::max)(hi.z, v.z) };
+            }
+            double determinant = 0.0;
+            {
+                SAFEARRAY* pArray = occurrence->GetWorldTransform()->Array();
+                double* m = nullptr;
+                if (pArray != nullptr && SUCCEEDED(SafeArrayAccessData(pArray, reinterpret_cast<void**>(&m))))
+                {
+                    determinant = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                                  m[2] * (m[4] * m[9] - m[5] * m[8]);
+                    SafeArrayUnaccessData(pArray);
+                }
+                if (pArray != nullptr)
+                    SafeArrayDestroy(pArray);
+            }
+            Log(L"[compare] %s: %zu triangles, from %s, transform determinant %.3f%s, box (%.2f, %.2f, %.2f) to "
+                L"(%.2f, %.2f, %.2f)",
+                name.c_str(), (triangles.size() - before) / 3, path.c_str(), determinant,
+                determinant < 0.0 ? L" (mirrored)" : L"", lo.x, lo.y, lo.z, hi.x, hi.y, hi.z);
         }
         Log(L"[compare] read %d of %zu parts, %zu triangles, in %llu ms", read, parts.size(), triangles.size() / 3,
             GetTickCount64() - start);
@@ -1632,7 +1911,8 @@ bool ReadFaceFacets(IADSession* pAssembly, const PickedGeometry& feature, std::v
         IADOccurrencePtr occurrence;
         IDispatchPtr target;
         IADFacePtr face;
-        if (BindFeature(pAssembly, feature, occurrence, target))
+        std::unique_ptr<ConfigurationScope> configuration;
+        if (BindFeature(pAssembly, feature, occurrence, target, &configuration))
             face = QI<IADFacePtr>(target);
         if (face == nullptr)
         {

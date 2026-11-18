@@ -286,6 +286,7 @@
       <li><strong>The tool holder hits the stock</strong>: the holder touched stock.</li>
       <li><strong>The tool hits fixture <em>name</em></strong>: the tool or its shank touched a fixture part.</li>
       <li><strong>The tool holder hits fixture <em>name</em></strong>: the holder touched a fixture part.</li>
+      <li><strong>The tool is overloaded</strong>: only when Stop when over is ticked (see Tool load), a move's chip went over that percent of the tool's chip load. Ignore collisions doesn't turn this one off.</li>
     </ul>
     Play, Step or the other buttons carry on from there.</dd>
   <dt>Show</dt>
@@ -293,11 +294,33 @@
     <ul>
       <li><strong>Stock</strong>: the cut stock, shaded (on at first).</li>
       <li><strong>Fixtures</strong>: the parts of the current operation's <a href="#fixtures">Fixtures</a> step, shaded in purple and drawn over the stock and model, so screws through the stock show (on at first). They're the cells the simulation checks the tool against (0.05 to 0.25 mm), so curved parts look a little blocky. Each operation shows its own step's fixtures, so they change when a later Fixtures step moves the clamps.</li>
-      <li><strong>Part</strong>: the parts as the simulation sees them, in green: every visible, unsuppressed part in the assembly, in the same cells as the stock, so you can check they line up with the model. An imported stock's own part, and every part in a Fixtures step, are left out. The parts are read the first time any of the last three boxes is ticked, which can take a moment.</li>
+      <li><strong>Part</strong>: the parts as the simulation sees them, in green: every visible, unsuppressed part in the assembly, in the same cells as the stock, so you can check they line up with the model. Each part is read in the configuration its occurrence uses where Alibre allows it (<span class="tbc">otherwise in its active configuration's shape, being worked on</span>), and parts that overlap each other count as solid where they overlap. An imported stock's own part, and every part in a Fixtures step, are left out. The parts are read the first time any of the last three boxes is ticked, which can take a moment.</li>
       <li><strong>Not enough removed</strong>: stock still left outside the parts, in amber. Stock to Leave shows here too.</li>
       <li><strong>Too much removed</strong>: part material the simulation has cut away, in red, drawn over the model so it shows inside the part.</li>
     </ul>
     With Tri-dexel, the stock is turned into cubes at the line spacing for this, so the differences are blocky even though the stock is smooth. Differences within one cell of a part's surface aren't shown, so the surface doesn't speckle. The line under the boxes gives each difference's volume in mm&sup3;, worked out again as the stock is cut, or says why the parts couldn't be read.</dd>
+  <dt>Tool load</dt>
+  <dd>How hard the tool works on each feed move, measured against the stock as it is just before the move cuts. Points just outside the front half of the tool, every 5 degrees round it and at heights up its flutes, are tested for stock: those in stock are where the teeth are cutting. From them come:
+    <ul>
+      <li><strong>Chip</strong>: the thickest chip each tooth cuts, in mm. The feed per tooth is the move's feed over the spindle speed times the flutes (the operation's Feeds &amp; Speeds tab and the tool's Flutes); a tooth cutting square to the feed makes a chip that thick, and one cutting at an angle a thinner one, so a light side cut (under half the diameter) makes thinner chips than a slot at the same feed (radial chip thinning). It's compared with the tool's chip load times the material's chip load factor for the tool's tool material, lowered for a long tool as the <a href="#feeds-calculator">feeds calculator</a> does: the percent shown. A tool with no chip load of its own (the feeds calculator's Chip load isn't saved on the tool) is compared with the chip the operation was programmed for instead: its Cut feed (a drill's Plunge feed) over the spindle speed times the flutes, shown as "programmed", so a slot at the cut feed is 100% and a light side cut less. Only an operation with no feed or spindle speed has nothing to compare with; its chip is then shown alone, in blue.</li>
+      <li><strong>Plunge</strong>: a move mostly down the tool's axis, cutting with its end: the feed per tooth along the axis. A drill's is <strong>Feed</strong>, per revolution, against the tool's chip load per revolution.</li>
+      <li><strong>Engaged</strong>: how far round the tool, in degrees, the teeth are in the stock (180 for a slot); <strong>depth</strong> along the tool, and <strong>width</strong> across the move, in contact.</li>
+      <li><strong>Removal rate</strong>: in cm&sup3; a minute, from what the move actually cut.</li>
+      <li><strong>Power and force</strong>: when the job's material has a specific cutting force (see <a href="#material">Material</a>), the cutting power in kW (the force times the removal rate) and the tangential force on the tool in N (the power over the cutting speed at the tool's widest diameter in contact, so a ball mill cutting shallow counts its smaller diameter). When the machine has a spindle Power (Machine tab), the power is also shown as a percent of it, and a move needing more than the spindle's power says so and is drawn red, even if its chip is fine.</li>
+    </ul>
+    Air is a feed move that touched no stock. A thread mill is measured as a cylinder of its diameter.
+    <dl>
+      <dt>Load line</dt>
+      <dd>The move the tool is on, or the last one cut.</dd>
+      <dt>Graph</dt>
+      <dd>The current operation's load across its machining time, filled in as it's cut. The bars are the chip: percent of the chip load (or of the programmed chip when the tool has none), or the chip in mm, in blue, when there's nothing to compare with; the highest in each column, coloured green, amber or red by the chip. When the machine has a spindle Power and the material a specific cutting force, a purple line over the bars is the power as a percent of the spindle's, on the same scale as percent bars (cut off at the top if it's higher; the label gives its highest), or on its own scale, with its 100% dotted in purple, over bars in mm. The dotted green line is 100% of the chip load, the dotted red one the stop limit when Stop when over is ticked, and the grey line where the simulation has got to. When an operation has just finished (as To Op End leaves it), its graph and summary stay until the next operation starts cutting.</dd>
+      <dt>This operation</dt>
+      <dd>The current operation so far: the highest load and the average chip (over the time the tool is cutting), and the most engagement, depth, removal rate, power and force. Each operation's is also written to the log when Play, To Op End or To End stops.</dd>
+      <dt>Stop when over</dt>
+      <dd>Off at first. Ticked, the simulation stops after a move whose chip is over the percent of the chip load in the box beside it (150% at first; taken as you type), with a warning. Operations whose tool has no chip load never stop. Both are remembered until Alibre closes.</dd>
+      <dt>Colour the toolpath</dt>
+      <dd>On at first, remembered until Alibre closes. The toolpath cut so far is drawn over the stock in its load's colour: green up to 100% of the chip load, amber over it, red over the Stop when over percent (whether or not it's ticked) or needing more than the spindle's power, grey cutting air, blue when there's no chip load to compare with. Rapids aren't drawn.</dd>
+    </dl></dd>
   <dt>Save STL...</dt>
   <dd>Saves the cut stock as it is at the current move as an STL file, in millimetres and in the assembly's coordinates, so it lines up with the parts. The first suggestion is <em>&lt;job&gt; - simulation.stl</em> beside the .cam file, then the last folder used. With voxels the surface is the cells' surface, so it's blocky, with steps the size of a cell; large and small faces meet with joins that some programs call not watertight, though viewers and slicers open it. With Tri-dexel it's the smooth surface, closed (watertight), with two triangles for every spacing square of surface, flat areas too, so a fine spacing makes a large file. The tool isn't saved. The line under the controls says what was saved.</dd>
   <dt>Close</dt>
@@ -395,6 +418,8 @@
   <dd>How far the machine can move along each axis, in millimetres. Each must be more than 0. <span class="tbc">Not used for checking toolpaths yet.</span></dd>
   <dt>Max spindle speed</dt>
   <dd>The spindle's top speed, in RPM. It must be more than 0. <span class="tbc">Not used for checking speeds yet.</span></dd>
+  <dt>Power</dt>
+  <dd>The spindle's power, in kW. The simulation's <a href="#simulation">Tool load</a> shows the cutting power as a percent of it, graphs it and draws a move needing more in red. Empty is not known (the default). Not negative.</dd>
   <dt>Sim Options...</dt>
   <dd>Opens <a href="#sim-options">Sim Options</a>: each axis's maximum velocity and acceleration, and the corner blend tolerance, which time the simulation's moves. Saved when you press OK.</dd>
   <dt>Tool holder Diameter, Depth</dt>
@@ -468,20 +493,22 @@
   <dt>Surface speed (m/min)</dt>
   <dd>How fast the cutting edge moves through this material, in metres per minute. The calculator turns it into a spindle speed. More than 0.</dd>
   <dt>Chip load factor (%)</dt>
-  <dd>The part of the tool's own chip load to take in this material: 100% in aluminium, less in harder materials. From 1 to 500%. Ticking a tool material with this box empty fills in 100.</dd>
+  <dd>The part of the tool's own chip load to take in this material: 100% in aluminium, less in harder materials. From 1 to 500%. Ticking a tool material with this box empty fills in 100. The simulation's <a href="#simulation">Tool load</a> compares chips with it too.</dd>
+  <dt>Specific cutting force (N/mm2)</dt>
+  <dd>The force it takes to cut a square millimetre of chip in this material (often called Kc): the simulation's Tool load works out cutting power and force from it. Empty (or 0) is not known, and the simulation then shows no power or force. The cutter maker's or a machining handbook's figure for the material is best; it rises as chips get thinner.</dd>
   <dt>Typical values, Apply</dt>
-  <dd>Fills all four rows from the chosen typical material, to be changed. These are conservative starting points; the cutter maker's figures are better:
+  <dd>Fills all four rows and the specific cutting force from the chosen typical material, to be changed. These are conservative starting points; the cutter maker's figures are better:
   <table>
-    <tr><th>Material</th><th>HSS</th><th>Cobalt HSS</th><th>Carbide</th><th>Coated carbide</th><th>Chip load factor</th></tr>
-    <tr><td>Aluminium</td><td>90</td><td>110</td><td>300</td><td>400</td><td>100%</td></tr>
-    <tr><td>Brass</td><td>60</td><td>75</td><td>200</td><td>250</td><td>80%</td></tr>
-    <tr><td>Mild steel</td><td>25</td><td>30</td><td>100</td><td>150</td><td>50%</td></tr>
-    <tr><td>Stainless steel</td><td>12</td><td>15</td><td>60</td><td>90</td><td>40%</td></tr>
-    <tr><td>Acrylic and plastics</td><td>100</td><td>100</td><td>300</td><td>300</td><td>100%</td></tr>
-    <tr><td>Hardwood</td><td>300</td><td>300</td><td>500</td><td>500</td><td>100%</td></tr>
-    <tr><td>MDF</td><td>300</td><td>300</td><td>600</td><td>600</td><td>120%</td></tr>
+    <tr><th>Material</th><th>HSS</th><th>Cobalt HSS</th><th>Carbide</th><th>Coated carbide</th><th>Chip load factor</th><th>Specific cutting force</th></tr>
+    <tr><td>Aluminium</td><td>90</td><td>110</td><td>300</td><td>400</td><td>100%</td><td>700</td></tr>
+    <tr><td>Brass</td><td>60</td><td>75</td><td>200</td><td>250</td><td>80%</td><td>800</td></tr>
+    <tr><td>Mild steel</td><td>25</td><td>30</td><td>100</td><td>150</td><td>50%</td><td>2000</td></tr>
+    <tr><td>Stainless steel</td><td>12</td><td>15</td><td>60</td><td>90</td><td>40%</td><td>2500</td></tr>
+    <tr><td>Acrylic and plastics</td><td>100</td><td>100</td><td>300</td><td>300</td><td>100%</td><td>150</td></tr>
+    <tr><td>Hardwood</td><td>300</td><td>300</td><td>500</td><td>500</td><td>100%</td><td>60</td></tr>
+    <tr><td>MDF</td><td>300</td><td>300</td><td>600</td><td>600</td><td>120%</td><td>40</td></tr>
   </table>
-  Surface speeds are in m/min.</dd>
+  Surface speeds are in m/min, specific cutting forces in N/mm&sup2;.</dd>
   <dt>OK</dt>
   <dd>Saves the material to the list straight away.</dd>
   <dt>Cancel</dt>
@@ -750,7 +777,7 @@
   <dt>Add the stock box's footprint</dt>
   <dd>For area operations (Facing, Profiling, Pocketing, Chamfer, Engrave and Plunge Roughing; not Drill, Hole Pocketing or Thread Milling). Adds the stock's box, seen from above along the origin's Z, to the area, as well as anything in the list, which can then be empty. It's a rectangle, or wider where the origin is tilted. For an imported stock part, it's the box round the part. Facing, Profiling, Pocketing, Chamfer and Engrave take it as an area of its own, after the listed ones, at the stock's top, so the cut geometry's level (where Cut Levels' At Top and At Bottom are measured from) is at least the stock's top. Plunge Roughing merges it with the rest of its area, and as nothing is beyond the stock's edges, its plunges reach them. Generate stops if there's no stock.</dd>
   <dt>Select Features</dt>
-  <dd>Turns the view's selection into the list. The listed features start out selected; click or Ctrl+click in the view to add or remove features, and press Done when finished. New features are added at the end.</dd>
+  <dd>Turns the view's selection into the list. The listed features start out selected; click or Ctrl+click in the view to add or remove features, and press Done when finished. New features are added at the end. <span class="tbc">A part used in a configuration other than its active one (a mirrored configuration, say) may still be read in the active one's shape; this is being worked on.</span></dd>
   <dt>Delete</dt>
   <dd>Removes the chosen rows.</dd>
   <dt>Sketches...</dt>

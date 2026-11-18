@@ -583,6 +583,17 @@
 #define IDC_SHAPE_HEIGHT_SPIN           13613
 #define IDC_SHAPE_ANGLE_SPIN            13614
 #define IDC_SHAPE_DIAMETER_SPIN         13615
+#define IDC_MATDLG_KC                   13616
+#define IDC_SIM_LOAD                    13617
+#define IDC_SIM_LOAD_GRAPH              13618
+#define IDC_SIM_LOAD_SUMMARY            13619
+#define IDC_SIM_STOP_OVERLOAD           13620
+#define IDC_SIM_OVERLOAD_PCT            13621
+#define IDC_SIM_OVERLOAD_LABEL          13622
+#define IDC_SIM_SHOW_LOAD               13623
+#define IDC_MACHINE_POWER_LABEL         13624
+#define IDC_MACHINE_POWER               13625
+#define IDC_MACHINE_POWER_UNIT          13626
 
 // Next default values for new objects
 //
@@ -590,7 +601,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        13057
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13616
+#define _APS_NEXT_CONTROL_VALUE         13627
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif
