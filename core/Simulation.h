@@ -180,8 +180,14 @@ namespace camcore
     // (a unit vector from the tip up the tool). Returns how many cells it removed.
     // A tool along the grid's Z (either way) is cut a column at a time; generalOnly
     // forces the cell by cell way, for tests.
+    // The cells are worked out a row of columns at a time on all cores, from the
+    // stock as it was before the move, then cleared on this thread.
     long long CutMove(VoxelStock& stock, const ToolProfile& profile, const Vec3& from, const Vec3& to, const Vec3& axis,
                       bool generalOnly = false);
+
+    // The same on one core, step by step, as it was before; tests compare the two.
+    long long CutMoveOneCore(VoxelStock& stock, const ToolProfile& profile, const Vec3& from, const Vec3& to,
+                             const Vec3& axis, bool generalOnly = false);
 
     // How many filled cells the tool would sweep through in that move, without
     // cutting them; with stopAtFirst, 1 as soon as one is found.
@@ -373,6 +379,15 @@ namespace camcore
         Frame machine;
     };
 
+    // Where the cutting's time went, summed since the last ResetTiming, in seconds:
+    // checking the holder, shank and fixtures, and cutting the stock.
+    struct SimTiming
+    {
+        double checkSeconds = 0.0;
+        double cutSeconds = 0.0;
+        size_t pieces = 0;          // moves or parts of moves cut
+    };
+
     // Steps through the operations' moves, cutting the stock.
     class Simulation
     {
@@ -462,6 +477,10 @@ namespace camcore
         void SetIgnoreCollisions(bool ignore) { m_ignoreCollisions = ignore; }
         bool IgnoreCollisions() const { return m_ignoreCollisions; }
 
+        // Time spent cutting, for finding what's slow.
+        const SimTiming& Timing() const { return m_timing; }
+        void ResetTiming() { m_timing = SimTiming(); }
+
     private:
         Vec3 AxisAfter(size_t move) const;     // the tool's axis once the move is done
         // Cuts one move's piece from a to b with the holder, shank and rapid checks,
@@ -483,5 +502,6 @@ namespace camcore
         size_t m_warningMove = 0;
         std::string m_warningFixture;
         bool m_ignoreCollisions = false;
+        SimTiming m_timing;
     };
 }

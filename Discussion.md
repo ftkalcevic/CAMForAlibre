@@ -13845,6 +13845,211 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > tests passed
 
+### 🤖 Claude
+
+> Good to hear. I've updated `CLAUDE.md` to record that the thin top and bottom-of-cut lines are tested in Alibre. Nothing is committed.
+
+### 🧑 Frank · 20:19
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+## 2026-11-18
+
+### 🧑 Frank · 14:09
+
+> can the simulation speed be increase by offloading the processing to the gpu?
+
+*(Frank stopped Claude here.)*
+
+### 🧑 Frank · 14:09
+
+> can the simulation speed be increase by offloading the processing to the gpu?
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Faster simulation: measure first, then the GPU where it pays
+>
+> ## Context
+>
+> Frank asked whether the simulation could be made faster by moving the work to the GPU.
+>
+> **Short answer:** partly. The cutting maths suits a GPU well, but some of the time may go to things a GPU can't speed up from inside an Alibre add-on.
+>
+> **What suits a GPU:**
+> - **Tri-dexel cutting** (`CutDexels`, `core\TriDexel`). Each ray is cut by the move on its own, so thousands of rays can run at once. Today the rays are worked out on all CPU cores and applied on one. A finishing pass of 20,770 moves takes 10.6 s at 0.1 mm.
+> - **Voxel cutting** (`CutMove`, `core\Simulation`). Each column is independent too, but today it runs on one core. Facing 305 moves takes 1.5 s at 0.05 mm.
+> - **Comparing with the part** (`CompareStock`) and **meshing** (`MeshChunks`). These already run on all cores and take tens of milliseconds, so there's little to gain.
+>
+> **What a GPU can't fix:**
+> - **Drawing in Alibre.** The stock mesh goes to Alibre through `Begin3DDisplay`/`DrawMesh` on every `On3DRender`. Alibre owns that drawing, so we can't keep the mesh on the GPU. A 0.1 mm finishing mesh is 4.7 million triangles, and copying it to Alibre on each redraw may cost more than the cutting.
+> - **Readback.** Every step, the cut chunks have to come back from the GPU to be meshed and handed to Alibre. With many small moves per tick, this round trip can eat the gain unless moves are batched (To End and To Op End already run in 100 ms batches).
+>
+> **Practical cost:**
+> - DirectX 11 compute shaders come with Windows and need no new library. Shaders are HLSL, compiled at build time.
+> - CUDA is NVIDIA only.
+> - Either way the CPU path has to stay as a fallback, for machines without a suitable GPU and for `CamCoreTests`. The two paths have to give the same cells.
+> - That roughly doubles the cutting code to maintain.
+> - `core\` stays Alibre-free; the GPU code would be its own small library.
+>
+> ## Step 1: Measure (recommended first, small)
+>
+> Add timing to the simulation so the log shows where the time goes for one run. This could be split into:
+> - cutting
+> - marking dirty chunks
+> - meshing
+> - comparing with the part
+> - joining meshes
+> - Alibre's `On3DRender` time to draw the mesh (`CamViewCommand.cpp`, DrawMesh)
+>
+> The new logging would be:
+> - **Per run** (To End / To Op End): one `[simulate] timing:` line with the totals and the triangle count drawn.
+> - **Per redraw:** `[draw]` lines, at most one a second.
+>
+> Files:
+> - `core\Simulation` / `core\TriDexel`: optional counters (`SimTiming`, plain `steady_clock` sums), no Alibre code.
+> - `addon\CamTabCommand.cpp` (`UpdateSimulationScene`, around the existing `[simulate] meshed` log at line 2309) and `addon\CamViewCommand.cpp` (draw time).
+> - The skipped `simulation timing*` and `tri-dexel timing*` tests print the same split.
+>
+> Frank then runs his slow job (e.g. `Rough 3` or the finishing pass) and sends the log.
+>
+> ## Step 2: Decide from the numbers
+>
+> **If cutting dominates:**
+> - **Cheaper first:** cut voxels on all cores, as tri-dexel rays already are. Columns are independent, as long as each core writes its own bricks. This might give 4 to 8 times, with no new dependency.
+> - **Then, if still needed:** a DirectX 11 compute path for tri-dexel cutting, for flat, ball and the golden-section tools. The ray grids would stay on the GPU, with batched moves and dirty chunks read back. It would be checked cell for cell against the CPU path in tests, with the CPU kept as the fallback.
+>
+> **If drawing dominates:** the fixes are on our side of Alibre's API, not the GPU:
+> - a coarser display mesh than the cut grid (decimate flat regions further, or mesh at 2x the spacing for display only)
+> - redraw less often while running
+> - send only changed chunks if Alibre's segments allow it (there's no `ClearSegment` in 27.0.1, so this needs checking)
+>
+> ## Verification
+>
+> - **Step 1:** the Release build and `CamCoreTests` pass. In Alibre, a simulation run logs the timing lines.
+> - **Step 2:** each option is timed with the skipped timing tests before and after, and the cells must match the existing path exactly.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> I'm adding timing to the simulation so the log shows where the time goes.
+
+> Now CutPiece: time the checks and the cut.
+
+> The core counters are in. Next I'm wiring up the add-on's logging.
+
+> The add-on timing is in. Next I'm making the timing tests print the same split.
+
+> The build is clean and all 399 tests pass. In the tests, cutting takes nearly all of the cut time, and the collision checks take almost none. Next I'll update CLAUDE.md and install.
+
+> Partly. The cutting maths would suit a GPU well, but drawing in Alibre can't be moved there. Before choosing, I've added timing so we can see where your slow runs actually spend their time. It's built and installed, but untested in Alibre, and nothing is committed.
+>
+> **Why only partly:**
+> - **Cutting suits a GPU.** Each tri-dexel ray, or voxel column, is cut independently, so thousands could run at once.
+> - **Drawing doesn't.** Alibre owns the drawing: we hand it the whole stock mesh through `DrawMesh` on every redraw. A 0.1 mm finishing mesh is 4.7 million triangles, and a GPU can't speed that hand-over up.
+> - **Cost.** The GPU would most likely be DirectX 11 compute shaders, which need no new library. The CPU path would have to stay as a fallback and give the same cells, so we'd be keeping two copies of the cutting code.
+>
+> **What the timing tests show already:**
+>
+> | Test (Release) | Cutting | Collision checks |
+> |---|---|---|
+> | Tri-dexel 0.1 mm, finishing 20,770 moves | 11.5 s | 2 ms |
+> | Voxels 0.05 mm, facing 305 moves | 1.5 s | under 1 ms |
+>
+> The test operations have no holder, so the checks will cost more in a real job. Voxel cutting still runs on one core. Making it use all of them might give 4 to 8 times, with no GPU and no new dependency, so I'd try that before a GPU.
+>
+> **What's in the log now:**
+> - When To End, To Op End or Play stops, one `[simulate] timing` line: total time, cutting, collision checks, meshing, joining, comparing, the rest, and the triangle count.
+> - While the simulation is showing, a `[draw]` line at most once a second: time spent preparing the mesh arrays, time in Alibre's `DrawMesh`, and time for the whole renders.
+> - Both timing tests print the same split, and `CLAUDE.md` notes it.
+>
+> The build is clean, all 399 tests pass, and the help didn't need changing because nothing on screen changed.
+>
+> **To test:**
+> 1. Open a slow job, Simulate, and press To End. When it stops, the log at `%LOCALAPPDATA%\CAMForAlibre\CAMForAlibre.log` has a `[simulate] timing, run:` line.
+> 2. Press Play for a few seconds, then Pause: there's a `[simulate] timing, play:` line, and `[draw]` lines appeared while it played.
+> 3. Pan or zoom the simulated stock: `[draw]` lines appear about once a second while you do.
+> 4. Send me those lines, ideally from the finishing job on tri-dexel at 0.1 mm and from a voxel run. If cutting dominates, I'll start with voxels on all cores, then a GPU path. If drawing dominates, the fix is a lighter mesh for display.
+
+### 🧑 Frank · 14:27
+
+> test completed. tri-dexel was much faster than voxels
+
+### 🤖 Claude
+
+> Thanks. That matches the timing tests: on the finishing pass, tri-dexel at 0.1 mm took about 11 s against 33 s for voxels at 0.05 mm.
+>
+> I can't see your runs' numbers, though. The log file was last written at 9:26 am, and the new build went in at 2:16 pm, so the `[simulate] timing` and `[draw]` lines never reached it. This is the same problem noted earlier, when the Turn the work test logged nothing. So we still can't tell how much of the time in Alibre goes to cutting and how much to drawing.
+>
+> My recommendation is to find out why the log stopped being written first. It's probably a small fix, and every later speed change needs those numbers. After that, the two ways forward are:
+> - **Voxels on all cores:** their cutting runs on one core today.
+> - **A GPU path for tri-dexel cutting:** a bigger job, and only worth it if cutting, not drawing, turns out to be the slow part.
+>
+> If you'd rather leave speed alone, using tri-dexel as the simulation model is already the quick option.
+
+### 🧑 Frank · 14:30
+
+> the log is here - "C:\Users\Frank Tkalcevic\AppData\Local\CAMForAlibre\CAMForAlibre.log"
+
+### 🤖 Claude
+
+> That's the file I'm reading, but my view of it is stuck. Even with the sandbox turned off, it ends at `09:26:49 AddOnUnload` this morning (877,803 bytes), with no runs after that. The copy under `AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\` is identical. The likely cause is the Claude desktop app virtualising AppData, which would also explain the earlier "log isn't being written" note.
+>
+> Please copy it into the project folder, where my view isn't stale:
+>
+> ```powershell
+> Copy-Item "$env:LOCALAPPDATA\CAMForAlibre\CAMForAlibre.log" "D:\Projects\alibre\AlibreCAM\CAMForAlibre.log"
+> ```
+>
+> Then I'll pull out the `[simulate] timing` and `[draw]` lines and tell you whether the time goes to cutting or to Alibre's drawing. I've saved a memory note to ask for a copy like this next time.
+
+### 🧑 Frank · 14:37
+
+> Copied it
+
+### 🤖 Claude
+
+> Got it. Nearly all the time goes to cutting the stock; drawing in Alibre takes very little. So a GPU isn't worth it yet.
+>
+> **To End**, the same 9,047 moves (these runs weren't at the same resolution):
+>
+> | Model | Total | Cutting | Collision checks | Meshing and joining |
+> |---|---|---|---|---|
+> | Voxels, 0.05 mm | 9.5–10.0 s | 8.9 s | 39 ms | 20 ms |
+> | Tri-dexel, 0.25 mm | 0.53–0.64 s | 0.48–0.58 s | 2–3 ms | 6 ms |
+>
+> **Drawing:**
+> - One render takes about 5 ms, and the full 100,000-triangle mesh about 14 ms.
+> - Alibre's `DrawMesh` is most of that, and preparing the arrays is 1–3 ms.
+>
+> **Play:**
+> - About 10 s of the 10 s is waiting on the play timer, at roughly 17 redraws a second.
+> - Less than 10% of that time is working: cutting 0.1–1.1 s, meshing about 0.2 s.
+> - So Play's speed is set by the moves-a-step slider or the real-time slider, not by the computer.
+>
+> **What it means:**
+> - A GPU could only speed up cutting. Tri-dexel at 0.25 mm already cuts in half a second, so the GPU's extra code wouldn't be worth it for you.
+> - Voxels at 0.05 mm are the slow case, and their cutting runs on one core. Spreading it over all cores, as tri-dexel already does, is the cheaper fix and needs no GPU.
+> - Until then, choosing Tri-dexel in the Simulation dialog is the quick answer.
+>
+> I've recorded these numbers in `CLAUDE.md` and marked the timing code as tested by you. The timing lines stay in the build, so we can measure again later. Nothing is committed. Your copied `CAMForAlibre.log` is sitting untracked in the project folder; delete it, or leave it out when you commit.
+
+### 🧑 Frank · 14:39
+
+> Yes, all cores
+
+### 🤖 Claude
+
+> Now I'll write the parallel version.
+
+> Now I'll add a test that compares the two ways move by move, including the return counts and dirty chunks.
+
+> All 400 tests pass, including the new cell-for-cell comparison. Now the timing:
+
+> On 16 cores, voxel cutting is now 2–5 times faster with the same cells. Next I'll update the docs and install.
+
 ---
 
 # Side conversation

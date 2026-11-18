@@ -604,5 +604,7 @@ TEST_CASE("tri-dexel timing on a 136 x 150 x 6 stock" * doctest::skip())
                 << finished.TriangleCount() << " in " << ms(t4, t5) << " ms, compare " << ms(t5, t6) << " ms ("
                 << difference.tooMuchVolume << " mm3), memory "
                 << simulation.Dexels().MemoryBytes() / (1024 * 1024) << " MB");
+        MESSAGE("  of the cuts: cutting " << simulation.Timing().cutSeconds * 1000.0 << " ms, checks "
+                << simulation.Timing().checkSeconds * 1000.0 << " ms, " << simulation.Timing().pieces << " pieces");
     }
 }

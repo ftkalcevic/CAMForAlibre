@@ -7,6 +7,7 @@
 #include "DisplaySettings.h"
 #include "Log.h"
 
+#include <chrono>
 #include <cmath>
 #include <vector>
 
@@ -14,6 +15,19 @@ using camcore::Vec3;
 
 namespace
 {
+    // How long drawing the simulation takes, logged as [draw] at most once a second:
+    // our side (turning the mesh into arrays) and Alibre's DrawMesh, then the whole render.
+    struct DrawTiming
+    {
+        double prepareSeconds = 0.0;
+        double drawMeshSeconds = 0.0;
+        double renderSeconds = 0.0;
+        size_t renders = 0;
+        size_t triangles = 0;       // in the last render
+        std::chrono::steady_clock::time_point logged = std::chrono::steady_clock::now();
+    };
+    DrawTiming g_drawTiming;
+
     // The sample add-ons pass 1-based arrays, so these do too.
     template <class T>
     SAFEARRAY* MakeArray(VARTYPE type, const std::vector<T>& values)
@@ -73,16 +87,22 @@ namespace
     {
         if (mesh.faces.empty())
             return;
+        using Clock = std::chrono::steady_clock;
+        const Clock::time_point prepareStart = Clock::now();
+        g_drawTiming.triangles += mesh.TriangleCount();
         std::vector<float> vertices(mesh.vertices.size());
         for (size_t i = 0; i < vertices.size(); ++i)
             vertices[i] = static_cast<float>(mesh.vertices[i] / millimetresPerUnit);
         SAFEARRAY* pVertices = MakeArray(VT_R4, vertices);
         SAFEARRAY* pNormals = MakeArray(VT_R4, mesh.normals);
         SAFEARRAY* pFaces = MakeArray(VT_I4, mesh.faces);
+        const Clock::time_point drawStart = Clock::now();
+        g_drawTiming.prepareSeconds += std::chrono::duration<double>(drawStart - prepareStart).count();
         if (pVertices != nullptr && pNormals != nullptr && pFaces != nullptr)
         {
             __int64 result = 0;
             const HRESULT hr = pCanvas->DrawMesh(segment, &pVertices, &pNormals, &pFaces, &result);
+            g_drawTiming.drawMeshSeconds += std::chrono::duration<double>(Clock::now() - drawStart).count();
             if (FAILED(hr))
                 Log(L"[view] DrawMesh failed hr=0x%08X", static_cast<unsigned>(hr));
         }
@@ -266,6 +286,11 @@ STDMETHODIMP CCamViewCommand::On3DRender()
 
     // Alibre loses the graphics on pan, zoom and hover unless they're rebuilt
     // on every render.
+    using Clock = std::chrono::steady_clock;
+    const Clock::time_point renderStart = Clock::now();
+    const bool simulating = m_pTab->GetScene().simulating;
+    if (simulating)
+        g_drawTiming.triangles = 0;
     IUnknown* pContext = nullptr;
     const HRESULT hr = m_site->Begin3DDisplay(VARIANT_TRUE, &pContext);
     if (!m_reportedRender)
@@ -296,6 +321,25 @@ STDMETHODIMP CCamViewCommand::On3DRender()
     }
 
     m_site->End3DDisplay();
+
+    if (simulating)
+    {
+        DrawTiming& t = g_drawTiming;
+        const Clock::time_point now = Clock::now();
+        t.renderSeconds += std::chrono::duration<double>(now - renderStart).count();
+        ++t.renders;
+        if (now - t.logged >= std::chrono::seconds(1))
+        {
+            Log(L"[draw] %zu renders in %.0f ms: preparing meshes %.0f ms, Alibre's DrawMesh %.0f ms, "
+                L"%zu triangles in the last",
+                t.renders, t.renderSeconds * 1000.0, t.prepareSeconds * 1000.0, t.drawMeshSeconds * 1000.0,
+                t.triangles);
+            const size_t triangles = t.triangles;
+            t = DrawTiming();
+            t.triangles = triangles;
+            t.logged = now;
+        }
+    }
     return S_OK;
 }
 

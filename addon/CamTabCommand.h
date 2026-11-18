@@ -162,6 +162,11 @@ public:
     bool SaveSimulationStl(const std::filesystem::path& path, std::wstring& message);
     void OnSimulationChanged();             // the stock or tool moved: mesh again and redraw
 
+    // Where a run's time went (cutting, checks, meshing, comparing), logged as one
+    // [simulate] timing line; the Simulation dialog resets it when a run starts.
+    void ResetSimulationTiming();
+    void LogSimulationTiming(const wchar_t* run, ULONGLONG wallMilliseconds);
+
     // Turn the work: Alibre's view turns about the rotary axis with the simulated
     // angle, so the tool stays upright and the work turns. Only on a 4 axis
     // machine with a work zero. The view is left where it is when it's unticked.
@@ -426,6 +431,10 @@ private:
     camcore::VoxelStock m_simulationPart;               // the parts in the simulation's grid
     bool m_simulationPartReady = false;
     bool m_simulationCompareStale = true;
+    double m_simMeshSeconds = 0.0;                      // since ResetSimulationTiming
+    double m_simJoinSeconds = 0.0;
+    double m_simCompareSeconds = 0.0;
+    size_t m_simSceneUpdates = 0;
     double m_simulationNotEnough = 0.0;                 // mm^3
     double m_simulationTooMuch = 0.0;
     camcore::StockMesh m_simulationPartMesh;

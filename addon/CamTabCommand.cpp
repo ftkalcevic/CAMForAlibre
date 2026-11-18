@@ -3,6 +3,9 @@
 #include "stdafx.h"
 #include "CAMForAlibre.h"
 #include "AddOnInterface.h"
+
+#include <chrono>
+
 #include "CamTabCommand.h"
 #include "DisplaySettings.h"
 #include "DrillToolpath.h"
@@ -2294,16 +2297,25 @@ void CCamTabCommand::UpdateSimulationScene()
 {
     // Each chunk that changed is meshed again, and the chunks joined into one mesh.
     // The changed chunks are meshed on all cores.
+    using Clock = std::chrono::steady_clock;
+    const auto secondsSince = [](Clock::time_point t) {
+        return std::chrono::duration<double>(Clock::now() - t).count();
+    };
+    ++m_simSceneUpdates;
     const ULONGLONG start = GetTickCount64();
+    const Clock::time_point meshStart = Clock::now();
     const std::vector<int> dirty = m_simulation.DirtyChunks();
     m_simulation.MeshChunks(dirty, m_simulationChunks);
     for (int c : dirty)
         m_simulation.SetChunkClean(c);
+    m_simMeshSeconds += secondsSince(meshStart);
     if (!dirty.empty())
         m_simulationCompareStale = true;
     if (!dirty.empty())
     {
+        const Clock::time_point joinStart = Clock::now();
         m_simulationMesh = camcore::JoinMeshes(m_simulationChunks);
+        m_simJoinSeconds += secondsSince(joinStart);
         const ULONGLONG took = GetTickCount64() - start;
         if (took > 200)
             Log(L"[simulate] meshed %zu chunks, %zu triangles in all, in %llu ms, %s", dirty.size(),
@@ -2318,12 +2330,14 @@ void CCamTabCommand::UpdateSimulationScene()
     if (comparing && m_simulationCompareStale)
     {
         const ULONGLONG compareStart = GetTickCount64();
+        const Clock::time_point compareClock = Clock::now();
         const camcore::StockDifference difference = m_simulation.CompareTo(m_simulationPart);
         m_simulationNotEnough = difference.notEnoughVolume;
         m_simulationTooMuch = difference.tooMuchVolume;
         m_simulationNotEnoughMesh = camcore::MeshStock(difference.notEnough);
         m_simulationTooMuchMesh = camcore::MeshStock(difference.tooMuch);
         m_simulationCompareStale = false;
+        m_simCompareSeconds += secondsSince(compareClock);
         const ULONGLONG took = GetTickCount64() - compareStart;
         if (took > 200)
             Log(L"[compare] compared in %llu ms: not enough %.1f mm3, too much %.1f mm3", took, m_simulationNotEnough,
@@ -2357,6 +2371,31 @@ void CCamTabCommand::UpdateSimulationScene()
         m_scene.simWarningFrom = move.from;
         m_scene.simWarningTo = move.to;
     }
+}
+
+void CCamTabCommand::ResetSimulationTiming()
+{
+    m_simulation.ResetTiming();
+    m_simMeshSeconds = 0.0;
+    m_simJoinSeconds = 0.0;
+    m_simCompareSeconds = 0.0;
+    m_simSceneUpdates = 0;
+}
+
+void CCamTabCommand::LogSimulationTiming(const wchar_t* run, ULONGLONG wallMilliseconds)
+{
+    // The rest of the wall time is the dialog, the timer's waits and Alibre's
+    // redraws, which the [draw] lines time.
+    const camcore::SimTiming& timing = m_simulation.Timing();
+    const double counted =
+        timing.cutSeconds + timing.checkSeconds + m_simMeshSeconds + m_simJoinSeconds + m_simCompareSeconds;
+    Log(L"[simulate] timing, %s: %llu ms in all; cutting %.0f ms (%zu pieces), collision checks %.0f ms, "
+        L"meshing %.0f ms, joining %.0f ms, comparing %.0f ms (%zu updates), other %.0f ms; "
+        L"%zu triangles to draw, %s",
+        run, wallMilliseconds, timing.cutSeconds * 1000.0, timing.pieces, timing.checkSeconds * 1000.0,
+        m_simMeshSeconds * 1000.0, m_simJoinSeconds * 1000.0, m_simCompareSeconds * 1000.0, m_simSceneUpdates,
+        (std::max)(0.0, static_cast<double>(wallMilliseconds) - counted * 1000.0), m_simulationMesh.TriangleCount(),
+        SimulationGridText().c_str());
 }
 
 void CCamTabCommand::OnSimulationChanged()

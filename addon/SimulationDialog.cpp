@@ -204,7 +204,11 @@ void CSimulationDlg::OnRealTimeChanged()
 void CSimulationDlg::Stop()
 {
     if (m_playing)
+    {
         KillTimer(kPlayTimer);
+        if (m_pTab != nullptr)
+            m_pTab->LogSimulationTiming(L"play", GetTickCount64() - m_runStarted);
+    }
     m_playing = false;
     if (m_running)
     {
@@ -212,7 +216,10 @@ void CSimulationDlg::Stop()
         KillTimer(kRunTimer);
         m_running = false;
         if (m_pTab != nullptr)
+        {
             m_pTab->OnSimulationChanged();
+            m_pTab->LogSimulationTiming(L"run", GetTickCount64() - m_runStarted);
+        }
     }
     SetDlgItemText(IDC_SIM_PLAY, L"Play");
 }
@@ -444,6 +451,8 @@ void CSimulationDlg::RunTo(size_t end)
         return;
     m_runEnd = end;
     m_running = true;
+    m_runStarted = GetTickCount64();
+    m_pTab->ResetSimulationTiming();
     SetDlgItemText(IDC_SIM_PLAY, L"Pause");
     ShowState();
     SetTimer(kRunTimer, kRunMilliseconds, nullptr);
@@ -486,6 +495,8 @@ void CSimulationDlg::OnPlay()
     m_pTab->GetSimulation().ClearWarning();
     m_playing = true;
     m_lastTick = GetTickCount64();
+    m_runStarted = m_lastTick;
+    m_pTab->ResetSimulationTiming();
     SetDlgItemText(IDC_SIM_PLAY, L"Pause");
     SetTimer(kPlayTimer, kPlayMilliseconds, nullptr);
 }

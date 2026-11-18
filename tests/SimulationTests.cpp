@@ -538,6 +538,49 @@ TEST_CASE("the column at a time cut matches the cell by cell one, both ways up")
     }
 }
 
+TEST_CASE("cutting on all cores matches cutting on one, cell for cell")
+{
+    // Long moves, so the rows are handed out to all cores, every tool type, along
+    // Z both ways, tilted and sideways, on divided and undivided stock.
+    const std::vector<std::pair<Vec3, Vec3>> moves = {
+        { { 5, 5, 12 }, { 5, 5, 6 } },           // plunge
+        { { -4, 12, 7 }, { 24, 12, 7 } },        // a slot right across
+        { { 2, 17, 10 }, { 18, 15, 5.3 } },      // ramp
+        { { 12.3, 2.1, 8.3 }, { 18.9, 19.4, 8.3 } },
+        { { 1, 1, 9 }, { 19, 19, 6.5 } },
+    };
+    Vec3 tilted;
+    REQUIRE(Normalise(Vec3{ 0.3, -0.2, 1.0 }, tilted));
+    for (const ToolProfile& profile : EveryToolType())
+    {
+        for (const Vec3& axis : { kUp, Vec3{ 0, 0, -1 }, tilted, Vec3{ 1, 0, 0 } })
+        {
+            for (bool divide : { true, false })
+            {
+                VoxelStock many = Block(0.1, divide);
+                VoxelStock one = Block(0.1, divide);
+                for (int c = 0; c < many.ChunkCount(); ++c)
+                {
+                    many.SetChunkClean(c);
+                    one.SetChunkClean(c);
+                }
+                for (const auto& move : moves)
+                {
+                    const Vec3 from = (axis.z < 0) ? Vec3{ move.first.x, move.first.y, 10 - move.first.z } : move.first;
+                    const Vec3 to = (axis.z < 0) ? Vec3{ move.second.x, move.second.y, 10 - move.second.z } : move.second;
+                    const long long a = CutMove(many, profile, from, to, axis);
+                    const long long b = CutMoveOneCore(one, profile, from, to, axis);
+                    CHECK(a == b);
+                }
+                CHECK(many.Count() < Block(0.1, divide).Count());
+                CHECK(SameCells(many, one));
+                CHECK(many.MixedBricks() == one.MixedBricks());
+                CHECK(DirtyChunks(many) == DirtyChunks(one));
+            }
+        }
+    }
+}
+
 TEST_CASE("divided and undivided stock cut the same")
 {
     for (const ToolProfile& profile : EveryToolType())
@@ -708,6 +751,8 @@ TEST_CASE("simulation timing on a 136 x 150 x 6 stock" * doctest::skip())
                 << ms(t0, t1) << " ms, mesh " << triangles << " in " << ms(t1, t2) << " ms, cut "
                 << simulation.Moves().size() << " moves in " << ms(t2, t3) << " ms, mesh " << after << " in "
                 << ms(t3, t4) << " ms, mixed bricks " << simulation.Stock().MixedBricks());
+        MESSAGE("  of the cut: cutting " << simulation.Timing().cutSeconds * 1000.0 << " ms, checks "
+                << simulation.Timing().checkSeconds * 1000.0 << " ms, " << simulation.Timing().pieces << " pieces");
     }
 }
 

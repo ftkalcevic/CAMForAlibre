@@ -3,6 +3,9 @@
 #include "Simulation.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <memory>
 #include <cmath>
 #include <cstring>
 #include <execution>
@@ -833,10 +836,300 @@ namespace camcore
     }
     }
 
+    long long CutMoveOneCore(VoxelStock& stock, const ToolProfile& profile, const Vec3& from, const Vec3& to,
+                             const Vec3& axis, bool generalOnly)
+    {
+        return SweepTool<true>(stock, profile, from, to, axis, generalOnly, false);
+    }
+
+    namespace
+    {
+        // One of CutMove's steps: a sweep square to the axis, and the cells it can reach.
+        struct SweepStep
+        {
+            Vec3 pa, pb;
+            double tipLow = 0.0, tipHigh = 0.0, r = 0.0;
+            int i0 = 0, j0 = 0, k0 = 0, i1 = -1, j1 = -1, k1 = -1, w0 = 0, w1 = -1;
+        };
+
+        // A word of cells a row found to clear.
+        struct RowClear
+        {
+            int i;
+            int q;
+            std::uint64_t mask;
+        };
+
+        // A row's cells already found in earlier steps, so later steps skip them as
+        // they would skip cells already cut. Dense over the move's columns and words,
+        // reset by the entries used; one per thread.
+        struct RowPending
+        {
+            std::vector<std::uint64_t> words;
+            std::vector<int> used;
+        };
+    }
+
     long long CutMove(VoxelStock& stock, const ToolProfile& profile, const Vec3& from, const Vec3& to,
                       const Vec3& axis, bool generalOnly)
     {
-        return SweepTool<true>(stock, profile, from, to, axis, generalOnly, false);
+        // The same steps and tests as CutMoveOneCore. A cell is cleared if some step
+        // finds it inside the tool, which doesn't depend on what the other rows or
+        // steps cut, so each row of columns is worked out on its own (rows share no
+        // cells), against the stock as it was before the move plus what that row's
+        // earlier steps found. The stock is only read meanwhile; the clears are then
+        // applied here, so bricks are split and merged on one thread.
+        Vec3 w;
+        if (!Normalise(axis, w) || stock.SizeX() == 0)
+            return 0;
+        const bool alongZ = !generalOnly && std::fabs(w.x) < 1e-9 && std::fabs(w.y) < 1e-9;
+        if (alongZ)
+            w = { 0.0, 0.0, (w.z > 0.0) ? 1.0 : -1.0 };
+        const double sign = w.z;
+
+        const double cell = stock.Cell();
+        const Vec3 d = to - from;
+        const double axial = Dot(d, w);
+        const double across = Length(d - w * axial);
+        const double reach = (std::max)(profile.radius, cell);
+        const int axialSteps = (across < 1e-9) ? 1 : static_cast<int>(std::ceil(std::fabs(axial) / (0.5 * cell)));
+        const int acrossSteps = (alongZ && std::fabs(axial) < 1e-12) ? 1 : static_cast<int>(std::ceil(across / (2.0 * reach)));
+        const int stepCount = (std::max)({ 1, axialSteps, acrossSteps });
+        const Vec3 lower = stock.Lower();
+
+        double stockTop = -1e300;
+        for (int corner = 0; corner < 8; ++corner)
+        {
+            const Vec3 c{ lower.x + ((corner & 1) ? stock.SizeX() * cell : 0.0),
+                          lower.y + ((corner & 2) ? stock.SizeY() * cell : 0.0),
+                          lower.z + ((corner & 4) ? stock.SizeZ() * cell : 0.0) };
+            stockTop = (std::max)(stockTop, Dot(c, w));
+        }
+
+        // Every step's sweep and box, as CutMoveOneCore works them out.
+        std::vector<SweepStep> steps;
+        steps.reserve(static_cast<size_t>(stepCount));
+        int rowLo = stock.SizeY(), rowHi = -1, colLo = stock.SizeX(), colHi = -1, wordLo = 1 << 30, wordHi = -1;
+        for (int s = 0; s < stepCount; ++s)
+        {
+            const Vec3 a = from + d * (static_cast<double>(s) / stepCount);
+            const Vec3 b = from + d * (static_cast<double>(s + 1) / stepCount);
+            SweepStep step;
+            step.tipLow = (std::min)(Dot(a, w), Dot(b, w));
+            step.tipHigh = (std::max)(Dot(a, w), Dot(b, w));
+            step.pa = a - w * Dot(a, w);
+            step.pb = b - w * Dot(b, w);
+            Vec3 lo = a, hi = a;
+            for (const Vec3& p : { a, b, a + w * profile.length, b + w * profile.length })
+            {
+                lo = { (std::min)(lo.x, p.x), (std::min)(lo.y, p.y), (std::min)(lo.z, p.z) };
+                hi = { (std::max)(hi.x, p.x), (std::max)(hi.y, p.y), (std::max)(hi.z, p.z) };
+            }
+            const double reachUp = stockTop - step.tipLow;
+            if (reachUp < 0.0)
+                continue;
+            const double widest = profile.RadiusAt((std::min)(reachUp, profile.length));
+            step.r = (widest >= 0.0) ? (std::min)(profile.radius, widest + cell) : profile.radius;
+            const double r = step.r;
+            step.i0 = (std::max)(0, static_cast<int>(std::floor((lo.x - r - lower.x) / cell)));
+            step.j0 = (std::max)(0, static_cast<int>(std::floor((lo.y - r - lower.y) / cell)));
+            step.k0 = (std::max)(0, static_cast<int>(std::floor((lo.z - r - lower.z) / cell)));
+            step.i1 = (std::min)(stock.SizeX() - 1, static_cast<int>(std::floor((hi.x + r - lower.x) / cell)));
+            step.j1 = (std::min)(stock.SizeY() - 1, static_cast<int>(std::floor((hi.y + r - lower.y) / cell)));
+            step.k1 = (std::min)(stock.SizeZ() - 1, static_cast<int>(std::floor((hi.z + r - lower.z) / cell)));
+            if (step.i0 > step.i1 || step.j0 > step.j1 || step.k0 > step.k1)
+                continue;
+            step.w0 = step.k0 / VoxelStock::kWord;
+            step.w1 = step.k1 / VoxelStock::kWord;
+            rowLo = (std::min)(rowLo, step.j0);
+            rowHi = (std::max)(rowHi, step.j1);
+            colLo = (std::min)(colLo, step.i0);
+            colHi = (std::max)(colHi, step.i1);
+            wordLo = (std::min)(wordLo, step.w0);
+            wordHi = (std::max)(wordHi, step.w1);
+            steps.push_back(step);
+        }
+        if (steps.empty())
+            return 0;
+
+        const int rows = rowHi - rowLo + 1;
+        const int columns = colHi - colLo + 1;
+        const int words = wordHi - wordLo + 1;
+        std::vector<std::vector<RowClear>> found(static_cast<size_t>(rows));
+        // Which steps found anything, for their dirty boxes (one byte each, written
+        // only as 1, so rows racing to write it don't matter for the result; atomic
+        // to be well defined).
+        std::unique_ptr<std::atomic<unsigned char>[]> stepHit(new std::atomic<unsigned char>[steps.size()]);
+        for (size_t s = 0; s < steps.size(); ++s)
+            stepHit[s].store(0, std::memory_order_relaxed);
+
+        const auto workRow = [&](int j) {
+            thread_local RowPending pending;
+            const size_t need = static_cast<size_t>(columns) * words;
+            if (pending.words.size() < need)
+                pending.words.assign(need, 0);
+            const auto slot = [&](int i, int q) {
+                return static_cast<size_t>(i - colLo) * words + static_cast<size_t>(q - wordLo);
+            };
+            // The stock as this row's earlier steps have left it.
+            const auto word = [&](int i, int q) {
+                return stock.Word(i, j, q) & ~pending.words[slot(i, q)];
+            };
+            const auto take = [&](int i, int q, std::uint64_t bits) {
+                const size_t at = slot(i, q);
+                if (pending.words[at] == 0)
+                    pending.used.push_back(static_cast<int>(at));
+                pending.words[at] |= bits;
+            };
+
+            for (size_t s = 0; s < steps.size(); ++s)
+            {
+                const SweepStep& step = steps[s];
+                if (j < step.j0 || j > step.j1)
+                    continue;
+                const double r = step.r;
+                const auto inside = [&](double along, double distance) {
+                    if (along - step.tipHigh > profile.length)
+                        return false;
+                    const double radius = profile.RadiusAt((std::min)(along - step.tipLow, profile.length));
+                    return radius >= 0.0 && distance <= radius + 1e-9;
+                };
+                int rowI0 = step.i0, rowI1 = step.i1;
+                if (alongZ)
+                {
+                    double xLo, xHi;
+                    if (!CapsuleRow(step.pa, step.pb, r + 1e-6, lower.y + (j + 0.5) * cell, xLo, xHi))
+                        continue;
+                    rowI0 = (std::max)(step.i0, static_cast<int>(std::floor((xLo - lower.x) / cell - 0.5)));
+                    rowI1 = (std::min)(step.i1, static_cast<int>(std::ceil((xHi - lower.x) / cell - 0.5)));
+                }
+                bool hit = false;
+                for (int i = rowI0; i <= rowI1; ++i)
+                {
+                    double distance = 0.0;
+                    if (alongZ)
+                    {
+                        const Vec3 c = stock.Centre(i, j, 0);
+                        distance = DistanceToSegment({ c.x, c.y, 0.0 }, step.pa, step.pb);
+                        if (distance > r + 1e-9)
+                            continue;
+                    }
+                    bool any = false;
+                    for (int q = step.w0; q <= step.w1 && !any; ++q)
+                        any = (word(i, q) & VoxelStock::SpanMask(q, step.k0, step.k1)) != 0;
+                    if (!any)
+                        continue;
+
+                    if (alongZ)
+                    {
+                        const int k0 = step.k0, k1 = step.k1;
+                        const double h = profile.HeightForRadius(distance - 1e-9);
+                        if (h < 0.0 && !inside(step.tipLow + profile.length, distance))
+                            continue;
+                        const double alongLow = step.tipLow + (std::max)(0.0, h);
+                        const double alongHigh = step.tipHigh + profile.length;
+                        const double zLow = (sign > 0.0) ? alongLow : -alongHigh;
+                        const double zHigh = (sign > 0.0) ? alongHigh : -alongLow;
+                        int kA = (std::max)(k0, static_cast<int>(std::ceil((zLow - lower.z) / cell - 0.5)));
+                        int kB = (std::min)(k1, static_cast<int>(std::floor((zHigh - lower.z) / cell - 0.5)));
+                        const auto test = [&](int k) {
+                            return inside(sign * (lower.z + (k + 0.5) * cell), distance);
+                        };
+                        kA = (std::min)(kA, k1 + 1);
+                        kB = (std::max)(kB, k0 - 1);
+                        while (kA > k0 && test(kA - 1))
+                            --kA;
+                        while (kA <= k1 && kA <= kB && !test(kA))
+                            ++kA;
+                        while (kB < k1 && kB >= kA && test(kB + 1))
+                            ++kB;
+                        while (kB >= kA && !test(kB))
+                            --kB;
+                        if (kA > kB)
+                        {
+                            for (kA = k0; kA <= k1 && !test(kA); ++kA)
+                            {
+                            }
+                            for (kB = kA; kB + 1 <= k1 && test(kB + 1); ++kB)
+                            {
+                            }
+                            if (kA > k1)
+                                continue;
+                        }
+                        for (int q = kA / VoxelStock::kWord; q <= kB / VoxelStock::kWord; ++q)
+                        {
+                            const std::uint64_t bits = word(i, q) & VoxelStock::SpanMask(q, kA, kB);
+                            if (bits != 0)
+                            {
+                                take(i, q, bits);
+                                hit = true;
+                            }
+                        }
+                        continue;
+                    }
+
+                    for (int q = step.w0; q <= step.w1; ++q)
+                    {
+                        std::uint64_t bits = word(i, q) & VoxelStock::SpanMask(q, step.k0, step.k1);
+                        std::uint64_t clear = 0;
+                        while (bits != 0)
+                        {
+                            const int bit = LowestBit(bits);
+                            bits &= bits - 1;
+                            const Vec3 c = stock.Centre(i, j, q * VoxelStock::kWord + bit);
+                            const double along = Dot(c, w);
+                            if (inside(along, DistanceToSegment(c - w * along, step.pa, step.pb)))
+                                clear |= std::uint64_t(1) << bit;
+                        }
+                        if (clear != 0)
+                        {
+                            take(i, q, clear);
+                            hit = true;
+                        }
+                    }
+                }
+                if (hit)
+                    stepHit[s].store(1, std::memory_order_relaxed);
+            }
+
+            // What this row found, and the scratch words back to zero.
+            std::vector<RowClear>& out = found[static_cast<size_t>(j - rowLo)];
+            out.reserve(pending.used.size());
+            for (int at : pending.used)
+            {
+                const int i = colLo + at / words;
+                const int q = wordLo + at % words;
+                out.push_back({ i, q, pending.words[static_cast<size_t>(at)] });
+                pending.words[static_cast<size_t>(at)] = 0;
+            }
+            pending.used.clear();
+        };
+
+        // Small moves aren't worth handing out.
+        std::vector<int> rowList(static_cast<size_t>(rows));
+        for (int j = 0; j < rows; ++j)
+            rowList[static_cast<size_t>(j)] = rowLo + j;
+        if (static_cast<long long>(rows) * columns * words * static_cast<long long>(steps.size()) < 4096 || rows < 4)
+            std::for_each(rowList.begin(), rowList.end(), workRow);
+        else
+            std::for_each(std::execution::par, rowList.begin(), rowList.end(), workRow);
+
+        long long removed = 0;
+        for (int j = 0; j < rows; ++j)
+        {
+            for (const RowClear& clear : found[static_cast<size_t>(j)])
+                removed += stock.ClearMask(clear.i, rowLo + j, clear.q, clear.mask);
+        }
+        for (size_t s = 0; s < steps.size(); ++s)
+        {
+            if (stepHit[s].load(std::memory_order_relaxed) != 0)
+            {
+                const SweepStep& step = steps[s];
+                stock.MarkDirtyBox(step.i0, step.j0, step.k0, step.i1, step.j1, step.k1);
+            }
+        }
+        stock.Settle();
+        return removed;
     }
 
     long long CountMove(const VoxelStock& stock, const ToolProfile& profile, const Vec3& from, const Vec3& to,
@@ -1747,6 +2040,12 @@ namespace camcore
     {
         const SimOperation& operation = m_operations[move.operation];
         const Vec3 toolAxis = move.ownAxis ? move.axis : operation.frame.zAxis;
+        using Clock = std::chrono::steady_clock;
+        const auto secondsSince = [](Clock::time_point t) {
+            return std::chrono::duration<double>(Clock::now() - t).count();
+        };
+        const Clock::time_point checkStart = Clock::now();
+        ++m_timing.pieces;
 
         // The holder and the shank above the flutes mustn't touch the stock as it
         // is before the piece (the flutes cut below them).
@@ -1820,6 +2119,8 @@ namespace camcore
         }
 
         // Each part of the tool, from its own tip, up or back down the axis.
+        const Clock::time_point cutStart = Clock::now();
+        m_timing.checkSeconds += std::chrono::duration<double>(cutStart - checkStart).count();
         bool cut = false;
         const auto cutWith = [&](const ToolProfile& profile, const Vec3& pa, const Vec3& pb, const Vec3& axis) {
             if (m_model == StockModel::TriDexel)
@@ -1843,10 +2144,13 @@ namespace camcore
                 }
             }
         }
+        m_timing.cutSeconds += secondsSince(cutStart);
         if (warning == SimWarning::None && move.rapid && cut && !m_ignoreCollisions)
             warning = SimWarning::RapidIntoStock;
+        const Clock::time_point lateCheck = Clock::now();
         if (warning == SimWarning::None && narrowShank && touches(operation.shank))
             warning = SimWarning::ShankHitsStock;
+        m_timing.checkSeconds += secondsSince(lateCheck);
         return warning;
     }
 

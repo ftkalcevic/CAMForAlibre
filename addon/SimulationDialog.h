@@ -79,6 +79,7 @@ private:
     bool m_playing;
     bool m_running = false;     // To Op End or To End is running
     size_t m_runEnd = 0;        // where it's running to
+    ULONGLONG m_runStarted = 0; // when the run or play began, for the timing line
     std::wstring m_note;
     std::wstring m_saved;       // what the last Save STL did
 };
