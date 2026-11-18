@@ -9,6 +9,7 @@
 #include "CamTabCommand.h"
 #include "ModelReader.h"
 #include "Log.h"
+#include "ShapeDialog.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -341,6 +342,7 @@ namespace
         case PickKind::PlanarFace:      return L"Face";
         case PickKind::LineEdge:        return L"Edge";
         case PickKind::CurveEdge:       return L"Curve";
+        case PickKind::Sketch:          return L"Sketch";
         case PickKind::SurfaceFace:     return L"Surface";
         default:                        return L"Other";
         }
@@ -368,6 +370,13 @@ BEGIN_MESSAGE_MAP(CFeaturesPage, COperationPage)
     ON_WM_LBUTTONUP()
     ON_WM_CAPTURECHANGED()
     ON_MESSAGE(WM_APP_ROWS_CHOSEN, &CFeaturesPage::OnRowsChosen)
+    ON_BN_CLICKED(IDC_FEATURES_SHAPE_ADD, &CFeaturesPage::OnAddShape)
+    ON_BN_CLICKED(IDC_FEATURES_CHOOSE_SKETCH, &CFeaturesPage::OnChooseSketches)
+    ON_BN_CLICKED(IDC_FEATURES_SHAPE_EDIT, &CFeaturesPage::OnEditShape)
+    ON_BN_CLICKED(IDC_FEATURES_SHAPE_DELETE, &CFeaturesPage::OnDeleteShape)
+    ON_NOTIFY(NM_DBLCLK, IDC_FEATURES_SHAPES, &CFeaturesPage::OnShapeDoubleClick)
+    ON_NOTIFY(LVN_ITEMCHANGED, IDC_FEATURES_SHAPES, &CFeaturesPage::OnShapeChosen)
+    ON_CBN_SELCHANGE(IDC_FEATURES_BOUNDARY_SHAPE, &CFeaturesPage::OnBoundaryShapeChanged)
 END_MESSAGE_MAP()
 
 CFeaturesPage::CFeaturesPage(COperationDlg* pOwner)
@@ -407,6 +416,18 @@ BOOL CFeaturesPage::OnInitDialog()
     m_corner.AddString(L"Bottom right");
     m_corner.SetCurSel(g_lastCorner);
 
+    m_shapeList.SubclassDlgItem(IDC_FEATURES_SHAPES, this);
+    m_shapeList.SetExtendedStyle(m_shapeList.GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+    m_shapeList.InsertColumn(0, L"Shape", LVCFMT_LEFT, 64);
+    m_shapeList.InsertColumn(1, L"Position", LVCFMT_LEFT, 120);
+    m_shapeList.InsertColumn(2, L"Size", LVCFMT_LEFT, 110);
+
+    m_boundaryShape.SubclassDlgItem(IDC_FEATURES_BOUNDARY_SHAPE, this);
+    m_boundaryShape.AddString(L"As picked");
+    m_boundaryShape.AddString(L"Bounding rectangle");
+    m_boundaryShape.AddString(L"Convex hull");
+    m_boundaryShape.SetCurSel(0);
+
     ShowSelecting(false);
     OnOrderChanged();
     return TRUE;
@@ -417,18 +438,207 @@ void CFeaturesPage::Load(const SequenceStep& step)
     m_features = step.features;
     FillList();
 
-    // Area operations can take the stock box's footprint too.
+    // Area operations can take the stock box's footprint too, and shapes; the 2 1/2
+    // axis ones the Boundary settings.
     const bool area = m_pOwner->GetFeatureFilter() != FeatureFilter::Points;
     GetDlgItem(IDC_FEATURES_STOCK_FOOTPRINT)->ShowWindow(area ? SW_SHOW : SW_HIDE);
     CheckDlgButton(IDC_FEATURES_STOCK_FOOTPRINT, (area && step.stockFootprint) ? BST_CHECKED : BST_UNCHECKED);
+
+    m_takesShapes = camcore::TakesShapes(step.type);
+    m_takesBoundary = camcore::TakesBoundary(step.type);
+    m_shapes = m_takesShapes ? step.shapes : std::vector<camcore::TypedShape>();
+    FillShapes(0);
+    m_boundaryShape.SetCurSel(static_cast<int>(step.boundary.shape));
+    SetDlgItemText(IDC_FEATURES_BOUNDARY_OFFSET, FormatNumber(step.boundary.offset).c_str());
+    Layout(area, m_takesShapes, m_takesBoundary);
 }
 
-bool CFeaturesPage::Save(SequenceStep& step, std::wstring& /*problems*/)
+bool CFeaturesPage::Save(SequenceStep& step, std::wstring& problems)
 {
     step.features = m_features;
     step.stockFootprint = m_pOwner->GetFeatureFilter() != FeatureFilter::Points &&
                           IsDlgButtonChecked(IDC_FEATURES_STOCK_FOOTPRINT) == BST_CHECKED;
+    step.shapes = m_takesShapes ? m_shapes : std::vector<camcore::TypedShape>();
+    if (!m_takesBoundary)
+        return true;
+    camcore::BoundarySettings boundary;
+    boundary.shape = static_cast<camcore::BoundaryShape>((std::max)(m_boundaryShape.GetCurSel(), 0));
+    if (!ReadValue(IDC_FEATURES_BOUNDARY_OFFSET, boundary.offset) || !camcore::ValidateBoundary(boundary).empty())
+    {
+        AppendProblem(problems, L"Features: the boundary's offset must be a number.");
+        return false;
+    }
+    step.boundary = boundary;
     return true;
+}
+
+void CFeaturesPage::Layout(bool area, bool shapes, bool boundary)
+{
+    // Drill, Hole Pocketing and Thread Milling have neither group, so the list
+    // takes their room. The template is laid out for the area operations.
+    const auto place = [this](int id, int x, int y, int width, int height) {
+        CRect rect(x, y, x + width, y + height);
+        MapDialogRect(&rect);
+        GetDlgItem(id)->MoveWindow(&rect);
+    };
+    if (!area)
+    {
+        place(IDC_FEATURES_LIST, 4, 4, 292, 150);
+        place(IDC_FEATURES_SELECT, 4, 160, 70, 14);
+        place(IDC_FEATURES_DELETE, 78, 160, 46, 14);
+        place(IDC_FEATURES_NOTE, 130, 160, 166, 22);
+    }
+    GetDlgItem(IDC_FEATURES_CHOOSE_SKETCH)->ShowWindow(area ? SW_SHOW : SW_HIDE);
+    for (int id : { IDC_FEATURES_SHAPES_GROUP, IDC_FEATURES_SHAPES, IDC_FEATURES_SHAPE_ADD, IDC_FEATURES_SHAPE_EDIT,
+                    IDC_FEATURES_SHAPE_DELETE })
+        GetDlgItem(id)->ShowWindow(shapes ? SW_SHOW : SW_HIDE);
+    for (int id : { IDC_FEATURES_BOUNDARY_GROUP, IDC_FEATURES_BOUNDARY_SHAPE, IDC_FEATURES_BOUNDARY_SHAPE_LABEL,
+                    IDC_FEATURES_BOUNDARY_OFFSET, IDC_FEATURES_BOUNDARY_OFFSET_LABEL, IDC_FEATURES_BOUNDARY_MM })
+    {
+        GetDlgItem(id)->ShowWindow(area ? SW_SHOW : SW_HIDE);
+        GetDlgItem(id)->EnableWindow(boundary ? TRUE : FALSE);
+    }
+}
+
+void CFeaturesPage::FillShapes(int choose)
+{
+    m_shapeList.DeleteAllItems();
+    for (size_t i = 0; i < m_shapes.size(); ++i)
+    {
+        const int row = m_shapeList.InsertItem(static_cast<int>(i), FromUtf8(ShapeKindTitle(m_shapes[i].kind)).c_str());
+        m_shapeList.SetItemText(row, 1, ShapePositionText(m_shapes[i]).c_str());
+        m_shapeList.SetItemText(row, 2, ShapeSizeText(m_shapes[i]).c_str());
+    }
+    if (choose >= 0 && choose < static_cast<int>(m_shapes.size()))
+        m_shapeList.SetItemState(choose, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+    UpdateShapeButtons();
+}
+
+void CFeaturesPage::UpdateShapeButtons()
+{
+    const BOOL chosen = m_shapeList.GetSelectedCount() > 0 ? TRUE : FALSE;
+    GetDlgItem(IDC_FEATURES_SHAPE_EDIT)->EnableWindow(chosen);
+    GetDlgItem(IDC_FEATURES_SHAPE_DELETE)->EnableWindow(chosen);
+}
+
+void CFeaturesPage::OnAddShape()
+{
+    CMenu menu;
+    menu.CreatePopupMenu();
+    menu.AppendMenu(MF_STRING, 1, L"Rectangle");
+    menu.AppendMenu(MF_STRING, 2, L"Circle");
+    menu.AppendMenu(MF_STRING, 3, L"Polygon");
+    CRect button;
+    GetDlgItem(IDC_FEATURES_SHAPE_ADD)->GetWindowRect(&button);
+    const int chosen = static_cast<int>(
+        menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD, button.left, button.bottom, this));
+    if (chosen == 0)
+        return;
+
+    camcore::TypedShape shape;
+    shape.kind = (chosen == 2) ? ShapeKind::Circle : (chosen == 3) ? ShapeKind::Polygon : ShapeKind::Rectangle;
+    if (shape.kind == ShapeKind::Polygon)
+        shape.points = { { 0.0, 0.0, 0.0 }, { 10.0, 0.0, 0.0 }, { 10.0, 10.0, 0.0 }, { 0.0, 10.0, 0.0 } };
+    // Drawn in the view while it's typed.
+    m_shapes.push_back(shape);
+    const size_t row = m_shapes.size() - 1;
+    CShapeDlg dialog(shape, this, [this, row](const camcore::TypedShape& preview) {
+        m_shapes[row] = preview;
+        m_pOwner->OnShapesChanged();
+    });
+    if (dialog.DoModal() != IDOK)
+    {
+        m_shapes.pop_back();
+        m_pOwner->OnShapesChanged();
+        return;
+    }
+    m_shapes[row] = dialog.GetShape();
+    FillShapes(static_cast<int>(row));
+    m_pOwner->OnShapesChanged();
+}
+
+void CFeaturesPage::OnChooseSketches()
+{
+    CWaitCursor wait;
+    CChooseSketchDlg dialog(m_pOwner->ListSketches(), this);
+    if (dialog.DoModal() != IDOK)
+        return;
+
+    // Each chosen sketch once, added at the end.
+    size_t added = 0;
+    for (const PickedGeometry& sketch : dialog.GetChosen())
+    {
+        const bool listed = std::any_of(m_features.begin(), m_features.end(),
+                                        [&](const PickedGeometry& f) { return camcore::SameFeature(f, sketch); });
+        if (listed)
+            continue;
+        m_features.push_back(sketch);
+        ++added;
+    }
+    if (added == 0)
+        return;
+    ChangedByUser();
+    SelectRow(static_cast<int>(m_features.size()) - 1);
+    m_pOwner->OnShapesChanged();
+}
+
+void CFeaturesPage::OnEditShape()
+{
+    const int row = m_shapeList.GetNextItem(-1, LVNI_SELECTED);
+    if (row < 0 || row >= static_cast<int>(m_shapes.size()))
+        return;
+    const camcore::TypedShape before = m_shapes[row];
+    CShapeDlg dialog(before, this, [this, row](const camcore::TypedShape& preview) {
+        m_shapes[row] = preview;
+        m_pOwner->OnShapesChanged();
+    });
+    if (dialog.DoModal() != IDOK)
+    {
+        m_shapes[row] = before;
+        m_pOwner->OnShapesChanged();
+        return;
+    }
+    m_shapes[row] = dialog.GetShape();
+    FillShapes(row);
+    m_pOwner->OnShapesChanged();
+}
+
+void CFeaturesPage::OnDeleteShape()
+{
+    const int row = m_shapeList.GetNextItem(-1, LVNI_SELECTED);
+    if (row < 0 || row >= static_cast<int>(m_shapes.size()))
+        return;
+    m_shapes.erase(m_shapes.begin() + row);
+    FillShapes((std::min)(row, static_cast<int>(m_shapes.size()) - 1));
+    m_pOwner->OnShapesChanged();
+}
+
+void CFeaturesPage::OnShapeDoubleClick(NMHDR* /*pNotify*/, LRESULT* pResult)
+{
+    *pResult = 0;
+    OnEditShape();
+}
+
+void CFeaturesPage::OnShapeChosen(NMHDR* /*pNotify*/, LRESULT* pResult)
+{
+    *pResult = 0;
+    UpdateShapeButtons();
+}
+
+void CFeaturesPage::OnBoundaryShapeChanged()
+{
+    switch (m_boundaryShape.GetCurSel())
+    {
+    case 1:
+        ShowNote(L"One rectangle round all the features and shapes, square to the origin's X and Y.");
+        break;
+    case 2:
+        ShowNote(L"One outline round all the features and shapes, like a band stretched round them.");
+        break;
+    default:
+        ShowNote(L"");
+        break;
+    }
 }
 
 void CFeaturesPage::OnStockFootprint()
@@ -453,7 +663,7 @@ void CFeaturesPage::FillList()
         m_list.SetItemText(row, kColumnType, FeatureTypeName(feature.kind));
 
         std::wstring part = FromUtf8(feature.occurrenceName);
-        if (feature.kind == PickKind::DesignPoint)
+        if (feature.kind == PickKind::DesignPoint || feature.kind == PickKind::Sketch)
             part = part.empty() ? FromUtf8(feature.targetName) : part + L": " + FromUtf8(feature.targetName);
         m_list.SetItemText(row, kColumnPart, part.c_str());
 
@@ -3949,6 +4159,22 @@ void COperationDlg::StopSelectingFeatures()
 std::vector<PickedGeometry> COperationDlg::GetFeatures() const
 {
     return (m_pFeatures != nullptr) ? m_pFeatures->GetFeatures() : std::vector<PickedGeometry>();
+}
+
+std::vector<camcore::TypedShape> COperationDlg::GetShapes() const
+{
+    return (m_pFeatures != nullptr) ? m_pFeatures->GetShapes() : m_step.shapes;
+}
+
+std::vector<PickedGeometry> COperationDlg::ListSketches() const
+{
+    return (m_pTab != nullptr) ? m_pTab->ListModelSketches() : std::vector<PickedGeometry>();
+}
+
+void COperationDlg::OnShapesChanged()
+{
+    if (m_pTab != nullptr)
+        m_pTab->OnOperationShapesChanged();
 }
 
 void COperationDlg::SetSelectedFeatures(const std::vector<PickedGeometry>& selected, int ignored)

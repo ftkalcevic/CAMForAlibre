@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Boundary.h"
+#include "BoundaryShape.h"
 #include "Clearance.h"
 #include "CutLevels.h"
 #include "Drill.h"
@@ -37,7 +38,7 @@ namespace camcore
     // Version 16 added Fixtures steps.
     // Version 17 added Thread Milling operations.
     // Version 18 added Rotate steps, and indexing settings on Set Origins.
-    constexpr int kCamFormatVersion = 18;
+    constexpr int kCamFormatVersion = 19;
 
     // Which assembly a job belongs to. The GUID comes from the assembly file,
     // and is empty if it couldn't be read.
@@ -68,6 +69,11 @@ namespace camcore
     };
 
     bool IsOperation(StepType type);
+
+    // The area operations, which take typed shapes, and those of them whose
+    // areas the Boundary settings change (Facing, Profiling, Pocketing, Chamfer).
+    bool TakesShapes(StepType type);
+    bool TakesBoundary(StepType type);
 
     struct SequenceStep;
 
@@ -105,6 +111,13 @@ namespace camcore
 
         // Area operations only: the stock box's footprint is part of the area too.
         bool stockFootprint = false;
+
+        // Area operations only: shapes typed in the operation, which are areas too.
+        std::vector<TypedShape> shapes;
+
+        // Facing, Profiling, Pocketing and Chamfer: the areas turned into a
+        // rectangle or convex hull, and offset.
+        BoundarySettings boundary;
 
         // Operations only: the ID of the tool in the job's library, or empty, and
         // the speeds and feeds to use it at.

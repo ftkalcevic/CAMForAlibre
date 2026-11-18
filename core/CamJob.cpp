@@ -113,6 +113,7 @@ namespace camcore
             case PickKind::DesignPlane:     return "designPlane";
             case PickKind::DesignAxis:      return "designAxis";
             case PickKind::SurfaceFace:     return "surfaceFace";
+            case PickKind::Sketch:          return "sketch";
             default:                        return "none";
             }
         }
@@ -123,7 +124,7 @@ namespace camcore
             {
                 PickKind::PlanarFace, PickKind::CylindricalFace, PickKind::LineEdge, PickKind::CircleEdge,
                 PickKind::DesignPoint, PickKind::CurveEdge, PickKind::DesignPlane, PickKind::DesignAxis,
-                PickKind::SurfaceFace
+                PickKind::SurfaceFace, PickKind::Sketch
             };
             for (PickKind candidate : kinds)
             {
@@ -275,7 +276,7 @@ namespace camcore
             if (pick.kind == PickKind::CircleEdge || pick.kind == PickKind::CylindricalFace)
                 item["radius"] = pick.radius;
             if (pick.kind == PickKind::DesignPoint || pick.kind == PickKind::DesignPlane ||
-                pick.kind == PickKind::DesignAxis)
+                pick.kind == PickKind::DesignAxis || pick.kind == PickKind::Sketch)
                 item["targetName"] = pick.targetName;
             return item;
         }
@@ -310,6 +311,7 @@ namespace camcore
             case PickKind::DesignPoint:
             case PickKind::DesignPlane:
             case PickKind::DesignAxis:
+            case PickKind::Sketch:
                 return ReadString(item, "targetName", pick.targetName);
 
             default:
@@ -2031,7 +2033,92 @@ namespace camcore
                 item["suppressed"] = true;
             if (step.stockFootprint)
                 item["stockFootprint"] = true;
+            if (!step.shapes.empty())
+            {
+                json shapes = json::array();
+                for (const TypedShape& shape : step.shapes)
+                {
+                    json s = { { "kind", ShapeKindName(shape.kind) }, { "z", shape.z } };
+                    if (shape.kind == ShapeKind::Polygon)
+                    {
+                        json points = json::array();
+                        for (const Vec3& p : shape.points)
+                            points.push_back(json::array({ p.x, p.y }));
+                        s["points"] = points;
+                    }
+                    else
+                    {
+                        s["x"] = shape.x;
+                        s["y"] = shape.y;
+                        if (shape.kind == ShapeKind::Circle)
+                        {
+                            s["diameter"] = shape.diameter;
+                        }
+                        else
+                        {
+                            s["width"] = shape.width;
+                            s["height"] = shape.height;
+                            s["angle"] = shape.angle;
+                        }
+                    }
+                    shapes.push_back(s);
+                }
+                item["shapes"] = shapes;
+            }
+            if (!step.boundary.IsDefault())
+                item["areaBoundary"] = { { "shape", BoundaryShapeName(step.boundary.shape) },
+                                     { "offset", step.boundary.offset } };
             return item;
+        }
+
+        // Typed shapes and the Boundary settings, missing in files before version 19.
+        bool ReadShapesAndBoundary(const json& item, SequenceStep& step)
+        {
+            const auto shapes = item.find("shapes");
+            if (shapes != item.end())
+            {
+                if (!shapes->is_array())
+                    return false;
+                for (const json& s : *shapes)
+                {
+                    TypedShape shape;
+                    std::string kind;
+                    if (!s.is_object() || !ReadString(s, "kind", kind) || !ShapeKindFromName(kind, shape.kind) ||
+                        !ReadNumber(s, "z", shape.z))
+                        return false;
+                    if (shape.kind == ShapeKind::Polygon)
+                    {
+                        const auto points = s.find("points");
+                        if (points == s.end() || !points->is_array())
+                            return false;
+                        for (const json& p : *points)
+                        {
+                            if (!p.is_array() || p.size() != 2 || !p[0].is_number() || !p[1].is_number())
+                                return false;
+                            shape.points.push_back({ p[0].get<double>(), p[1].get<double>(), 0.0 });
+                        }
+                    }
+                    else if (!ReadNumber(s, "x", shape.x) || !ReadNumber(s, "y", shape.y) ||
+                             (shape.kind == ShapeKind::Circle
+                                  ? !ReadNumber(s, "diameter", shape.diameter)
+                                  : (!ReadNumber(s, "width", shape.width) || !ReadNumber(s, "height", shape.height) ||
+                                     !ReadNumber(s, "angle", shape.angle))))
+                    {
+                        return false;
+                    }
+                    step.shapes.push_back(shape);
+                }
+            }
+            const auto boundary = item.find("areaBoundary");
+            if (boundary != item.end())
+            {
+                std::string shape;
+                if (!boundary->is_object() || !ReadString(*boundary, "shape", shape) ||
+                    !BoundaryShapeFromName(shape, step.boundary.shape) ||
+                    !ReadNumber(*boundary, "offset", step.boundary.offset))
+                    return false;
+            }
+            return true;
         }
 
         // Steps saved before suppressing existed aren't suppressed.
@@ -2049,8 +2136,22 @@ namespace camcore
                     return false;
                 *flag.second = found->get<bool>();
             }
-            return true;
+            return ReadShapesAndBoundary(item, step);
         }
+    }
+
+    bool TakesShapes(StepType type)
+    {
+        return type == StepType::Facing || type == StepType::Profiling || type == StepType::Pocketing ||
+               type == StepType::Chamfer || type == StepType::Engrave || type == StepType::PlungeRoughing ||
+               type == StepType::WaterlineRoughing || type == StepType::WaterlineFinishing ||
+               type == StepType::ParallelFinishing;
+    }
+
+    bool TakesBoundary(StepType type)
+    {
+        return type == StepType::Facing || type == StepType::Profiling || type == StepType::Pocketing ||
+               type == StepType::Chamfer;
     }
 
     bool IsOperation(StepType type)

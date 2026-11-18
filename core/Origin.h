@@ -59,7 +59,8 @@ namespace camcore
         CurveEdge,      // any other edge, such as a spline: start and end, and point halfway along
         DesignPlane,    // Alibre's own planes, such as XY, or the user's
         DesignAxis,
-        SurfaceFace     // any other face, such as a sphere or spline surface: only Plunge Roughing takes one
+        SurfaceFace,    // any other face, such as a sphere or spline surface: only Plunge Roughing takes one
+        Sketch          // a whole Alibre sketch (the assembly's or a part's), its lines, arcs and circles as edges
     };
 
     // A face, edge or design point picked in the view.
@@ -74,7 +75,7 @@ namespace camcore
         PersistentKey occurrenceKey;
         PersistentKey targetKey;
         std::string occurrenceName;
-        std::string targetName;     // design points, planes and axes only
+        std::string targetName;     // design points, planes and axes, and sketches
 
         Vec3 clicked;       // where the user clicked
 

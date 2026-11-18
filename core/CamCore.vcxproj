@@ -91,6 +91,7 @@
     <ClCompile Include="Profiling.cpp" />
     <ClCompile Include="ProgramSettings.cpp" />
     <ClCompile Include="Stock.cpp" />
+    <ClCompile Include="BoundaryShape.cpp" />
     <ClCompile Include="DropCutter.cpp" />
     <ClCompile Include="FinishingDump.cpp" />
     <ClCompile Include="Nurbs.cpp" />
@@ -135,6 +136,7 @@
     <ClInclude Include="Profiling.h" />
     <ClInclude Include="ProgramSettings.h" />
     <ClInclude Include="Stock.h" />
+    <ClInclude Include="BoundaryShape.h" />
     <ClInclude Include="DropCutter.h" />
     <ClInclude Include="FinishingDump.h" />
     <ClInclude Include="Nurbs.h" />

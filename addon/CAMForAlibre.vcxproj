@@ -116,6 +116,7 @@
     <ClCompile Include="ModelReader.cpp" />
     <ClCompile Include="OperationDialog.cpp" />
     <ClCompile Include="OriginDialog.cpp" />
+    <ClCompile Include="ShapeDialog.cpp" />
     <ClCompile Include="RotateDialog.cpp" />
     <ClCompile Include="SimOptionsDialog.cpp" />
     <ClCompile Include="PostDialog.cpp" />
@@ -147,6 +148,7 @@
     <ClInclude Include="ModelReader.h" />
     <ClInclude Include="OperationDialog.h" />
     <ClInclude Include="OriginDialog.h" />
+    <ClInclude Include="ShapeDialog.h" />
     <ClInclude Include="RotateDialog.h" />
     <ClInclude Include="SimOptionsDialog.h" />
     <ClInclude Include="PostDialog.h" />

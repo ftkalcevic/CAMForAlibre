@@ -236,6 +236,8 @@ public:
 
     // Shows the rows chosen in the Features list in the view.
     void ShowFeaturesInView(const std::vector<camcore::PickedGeometry>& features);
+    void OnOperationShapesChanged();    // the open dialog's typed shapes or features changed: redraw them
+    std::vector<camcore::PickedGeometry> ListModelSketches();
 
     // The features whose outlines are drawn in orange: the open operation
     // dialog's, otherwise the tree's selected operation's (all of a folder's
@@ -247,6 +249,7 @@ public:
         StepRef ref;                                    // the folder, and the operation in it (or kNewStep)
         const camcore::SequenceStep* pStep = nullptr;   // the operation's settings (the dialog's while it's open)
         std::vector<camcore::PickedGeometry> features;
+        std::vector<camcore::TypedShape> shapes;        // the dialog's while it's open
     };
     std::vector<HighlightGroup> HighlightedFeatures() const;
     void UpdateHighlights();
@@ -385,6 +388,7 @@ private:
     std::vector<std::vector<std::vector<camcore::Vec3>>> m_highlightGroupOutlines;  // each group's, in assembly mm
     std::vector<std::vector<camcore::Vec3>> m_highlightOutlines;   // every group's, in assembly mm
     std::vector<std::vector<camcore::Vec3>> m_highlightLevels;     // the cuts' tops and bottoms, in assembly mm
+    std::vector<std::vector<camcore::Vec3>> m_highlightShapes;     // typed shapes, in assembly mm
 
     // Only one dialog is open at a time, so this is set only when the others aren't.
     CPartBoxStockDlg* m_pPartBoxDlg;

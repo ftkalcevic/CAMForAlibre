@@ -81,6 +81,7 @@
     <ClCompile Include="ProfileToolpathTests.cpp" />
     <ClCompile Include="ScriptedPostTests.cpp" />
     <ClCompile Include="StockTests.cpp" />
+    <ClCompile Include="BoundaryShapeTests.cpp" />
     <ClCompile Include="MachineTests.cpp" />
     <ClCompile Include="ChamferToolpathTests.cpp" />
     <ClCompile Include="EngraveToolpathTests.cpp" />

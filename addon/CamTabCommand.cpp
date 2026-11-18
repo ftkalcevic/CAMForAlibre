@@ -1641,6 +1641,8 @@ std::vector<CCamTabCommand::HighlightGroup> CCamTabCommand::HighlightedFeatures(
         group.ref = ref;
         group.pStep = pStep;
         group.features = features;
+        if (pStep != nullptr)
+            group.shapes = pStep->shapes;
         groups.push_back(std::move(group));
     };
 
@@ -1649,6 +1651,7 @@ std::vector<CCamTabCommand::HighlightGroup> CCamTabCommand::HighlightedFeatures(
     if (m_pOperationDlg != nullptr && !m_pOperationDlg->IsBulk())
     {
         add(m_operationTarget, &m_pOperationDlg->GetStep(), m_pOperationDlg->GetFeatures());
+        groups.back().shapes = m_pOperationDlg->GetShapes();
         return groups;
     }
     if (m_pOperationDlg != nullptr)
@@ -1738,17 +1741,36 @@ void CCamTabCommand::UpdateHighlights()
     // The top and bottom of each 2 1/2 axis operation's cut, drawn thin, worked
     // out every time as its settings, tool or frame may have changed. A level at
     // the geometry's own height is left out: the feature shows there.
+    // Typed shapes are drawn too, at the picked geometry's height, or their own.
     constexpr double kSameLevel = 0.001;
     m_highlightLevels.clear();
+    m_highlightShapes.clear();
     for (size_t g = 0; g < groups.size() && g < m_highlightGroupOutlines.size(); ++g)
     {
-        const std::vector<std::vector<camcore::Vec3>>& outlines = m_highlightGroupOutlines[g];
+        std::vector<std::vector<camcore::Vec3>> outlines = m_highlightGroupOutlines[g];
         const camcore::SequenceStep* pStep = groups[g].pStep;
-        if (pStep == nullptr || outlines.empty() || groups[g].ref.step >= m_job.sequence.size())
+        if (pStep == nullptr || groups[g].ref.step >= m_job.sequence.size())
             continue;
         const camcore::FrameResult frame = FrameOf(groups[g].ref.step);
+        if (!frame.ok)
+            continue;
         double geometryZ = 0.0;
-        if (!frame.ok || !camcore::HighestAlongFrameZ(frame.frame, outlines, geometryZ))
+        const bool haveGeometry = camcore::HighestAlongFrameZ(frame.frame, outlines, geometryZ);
+        if (camcore::TakesShapes(pStep->type))
+        {
+            for (const camcore::TypedShape& shape : groups[g].shapes)
+            {
+                std::vector<camcore::Vec3> points =
+                    camcore::PathPoints(camcore::ShapePath(shape, haveGeometry ? geometryZ : shape.z), true);
+                if (points.empty())
+                    continue;
+                for (camcore::Vec3& point : points)
+                    point = camcore::FramePointToWorld(frame.frame, point);
+                m_highlightShapes.push_back(points);
+                outlines.push_back(std::move(points));
+            }
+        }
+        if (outlines.empty() || !camcore::HighestAlongFrameZ(frame.frame, outlines, geometryZ))
             continue;
         camcore::Tool tool;
         const camcore::Tool* pTool = nullptr;
@@ -3220,10 +3242,21 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
     }
     const auto stockFootprint = [&]() { return camcore::StockFootprint(frame.frame, stockBox); };
 
+    // Typed shapes must be usable before anything's read.
+    for (size_t n = 0; n < operation.shapes.size(); ++n)
+    {
+        const std::string shapeProblem = camcore::ValidateShape(operation.shapes[n]);
+        if (!shapeProblem.empty())
+        {
+            problem = "Shape " + std::to_string(n + 1) + ": " + shapeProblem;
+            return false;
+        }
+    }
+
     camcore::AreaGeometry areas;
     auto gatherAreas = [&](const char* name) {
-        const camcore::AreaFeatureCheck check =
-            camcore::CheckAreaFeatures(operation.features, name, operation.stockFootprint);
+        const camcore::AreaFeatureCheck check = camcore::CheckAreaFeatures(
+            operation.features, name, operation.stockFootprint || !operation.shapes.empty());
         if (!check.ok)
         {
             problem = check.problem;
@@ -3239,11 +3272,39 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
             outlines.push_back({ stockFootprint() });
             isFace.push_back(true);
         }
+
+        // Typed shapes are areas of their own, at the picked geometry's level, or
+        // at their own heights when there's nothing else.
+        const bool shapesOnly = outlines.empty();
+        if (shapesOnly)
+        {
+            for (const camcore::TypedShape& shape : operation.shapes)
+            {
+                outlines.push_back({ camcore::ClosedPiece(camcore::ShapePath(shape, shape.z)) });
+                isFace.push_back(true);
+            }
+        }
         areas = camcore::GatherAreas(outlines, isFace);
         if (!areas.ok)
         {
             problem = areas.problem;
             return false;
+        }
+        if (!shapesOnly)
+        {
+            for (const camcore::TypedShape& shape : operation.shapes)
+                areas.areas.push_back({ { camcore::ClosedPiece(camcore::ShapePath(shape, areas.level)) } });
+        }
+
+        if (camcore::TakesBoundary(operation.type))
+        {
+            std::string boundaryProblem;
+            if (!camcore::ApplyBoundary(operation.boundary, areas, operation.type == camcore::StepType::Facing,
+                                        boundaryProblem))
+            {
+                problem = boundaryProblem;
+                return false;
+            }
         }
         Log(L"[generate] %zu areas, at Z %.3f", areas.areas.size(), areas.level);
         return true;
@@ -3335,10 +3396,10 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
     {
         if (m_pProgress != nullptr)
             m_pProgress->Update(-1.0, L"Reading the area");
-        if (operation.features.empty() && !operation.stockFootprint)
+        if (operation.features.empty() && !operation.stockFootprint && operation.shapes.empty())
         {
-            problem = "There are no features. Pick faces, or edges making closed loops, or add the stock box's "
-                      "footprint.";
+            problem = "There are no features. Pick faces, or edges making closed loops, add a shape, or add the "
+                      "stock box's footprint.";
             return false;
         }
 
@@ -3429,6 +3490,14 @@ bool CCamTabCommand::GenerateOperationMoves(const StepRef& target, std::string& 
             footprint.closed = true;
             footprint.path = stockFootprint();
             areaLoops.push_back(std::move(footprint));
+        }
+        for (const camcore::TypedShape& shape : operation.shapes)
+        {
+            camcore::ProfileChain typed;
+            typed.ok = true;
+            typed.closed = true;
+            typed.path = camcore::ShapePath(shape, 0.0);
+            areaLoops.push_back(std::move(typed));
         }
         Log(L"[generate] area from %zu faces and %zu loops", areaFaces.size(), areaLoops.size());
 
@@ -4396,6 +4465,7 @@ void CCamTabCommand::RebuildScene()
     // The chosen operation's features, outlined in orange.
     UpdateHighlights();
     m_scene.highlights = m_highlightOutlines;
+    m_scene.highlights.insert(m_scene.highlights.end(), m_highlightShapes.begin(), m_highlightShapes.end());
     m_scene.highlightLevels = m_highlightLevels;
 
     // Every generated toolpath, brought from its origin's frame into the assembly.
@@ -4596,6 +4666,24 @@ void CCamTabCommand::EndFeatureSelect()
 
     // The list may have changed, so its outlines are drawn again.
     RebuildScene();
+}
+
+void CCamTabCommand::OnOperationShapesChanged()
+{
+    RebuildScene();
+}
+
+std::vector<camcore::PickedGeometry> CCamTabCommand::ListModelSketches()
+{
+    try
+    {
+        return ListSketches(GetSession());
+    }
+    catch (const _com_error& error)
+    {
+        Log(L"[sketch] could not find the session: hr=0x%08X", static_cast<unsigned>(error.Error()));
+        return {};
+    }
 }
 
 void CCamTabCommand::ShowFeaturesInView(const std::vector<camcore::PickedGeometry>& features)

@@ -753,14 +753,60 @@
   <dd>Turns the view's selection into the list. The listed features start out selected; click or Ctrl+click in the view to add or remove features, and press Done when finished. New features are added at the end.</dd>
   <dt>Delete</dt>
   <dd>Removes the chosen rows.</dd>
+  <dt>Sketches...</dt>
+  <dd>For area operations. Adds whole Alibre sketches, the assembly's own or a part's, chosen in the <a href="#choose-sketches">Choose Sketches</a> window. Draw the shape you want in a sketch, with Alibre's own tools, constraints and dimensions, and add it here. A sketch is one row (type Sketch, its part and name, X, Y and Z at the middle of its figures), and its lines, arcs and circles count as edges, so closed loops make areas and open ones can be profiled. Construction lines and points are left out, and so are splines and ellipses for now. Generate reads the sketch again each time, so changing its dimensions changes the cut. It's found again by its name, so renaming the sketch loses it. Sketch rows can't be shown in the view by choosing them, as Alibre can't select sketches for an add-on.</dd>
   <dt>Note</dt>
   <dd>Says what this operation accepts, and any problem with the list.</dd>
+  <dt>Shapes</dt>
+  <dd>For area operations (Facing, Profiling, Pocketing, Chamfer, Engrave, Plunge Roughing, Waterline Roughing, Waterline Finishing and Parallel Finishing). Rectangles, circles and polygons typed in the operation's origin, for areas the model's faces and edges don't give. Each is an area of its own, like a picked face, so the list can be empty. They're drawn in orange with the picked geometry. With picked features or the stock box's footprint they sit at the picked geometry's height; otherwise at their own Z.</dd>
+  <dt>Shapes ▸ Add...</dt>
+  <dd>Adds a Rectangle, Circle or Polygon, typed in the <a href="#shape">Shape</a> window.</dd>
+  <dt>Shapes ▸ Edit</dt>
+  <dd>Changes the chosen shape. Double-clicking a row does the same.</dd>
+  <dt>Shapes ▸ Delete</dt>
+  <dd>Removes the chosen shape.</dd>
+  <dt>Boundary ▸ Shape</dt>
+  <dd>For Facing, Profiling, Pocketing and Chamfer; greyed for the others. As picked cuts the areas the features and shapes make. Bounding rectangle cuts one rectangle round all of them, square to the origin's X and Y: the rectangle round a few holes, say. Convex hull cuts one outline round all of them, as a band stretched round them would make. Both take open edges too.</dd>
+  <dt>Boundary ▸ Offset</dt>
+  <dd>Grows each closed area by this much all round, with rounded corners outside, or shrinks it if negative (an area too narrow for it is left out, and one can split in two). 0 leaves the areas as they are. It's applied after the Shape, so a circle with an offset of 20 mm is a circle 40 mm bigger across. Open edges, as Profiling and Chamfer can follow, are left as they are; Facing closes them first, as it does anyway. Areas that overlap after growing are each cut on their own.</dd>
   <dt>Sort ▸ Order</dt>
   <dd>How Sort orders the list: Minimum distance (from the first feature, always to the nearest one left), or Directional (zigzag rows, X first or Y first).</dd>
   <dt>Sort ▸ Start corner</dt>
   <dd>For Directional, the corner the rows start from: top left, top right, bottom left or bottom right.</dd>
   <dt>Sort</dt>
   <dd>Reorders the list now.</dd>
+</dl>
+</section>
+
+<section id="choose-sketches">
+<h2>Choose Sketches</h2>
+<p>Opened by Sketches... on the Features tab. Lists every sketch in the assembly and its visible parts that has lines, arcs or circles, as "Assembly: Sketch&lt;1&gt;" or "Part&lt;1&gt;: Sketch&lt;2&gt;". A part used twice is listed for each occurrence, at its own place.</p>
+<dl>
+  <dt>Sketch list</dt>
+  <dd>Choose one or more (Ctrl+click or Shift+click). A sketch already in the features list isn't added again.</dd>
+  <dt>OK</dt>
+  <dd>Adds the chosen sketches to the end of the features list.</dd>
+</dl>
+</section>
+
+<section id="shape">
+<h2>Shape</h2>
+<p>A rectangle, circle or polygon typed on the Features tab, in the operation's origin, in mm. The window shows only what its kind uses. Each number has a spinner: its arrows (or the Up and Down keys) step it by 1 mm or 1 degree, or by 0.1 with Ctrl held. The shape is drawn in the view as it changes, whenever the numbers make a usable shape; Cancel puts it back as it was.</p>
+<dl>
+  <dt>Centre X, Centre Y</dt>
+  <dd>Rectangle and Circle: the middle of the shape.</dd>
+  <dt>Width, Height</dt>
+  <dd>Rectangle: its size along the angle, and square to it. Both more than 0.</dd>
+  <dt>Angle (deg)</dt>
+  <dd>Rectangle: how far it's turned, anticlockwise from the origin's X. 0 has the width along X.</dd>
+  <dt>Diameter</dt>
+  <dd>Circle: more than 0. It's cut as an exact circle.</dd>
+  <dt>Points</dt>
+  <dd>Polygon: its corners in order, an X and a Y a line, separated by a comma, space or tab. At least 3, and its sides mustn't cross. Either way round is fine.</dd>
+  <dt>Z</dt>
+  <dd>The shape's height in the origin, used only when the operation has no picked features and no stock box's footprint; otherwise the shape is put at the picked geometry's height, as edges are. The 3D operations project shapes from above, so Z doesn't matter to them.</dd>
+  <dt>Note</dt>
+  <dd>Says what's wrong when OK can't take the values.</dd>
 </dl>
 </section>
 

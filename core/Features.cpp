@@ -96,10 +96,11 @@ namespace camcore
             return kind == PickKind::CircleEdge || kind == PickKind::CylindricalFace || kind == PickKind::DesignPoint;
         case FeatureFilter::FacingArea:
             return kind == PickKind::PlanarFace || kind == PickKind::LineEdge || kind == PickKind::CircleEdge ||
-                   kind == PickKind::CurveEdge;
+                   kind == PickKind::CurveEdge || kind == PickKind::Sketch;
         case FeatureFilter::ProjectedArea:
             return kind == PickKind::PlanarFace || kind == PickKind::CylindricalFace || kind == PickKind::SurfaceFace ||
-                   kind == PickKind::LineEdge || kind == PickKind::CircleEdge || kind == PickKind::CurveEdge;
+                   kind == PickKind::LineEdge || kind == PickKind::CircleEdge || kind == PickKind::CurveEdge ||
+                   kind == PickKind::Sketch;
         default:
             return false;
         }
@@ -127,8 +128,9 @@ namespace camcore
         if (a.kind != b.kind || a.occurrenceKey.hex != b.occurrenceKey.hex)
             return false;
 
-        // Design points have no key, so their name stands in for one.
-        if (a.kind == PickKind::DesignPoint)
+        // Design points have no key, so their name stands in for one. An
+        // assembly sketch's key doesn't bind again, so sketches go by name too.
+        if (a.kind == PickKind::DesignPoint || a.kind == PickKind::Sketch)
             return a.targetName == b.targetName && a.occurrenceName == b.occurrenceName;
         return a.targetKey.hex == b.targetKey.hex;
     }

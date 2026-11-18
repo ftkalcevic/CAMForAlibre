@@ -760,9 +760,13 @@ bool ReadSelectedFeatures(IADSession* pAssembly, camcore::FeatureFilter filter, 
             }
 
             if (read)
+            {
                 features.push_back(pick);
+            }
             else
+            {
                 ++ignored;
+            }
         }
         Log(L"[features] %ld selected: %zu features, %d ignored", count, features.size(), ignored);
         return true;
@@ -781,7 +785,7 @@ namespace
     bool BindFeature(IADSession* pAssembly, const PickedGeometry& feature, IADOccurrencePtr& occurrence,
                      IDispatchPtr& target)
     {
-        if (feature.kind == PickKind::DesignPoint)
+        if (feature.kind == PickKind::DesignPoint || feature.kind == PickKind::Sketch)
             return false;
 
         occurrence = QI<IADOccurrencePtr>(BindKey(pAssembly, feature.occurrenceKey, ADObjectType_AD_OCCURRENCE));
@@ -944,6 +948,193 @@ namespace
     }
 }
 
+namespace
+{
+    // A sketch found again: a part's by its key in the part, failing that by
+    // name; the assembly's by name, as its key doesn't bind again.
+    IADSketchPtr FindSketch(IADSession* pAssembly, const PickedGeometry& feature, IADOccurrencePtr& occurrence)
+    {
+        occurrence = nullptr;
+        IADDesignSessionPtr design;
+        if (feature.occurrenceKey.IsEmpty())
+        {
+            design = QI<IADDesignSessionPtr>(pAssembly);
+        }
+        else
+        {
+            occurrence = QI<IADOccurrencePtr>(BindKey(pAssembly, feature.occurrenceKey, ADObjectType_AD_OCCURRENCE));
+            if (occurrence == nullptr)
+                return nullptr;
+            design = QI<IADDesignSessionPtr>(occurrence->GetDesignSession());
+        }
+        if (design == nullptr)
+            return nullptr;
+
+        if (IADSketchPtr byKey = QI<IADSketchPtr>(BindKey(QI<IADSessionPtr>(design), feature.targetKey,
+                                                            ADObjectType_AD_SKETCH)))
+            return byKey;
+        IADSketchesPtr sketches = design->GetSketches();
+        const long count = (sketches != nullptr) ? sketches->GetCount() : 0;
+        const std::wstring name = FromUtf8(feature.targetName);
+        for (long i = 0; i < count; ++i)
+        {
+            IADSketchPtr sketch = sketches->GetItem(_variant_t(i));
+            if (sketch != nullptr && name == static_cast<const wchar_t*>(sketch->GetName()))
+                return sketch;
+        }
+        return nullptr;
+    }
+
+    // A point in the sketch, in the session's coordinates (model units).
+    Vec3 SketchToWorld(IADSketch* pSketch, double u, double v)
+    {
+        IADPointPtr world;
+        pSketch->MapFromSketchToWorld(u, v, &world);
+        if (world == nullptr)
+            _com_issue_error(E_FAIL);
+        return { world->GetX(), world->GetY(), world->GetZ() };
+    }
+
+    // What a sketch's figures make, as ReadFeatureOutline gives them.
+    struct SketchOutline
+    {
+        std::vector<camcore::Path> pieces;
+        size_t lines = 0, arcs = 0, circles = 0, points = 0, construction = 0, skipped = 0, unread = 0;
+    };
+
+    // The sketch's lines, arcs and circles in assembly mm. Construction
+    // figures, points and other kinds (splines, ellipses) are left out, and
+    // figures that can't be read (Alibre's hidden reference figures) are skipped.
+    SketchOutline ReadSketchFigures(IADSketch* pSketch, const PartToAssembly& transform)
+    {
+        constexpr double kTwoPi = 6.28318530717958647692;
+        constexpr double kPi = kTwoPi / 2.0;
+        SketchOutline outline;
+        IADSketchFiguresPtr figures = pSketch->GetFigures();
+        const long count = (figures != nullptr) ? figures->GetCount() : 0;
+        for (long f = 0; f < count; ++f)
+        {
+            try
+            {
+                IADSketchFigurePtr figure = figures->GetItem(_variant_t(f));
+                if (figure == nullptr)
+                    continue;
+                if (figure->GetIsReference() != VARIANT_FALSE)
+                {
+                    ++outline.construction;
+                    continue;
+                }
+
+                // The sketch's own anticlockwise, about its normal in the assembly.
+                const auto normalAt = [&](double u, double v) {
+                    const Vec3 c = transform.Point(SketchToWorld(pSketch, u, v));
+                    const Vec3 a = transform.Point(SketchToWorld(pSketch, u + 1.0, v)) - c;
+                    const Vec3 b = transform.Point(SketchToWorld(pSketch, u, v + 1.0)) - c;
+                    Vec3 n;
+                    return camcore::Normalise(camcore::Cross(a, b), n) ? n : Vec3{ 0.0, 0.0, 1.0 };
+                };
+
+                if (IADSketchLinePtr line = QI<IADSketchLinePtr>(figure))
+                {
+                    const Vec3 a = transform.Point(SketchToWorld(pSketch, line->GetStart()->GetX(), line->GetStart()->GetY()));
+                    const Vec3 b = transform.Point(SketchToWorld(pSketch, line->GetEnd()->GetX(), line->GetEnd()->GetY()));
+                    outline.pieces.push_back(camcore::PathFromPoints({ a, b }));
+                    ++outline.lines;
+                }
+                else if (IADSketchCircularArcPtr arc = QI<IADSketchCircularArcPtr>(figure))
+                {
+                    const double cu = arc->GetCenter()->GetX(), cv = arc->GetCenter()->GetY();
+                    const double su = arc->GetStart()->GetX(), sv = arc->GetStart()->GetY();
+                    const double eu = arc->GetEnd()->GetX(), ev = arc->GetEnd()->GetY();
+
+                    // Which way it goes: the anticlockwise sweep from start to end
+                    // matches the included angle (in radians or degrees), or it's clockwise.
+                    double sweep = std::atan2(ev - cv, eu - cu) - std::atan2(sv - cv, su - cu);
+                    while (sweep <= 1e-9)
+                        sweep += kTwoPi;
+                    const double included = std::fabs(arc->GetIncludedAngle());
+                    const bool anticlockwise = std::fabs(included - sweep) < 1e-3 ||
+                                               std::fabs(included * kPi / 180.0 - sweep) < 1e-3;
+                    if (outline.arcs == 0)
+                        Log(L"[sketch] first arc: included angle %.6f, anticlockwise sweep %.6f rad, right hand %d, "
+                            L"so %s",
+                            arc->GetIncludedAngle(), sweep, arc->GetIsRightHandRule() != VARIANT_FALSE ? 1 : 0,
+                            anticlockwise ? L"anticlockwise" : L"clockwise");
+
+                    const Vec3 n = normalAt(cu, cv);
+                    camcore::Path piece(2);
+                    piece[0].point = transform.Point(SketchToWorld(pSketch, su, sv));
+                    piece[0].arc = true;
+                    piece[0].centre = transform.Point(SketchToWorld(pSketch, cu, cv));
+                    piece[0].axis = anticlockwise ? n : n * -1.0;
+                    piece[1].point = transform.Point(SketchToWorld(pSketch, eu, ev));
+                    outline.pieces.push_back(std::move(piece));
+                    ++outline.arcs;
+                }
+                else if (IADSketchCirclePtr circle = QI<IADSketchCirclePtr>(figure))
+                {
+                    // Two half arcs, ending back at the start, as a circle edge is read.
+                    const double cu = circle->GetCenter()->GetX(), cv = circle->GetCenter()->GetY();
+                    const double r = circle->GetRadius();
+                    const Vec3 n = normalAt(cu, cv);
+                    const Vec3 centre = transform.Point(SketchToWorld(pSketch, cu, cv));
+                    camcore::Path piece(3);
+                    piece[0].point = transform.Point(SketchToWorld(pSketch, cu + r, cv));
+                    piece[1].point = transform.Point(SketchToWorld(pSketch, cu - r, cv));
+                    piece[2].point = piece[0].point;
+                    for (int k = 0; k < 2; ++k)
+                    {
+                        piece[k].arc = true;
+                        piece[k].centre = centre;
+                        piece[k].axis = n;
+                    }
+                    outline.pieces.push_back(std::move(piece));
+                    ++outline.circles;
+                }
+                else if (QI<IADSketchPointPtr>(figure) != nullptr)
+                {
+                    ++outline.points;
+                }
+                else
+                {
+                    ++outline.skipped;
+                }
+            }
+            catch (const _com_error&)
+            {
+                ++outline.unread;
+            }
+        }
+        return outline;
+    }
+
+    bool ReadSketchOutline(IADSession* pAssembly, const PickedGeometry& feature, std::vector<camcore::Path>& pieces,
+                           std::wstring& problem)
+    {
+        IADOccurrencePtr occurrence;
+        IADSketchPtr sketch = FindSketch(pAssembly, feature, occurrence);
+        const std::wstring name = FromUtf8(feature.targetName);
+        if (sketch == nullptr)
+        {
+            problem = L"The sketch " + name + L" can't be found in the model. It may have been deleted or renamed.";
+            return false;
+        }
+        const PartToAssembly transform(occurrence, MillimetresPerModelUnit(QI<IADDesignSessionPtr>(pAssembly)));
+        SketchOutline outline = ReadSketchFigures(sketch, transform);
+        Log(L"[sketch] %s %s: %zu lines, %zu arcs, %zu circles; left out %zu points, %zu construction, %zu other, "
+            L"%zu unreadable",
+            FromUtf8(feature.occurrenceName).c_str(), name.c_str(), outline.lines, outline.arcs, outline.circles,
+            outline.points, outline.construction, outline.skipped, outline.unread);
+        if (outline.pieces.empty())
+        {
+            problem = L"The sketch " + name + L" has no lines, arcs or circles to cut.";
+            return false;
+        }
+        pieces = std::move(outline.pieces);
+        return true;
+    }
+}
+
 bool ReadFeatureOutline(IADSession* pAssembly, const PickedGeometry& feature, std::vector<camcore::Path>& pieces,
                         std::wstring& problem, bool allLoops)
 {
@@ -952,6 +1143,9 @@ bool ReadFeatureOutline(IADSession* pAssembly, const PickedGeometry& feature, st
 
     try
     {
+        if (feature.kind == PickKind::Sketch)
+            return ReadSketchOutline(pAssembly, feature, pieces, problem);
+
         IADOccurrencePtr occurrence;
         IDispatchPtr target;
         if (!BindFeature(pAssembly, feature, occurrence, target))
@@ -2096,4 +2290,71 @@ void PartSurfaces::LogFailures() const
         return;
     Log(L"[surfaces] closest points failed: %zu with no surface, %zu not found, %zu errors (the first hr=0x%08X)",
         m_impl->noSurface, m_impl->notFound, m_impl->errors, static_cast<unsigned>(m_impl->firstError));
+}
+
+std::vector<PickedGeometry> ListSketches(IADSession* pAssembly)
+{
+    std::vector<PickedGeometry> result;
+    try
+    {
+        const double assemblyMm = MillimetresPerModelUnit(QI<IADDesignSessionPtr>(pAssembly));
+        const auto addAll = [&](IADDesignSession* pDesign, IADOccurrence* pOccurrence) {
+            IADSketchesPtr sketches = (pDesign != nullptr) ? pDesign->GetSketches() : nullptr;
+            const long count = (sketches != nullptr) ? sketches->GetCount() : 0;
+            const PartToAssembly transform(pOccurrence, assemblyMm);
+            for (long i = 0; i < count; ++i)
+            {
+                try
+                {
+                    IADSketchPtr sketch = sketches->GetItem(_variant_t(i));
+                    if (sketch == nullptr)
+                        continue;
+                    PickedGeometry pick;
+                    pick.kind = PickKind::Sketch;
+                    pick.targetName = ToUtf8(static_cast<const wchar_t*>(sketch->GetName()));
+                    pick.targetKey = TakeKey(sketch->GetKey());
+                    if (pOccurrence != nullptr)
+                    {
+                        pick.occurrenceKey = TakeKey(pOccurrence->GetKey());
+                        pick.occurrenceName = ToUtf8(static_cast<const wchar_t*>(pOccurrence->GetName()));
+                    }
+
+                    // Only sketches with something to cut, shown at the middle of their figures.
+                    const SketchOutline outline = ReadSketchFigures(sketch, transform);
+                    if (outline.pieces.empty())
+                        continue;
+                    Vec3 low = outline.pieces.front().front().point, high = low;
+                    for (const camcore::Path& piece : outline.pieces)
+                    {
+                        for (const camcore::Vec3& p : camcore::PathPoints(piece, false))
+                        {
+                            low = { (std::min)(low.x, p.x), (std::min)(low.y, p.y), (std::min)(low.z, p.z) };
+                            high = { (std::max)(high.x, p.x), (std::max)(high.y, p.y), (std::max)(high.z, p.z) };
+                        }
+                    }
+                    pick.point = (low + high) * 0.5;
+                    pick.clicked = pick.point;
+                    result.push_back(pick);
+                }
+                catch (const _com_error& error)
+                {
+                    Log(L"[sketch] could not read a sketch: hr=0x%08X", static_cast<unsigned>(error.Error()));
+                }
+            }
+        };
+
+        addAll(QI<IADDesignSessionPtr>(pAssembly), nullptr);
+        IADAssemblySessionPtr assembly = QI<IADAssemblySessionPtr>(pAssembly);
+        std::vector<IADOccurrencePtr> parts;
+        if (assembly != nullptr)
+            CollectPartOccurrences(assembly->GetRootOccurrence(), parts);
+        for (IADOccurrencePtr& part : parts)
+            addAll(QI<IADDesignSessionPtr>(part->GetDesignSession()), part);
+    }
+    catch (const _com_error& error)
+    {
+        Log(L"[sketch] could not list the sketches: hr=0x%08X", static_cast<unsigned>(error.Error()));
+    }
+    Log(L"[sketch] %zu sketches with lines, arcs or circles", result.size());
+    return result;
 }

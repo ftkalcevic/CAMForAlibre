@@ -234,6 +234,8 @@
 #define IDD_OP_THREAD_MILLING           13052
 #define IDD_ROTATE                      13053
 #define IDD_SIM_OPTIONS                 13054
+#define IDD_SHAPE                       13055
+#define IDD_CHOOSE_SKETCH               13056
 #define IDC_VIEW_SMALL                  13296
 #define IDC_VIEW_MEDIUM                 13297
 #define IDC_VIEW_LARGE                  13298
@@ -540,14 +542,55 @@
 #define IDC_HP_PITCH_HEIGHT             13293
 #define IDC_HP_APPROACH                 13294
 #define IDC_HP_DIAMETER_LABEL           13295
+#define IDC_FEATURES_SHAPES_GROUP       13575
+#define IDC_FEATURES_SHAPES             13576
+#define IDC_FEATURES_SHAPE_ADD          13577
+#define IDC_FEATURES_SHAPE_EDIT         13578
+#define IDC_FEATURES_SHAPE_DELETE       13579
+#define IDC_FEATURES_BOUNDARY_GROUP     13580
+#define IDC_FEATURES_BOUNDARY_SHAPE     13581
+#define IDC_FEATURES_BOUNDARY_OFFSET    13582
+#define IDC_FEATURES_BOUNDARY_SHAPE_LABEL 13583
+#define IDC_FEATURES_BOUNDARY_OFFSET_LABEL 13584
+#define IDC_FEATURES_BOUNDARY_MM        13585
+#define IDC_FEATURES_SORT_GROUP         13586
+#define IDC_FEATURES_ORDER_LABEL        13587
+#define IDC_FEATURES_CORNER_LABEL       13588
+#define IDC_SHAPE_X                     13589
+#define IDC_SHAPE_Y                     13590
+#define IDC_SHAPE_Z                     13591
+#define IDC_SHAPE_WIDTH                 13592
+#define IDC_SHAPE_HEIGHT                13593
+#define IDC_SHAPE_ANGLE                 13594
+#define IDC_SHAPE_DIAMETER              13595
+#define IDC_SHAPE_POINTS                13596
+#define IDC_SHAPE_X_LABEL               13597
+#define IDC_SHAPE_Y_LABEL               13598
+#define IDC_SHAPE_WIDTH_LABEL           13599
+#define IDC_SHAPE_HEIGHT_LABEL          13600
+#define IDC_SHAPE_ANGLE_LABEL           13601
+#define IDC_SHAPE_DIAMETER_LABEL        13602
+#define IDC_SHAPE_POINTS_LABEL          13603
+#define IDC_SHAPE_NOTE                  13604
+#define IDC_SHAPE_Z_LABEL               13605
+#define IDC_CHOOSE_SKETCH_LIST          13606
+#define IDC_FEATURES_CHOOSE_SKETCH      13607
+#define IDC_CHOOSE_SKETCH_NOTE          13608
+#define IDC_SHAPE_X_SPIN                13609
+#define IDC_SHAPE_Y_SPIN                13610
+#define IDC_SHAPE_Z_SPIN                13611
+#define IDC_SHAPE_WIDTH_SPIN            13612
+#define IDC_SHAPE_HEIGHT_SPIN           13613
+#define IDC_SHAPE_ANGLE_SPIN            13614
+#define IDC_SHAPE_DIAMETER_SPIN         13615
 
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        13055
+#define _APS_NEXT_RESOURCE_VALUE        13057
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         13575
+#define _APS_NEXT_CONTROL_VALUE         13616
 #define _APS_NEXT_SYMED_VALUE           13010
 #endif
 #endif

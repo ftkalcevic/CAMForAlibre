@@ -43,13 +43,14 @@ namespace camcore
         AreaFeatureCheck check;
         if (features.empty() && !stockFootprint)
         {
-            check.problem = "There are no features. Pick faces or edges.";
+            check.problem = "There are no features. Pick faces or edges, or add a shape.";
             return check;
         }
         for (const PickedGeometry& feature : features)
         {
             const bool usable = feature.kind == PickKind::PlanarFace || feature.kind == PickKind::LineEdge ||
-                                feature.kind == PickKind::CircleEdge || feature.kind == PickKind::CurveEdge;
+                                feature.kind == PickKind::CircleEdge || feature.kind == PickKind::CurveEdge ||
+                                feature.kind == PickKind::Sketch;
             if (!usable)
             {
                 check.problem = operation + " can only use flat faces and edges.";

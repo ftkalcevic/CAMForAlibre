@@ -51,6 +51,10 @@ int SelectFeatures(IADSession* pAssembly, const std::vector<camcore::PickedGeome
 bool ReadFeatureOutline(IADSession* pAssembly, const camcore::PickedGeometry& feature,
                         std::vector<camcore::Path>& pieces, std::wstring& problem, bool allLoops = false);
 
+// Every sketch in the assembly and its visible parts that has lines, arcs or
+// circles, as Sketch features (point: the middle of its figures, in assembly mm).
+std::vector<camcore::PickedGeometry> ListSketches(IADSession* pAssembly);
+
 // Highlights one feature in the view without changing the selection. Null clears it.
 void HighlightFeature(IADSession* pAssembly, const camcore::PickedGeometry* pFeature);
 

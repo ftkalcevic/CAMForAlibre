@@ -116,6 +116,7 @@ public:
     bool Save(camcore::SequenceStep& step, std::wstring& problems) override;
 
     const std::vector<camcore::PickedGeometry>& GetFeatures() const { return m_features; }
+    const std::vector<camcore::TypedShape>& GetShapes() const { return m_shapes; }
     void SetSelectedFeatures(const std::vector<camcore::PickedGeometry>& selected, int ignored);
     void ForgetViewSelection();     // before selecting starts, so the next selection is all new
     void ShowSelecting(bool selecting);
@@ -141,10 +142,20 @@ protected:
     afx_msg void OnLButtonUp(UINT flags, CPoint point);
     afx_msg void OnCaptureChanged(CWnd* pWnd);
     afx_msg LRESULT OnRowsChosen(WPARAM wParam, LPARAM lParam);
+    afx_msg void OnAddShape();
+    afx_msg void OnChooseSketches();
+    afx_msg void OnEditShape();
+    afx_msg void OnDeleteShape();
+    afx_msg void OnShapeDoubleClick(NMHDR* pNotify, LRESULT* pResult);
+    afx_msg void OnShapeChosen(NMHDR* pNotify, LRESULT* pResult);
+    afx_msg void OnBoundaryShapeChanged();
 
     DECLARE_MESSAGE_MAP()
 
 private:
+    void Layout(bool area, bool shapes, bool boundary);
+    void FillShapes(int choose);
+    void UpdateShapeButtons();
     void FillList();
     void SelectRow(int row);
     void UpdateButtons();
@@ -153,6 +164,11 @@ private:
     void ChangedByUser();
 
     std::vector<camcore::PickedGeometry> m_features;
+    std::vector<camcore::TypedShape> m_shapes;
+    bool m_takesShapes = false;
+    bool m_takesBoundary = false;
+    CListCtrl m_shapeList;
+    CComboBox m_boundaryShape;
 
     // What the view had selected when the list last heard, while selecting.
     std::vector<camcore::PickedGeometry> m_viewSelection;
@@ -658,6 +674,9 @@ public:
     void StartSelectingFeatures();
     void StopSelectingFeatures();
     std::vector<camcore::PickedGeometry> GetFeatures() const;
+    std::vector<camcore::TypedShape> GetShapes() const;
+    std::vector<camcore::PickedGeometry> ListSketches() const;     // the model's sketches, for Choose Sketches
+    void OnShapesChanged();     // redraws the view's shapes
     void SetSelectedFeatures(const std::vector<camcore::PickedGeometry>& selected, int ignored);
     void ShowFeatureNote(const std::wstring& text);
     void ShowFeaturesInView(const std::vector<camcore::PickedGeometry>& features);

@@ -14129,6 +14129,376 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > fixed
 
+### 🤖 Claude
+
+> Good, the fix works. I've noted in `CLAUDE.md` that you tested it in Alibre. Nothing is committed.
+
+### 🧑 Frank · 15:57
+
+> some times the geometry isn't enough to specify the cut boundary.  Some programs have cad elements to draw lines, rectangles, circles, etc.  What options do we have for camforalibre?
+
+### 🤖 Claude
+
+> Questions:
+> - When the picked faces and edges don't give the cut boundary you want, which way should CAMForAlibre let you make one? (Alibre 27.0.1's API has sketches on both parts and assemblies, and its pick filter has a 2D sketches switch. None of that is proven yet.)
+>   - Pick Alibre sketches (Recommended): Draw lines, rectangles, circles and arcs with Alibre's own sketcher, with its constraints and dimensions, in the assembly or a part. Then pick the sketch, or its figures, on the Features tab like edges. It stays parametric and needs no drawing tools of our own. Risk: the sketch API is unproven, so step one is a test of reading and picking sketches.
+>   - Shapes typed in the operation: A Boundary list on the Features tab: rectangle, circle or polygon, typed in the origin's X/Y (with a pick for the centre or corner), drawn in orange. Simple, fully under our control and testable without Alibre, but no constraints or snapping, and it doesn't follow the model when it changes.
+>   - Change picked geometry: Options on the picked boundary: offset it out or in by a distance, replace it with its bounding rectangle or convex hull, or join it with the stock footprint (which already exists). Covers 'this circle plus 20 mm' or 'the rectangle round these holes' with no drawing at all.
+>   - Draw in the view: Click points on the origin's plane in Alibre's view to draw lines, rectangles and circles with our own view command. The most like other CAM programs, but the most work: mouse handling, snapping, editing, and keeping it up to date. Probably not worth it if Alibre sketches work.
+
+### 🧑 Frank · 16:04
+
+> Answers:
+> - When the picked faces and edges don't give the cut boundary you want, which way should CAMForAlibre let you make one? (Alibre 27.0.1's API has sketches on both parts and assemblies, and its pick filter has a 2D sketches switch. None of that is proven yet.)
+>   **Pick Alibre sketches (Recommended),Shapes typed in the operation,Change picked geometry**
+
+### 🤖 Claude
+
+> Plan:
+>
+> # Cut boundaries beyond picked geometry
+>
+> ## Context
+>
+> Sometimes the faces and edges Frank can pick don't make the cut boundary he wants. For example, he wants to face a circle plus 20 mm, the rectangle round some holes, or an area that has no edges at all. Other CAM programs have their own drawing tools for this.
+>
+> Frank chose three ways, out of the four offered:
+> 1. **Pick Alibre sketches.** Use Alibre's own sketcher, with its constraints and dimensions, and pick the sketch's figures like edges.
+> 2. **Change picked geometry.** Offset the boundary, or replace it with its bounding rectangle or convex hull.
+> 3. **Shapes typed in the operation.** Rectangle, circle or polygon, typed in the origin's X and Y.
+>
+> He turned down drawing in the view with our own tools.
+>
+> **What already exists:**
+> - The stock box's footprint is already an extra outline. `SequenceStep::stockFootprint` is turned into `StockFootprint` and added to `GatherAreas` as one more face. This happens in `CCamTabCommand` around `addon\CamTabCommand.cpp:3215-3430`.
+> - Typed shapes and sketch figures can join the same way.
+> - `PickKind` and `PickedGeometry` are in `core\Origin.h`.
+> - `ReadFeatureOutline`, `ReadRoundEdge` and the curve sampling are in `addon\GeometryReader`.
+> - `GatherAreas` and `ChainProfile` are in `core\ProfileToolpath`.
+> - `OffsetProfile` (rounded outside corners) is in `core\ProfileToolpath`.
+> - `PathExtent` and `ClosePath` are in `core\Boundary`.
+> - The `.cam` format is at version 18.
+>
+> **The API:** Alibre 27.0.1 has `IADDesignSession::Sketches`, which the assembly session inherits, so assembly sketches are reachable. It also has `IADSketch`, `IADSketchFigure`, `ADObjectType_AD_SKETCH_FIGURE` (17) and `IADDesignSelectionFilter::PutSketches2D`. None of this has been tried yet.
+>
+> ## Order
+>
+> The steps run in this order so that Frank's Alibre test of the sketch probe runs while the parts that don't need Alibre get built.
+>
+> ### Step 1: Sketch probe (needs Frank's test)
+>
+> A temporary logging step, run when Select Features is active, with sketches let through the filter (`PutSketches2D(VARIANT_TRUE)`). It logs:
+> - what `SelectedObjectsEx` returns for a clicked sketch figure: the proxy type, the object type, and whether it's an `IADSketchFigure` or `IADSketch`
+> - the figure's type and its geometry (line ends, circle or arc centre, radius and angles, spline points), using `MapFromSketchToWorld` for the sketch's frame
+> - its `GetKey`, and whether `BindKeyToItem` finds it again
+>
+> It does this for a sketch in the assembly and a sketch in a part.
+>
+> Frank draws a rectangle and a circle in each, clicks them, and sends the log. What it finds goes into CLAUDE.md's proven API list.
+>
+> ### Step 2: Change picked geometry (no Alibre needed)
+>
+> A **Boundary** group on the Features tab of the area operations: Facing, Profiling, Pocketing, Chamfer, Engrave, Plunge Roughing and the waterline and parallel operations.
+>
+> **Settings:**
+> - **Shape:** As Picked, Bounding Rectangle or Convex Hull.
+>   - The rectangle is square to the origin's X and Y.
+>   - It applies to each area from `GatherAreas` after flattening.
+> - **Offset:** a signed distance, out positive. Rounded outside corners, via `OffsetProfile`.
+>
+> They're saved as `SequenceStep::boundaryShape` and `boundaryOffset` in a new `core\BoundaryShape` (`BoundaryShapeSettings`, `ApplyBoundaryShape(Path, settings)`, `ValidateBoundaryShape`).
+>
+> **Rules:**
+> - They apply to closed areas.
+> - Open edge chains (Profiling and Engrave) are left alone, and the tab says so.
+> - Areas that overlap after offsetting are merged. That merge needs a union, and the polygon union is the open question. The grid route used by `PlungeArea` is enough for a first version.
+>
+> **UI:** controls in each Features template, greyed for the Points filter. The help gets a Boundary section.
+>
+> **Tests:** `tests\BoundaryShapeTests.cpp`:
+> - a circle offset 20 mm is a circle 20 mm bigger
+> - a hull of three holes
+> - a rectangle round an L shape
+> - negative offsets
+> - Facing over an offset circle reaching the right extent
+>
+> ### Step 3: Shapes typed in the operation (no Alibre needed)
+>
+> A **Shapes** list under the Features list, with Add Rectangle, Add Circle, Add Polygon, Edit and Delete. Each shape is in the active origin's frame:
+> - **Rectangle:** centre X, centre Y, width, height and angle
+> - **Circle:** centre X, centre Y and diameter
+> - **Polygon:** a list of X and Y points
+>
+> A small modal dialog edits each one. Pick buttons take the centre or a corner from a design point or circle edge, using the existing `ReadSelectedPick`.
+>
+> The shapes are saved as `SequenceStep::shapes` (`core\BoundaryShape`'s `TypedShape`, `ShapePath`), at the operation's cut geometry height. Each is added to the outlines as a face, like the stock footprint, so the Boundary changes from step 2 apply to them too. They're drawn in orange with the other highlights.
+>
+> **Tests:** each shape's path, saving and loading, and Facing over a typed rectangle.
+>
+> ### Step 4: Sketch figures as features (after step 1's log)
+>
+> This is shaped by what step 1 finds. The expected design:
+> - `PickKind::SketchFigure` for lines, circles, arcs and splines, saved with the occurrence key (empty for the assembly), the sketch key and the figure key or index, like edges.
+> - `ReadFeatureOutline` reads them through `MapFromSketchToWorld`, with arcs exact as `ReadRoundEdge` does.
+> - They then flow through `GatherAreas` like edges: closed loops become areas, and open chains work for Profiling and Engrave.
+> - The Features filter's Select Features lets sketches through.
+>
+> **Fallback:** if picking figures fails but reading works, the Features tab gets a Choose Sketch button that lists the assembly's and parts' sketches by name and takes all their figures.
+>
+> ### Docs, each step
+>
+> - the help (Features tab, the new dialog)
+> - `docs\SPEC.md`
+> - CLAUDE.md
+> - the `.cam` format version goes up to 19 for steps 2 and 3, and 20 for step 4
+> - `python tools\BuildDiscussion.py`
+>
+> ## Verification
+>
+> - Release build, then `CamCoreTests` with the new tests.
+> - Install with Alibre closed.
+> - Frank tests:
+>   - **Step 1:** the probe log.
+>   - **Step 2:** `4th test` Facing with Linear passes and Offset 20.
+>   - **Step 3:** Facing over a typed rectangle where there's no geometry.
+>   - **Step 4:** Pocketing over an assembly sketch's rectangle, then change a sketch dimension and Generate again.
+>
+> ## Choices left to Claude unless Frank says otherwise
+>
+> - Bounding rectangle square to the origin's axes, not the smallest rotated one.
+> - Offset corners rounded.
+> - Typed shapes sit at the cut geometry's height, or Z 0 when there are no features.
+
+*(Frank approved the plan.)*
+
+### 🤖 Claude
+
+> I'm reading how the Features tab picks things, so the sketch probe can be added there.
+
+> I'm writing the sketch probe now. It only logs: what Alibre returns when a sketch figure is clicked, and the sketches in the assembly and its parts.
+
+> Now a function that lists every sketch when Select Features starts, and the filter switch.
+
+> The probe builds. Next is step 2, Boundary shape and offset. I'm reading how Generate builds each operation's areas.
+
+> I have the helpers I need. Next I'll check where `stockFootprint` is saved and compared, so the new settings go in the same places.
+
+> Typed shapes affect the Features tab's layout too, so I'm designing both together. I'm writing the core part first: the boundary changes and typed shapes, in a new `core\BoundaryShape`.
+
+> Now saving and loading in `CamJob`.
+
+> Saving and loading are done. Next I'm adding the new files to the projects and writing the core tests.
+
+> All 6 new tests pass. Next I'm connecting shapes and the Boundary settings to Generate.
+
+> Now the drawing. Typed shapes should show in orange like picked geometry.
+
+> Now the drawing code.
+
+> Next the Features tab itself. I'm checking how changes to the features list redraw the view.
+
+> Now the Features tab UI and the shape dialog. I'm checking the existing number formatting and the help page's section style.
+
+> Writing the resources and the shape dialog now.
+
+> Per the earlier lesson, I'll write the script to a file instead.
+
+> The shape dialog is written. Now the Features page code.
+
+> Two slips: the `#include` wasn't added, and the longest IDs ran into their numbers in `resource.h`. Fixing both.
+
+> `sed` turned the file's line endings into LF. Putting CRLF back and adding the include.
+
+> The build is clean. Next: run all tests, then the help.
+
+> Two failures, both mine. An old `.cam` file used the key `boundary` for Facing's outline, which clashes with my new key. And `ShapeDialog.cpp` has a non-ASCII character. Fixing both.
+
+> All 407 tests pass. Next, the help.
+
+> Now `docs\SPEC.md` and `CLAUDE.md`.
+
+> Steps 1 to 3 of the plan are built and installed (the 4:27 pm build): typed shapes, the Boundary settings, and a probe that logs Alibre's sketches. Step 4, picking sketch figures like edges, waits for the probe's log from you. All 407 tests pass, including 6 new ones. None of it is tested in Alibre, and nothing is committed.
+>
+> **Features tab:** it's taller now. For Drill, Hole Pocketing and Thread Milling, the list takes the room the two new groups use.
+> - **Shapes** (all area operations): Add... offers Rectangle, Circle or Polygon, typed in the origin's X and Y in a new Shape window. Edit, Delete and double-click work on the chosen row.
+>   - Each shape is an area of its own, like a picked face, so an operation can have shapes and no picked features.
+>   - Shapes are drawn in orange.
+>   - They sit at the picked geometry's height, or at their own Z when there's nothing else. The 3D operations project them from above.
+> - **Boundary** (Facing, Profiling, Pocketing and Chamfer; greyed for the others):
+>   - **Shape:** As picked, Bounding rectangle (square to the origin's X and Y), or Convex hull. The last two make one area round everything.
+>   - **Offset:** grows each closed area all round with rounded corners, or shrinks it if negative. Open edges are left as they are, except that Facing closes them first.
+>
+> **Things to know:**
+> - Areas that overlap after an offset are each cut on their own, not merged.
+> - Only Facing draws the changed boundary, and only after Generate. For the other operations you see it in the toolpath.
+> - Shape positions are typed only; there's no Pick button. The Shape window is modal, so Alibre's view can't be clicked while it's open.
+> - The `.cam` format is now version 19. The Boundary settings are saved as `areaBoundary`, because older files already use the key `boundary` for Facing's outline.
+>
+> **Sketch probe:** Select Features now lets 2D sketches be picked. It logs every sketch in the assembly and its parts, and whatever you click that isn't a face, edge or point. The lines start with `[sketch probe]`.
+>
+> **To test:**
+> 1. Help changed: check the Features tab section and the new Shape section.
+> 2. In `4th test` Facing 1, set Boundary Offset to 20 with Linear passes, then generate. The faced area should be the circle plus 20 mm all round.
+> 3. Add 3 Drills' worth of holes to a Pocketing, set Bounding rectangle and generate. It should pocket the rectangle round them. Then try Convex hull.
+> 4. Make a Facing with no features and add a Rectangle shape at Z 0. It should draw in orange and face that rectangle. Edit it, delete it, and try a bad polygon (crossing sides).
+> 5. Save and reopen the job. The shapes and Boundary settings should still be there.
+> 6. Drill's Features tab: the list should fill the space, with no Shapes or Boundary groups.
+> 7. Sketch probe: draw a rectangle and a circle in an assembly sketch and in a part sketch. Click Select Features, click each figure, then click Done. Copy the log into the project folder so I can read the `[sketch probe]` lines.
+
+### 🧑 Frank · 16:37
+
+> I created a sketch, selected it, but it didn't get included in the feature tab's list of features.
+
+### 🤖 Claude
+
+> That's expected for now. The probe only logs what Alibre returns when you click a sketch figure; it doesn't add sketches to the list yet. Picking sketch figures like edges is step 4 of the plan, and I'll design it from what the log shows.
+>
+> To get there:
+> 1. Make sure Select Features was on when you clicked the sketch, then click Done.
+> 2. Copy the log into the project folder, for example `D:\Projects\alibre\AlibreCAM\CAMForAlibre.log`. I can't see your AppData copy from here.
+>
+> I'll read the `[sketch probe]` lines from it. If you can, click both an assembly sketch and a part sketch, so I can see how Alibre returns each.
+
+### 🧑 Frank · 16:38
+
+> Copied
+
+### 🤖 Claude
+
+> The sketch list reads well. I'm checking what happened when you clicked a figure.
+
+> Thanks. The log answers the question: Alibre's sketches can be read, but they can't be picked in the view.
+>
+> **What works:**
+> - I can list every sketch in the assembly and in each part, with its name, plane and figures.
+> - Lines, circles and points read correctly.
+> - `MapFromSketchToWorld` converts their coordinates. For an assembly sketch they come out in the assembly's coordinates. For a part sketch they come out in the part's, so the occurrence's position is still to be applied.
+> - A part sketch's key finds it again after a restart. An assembly sketch's key doesn't, so an assembly sketch would have to be found again by its name.
+>
+> **What doesn't work:** clicking a sketch figure while Select Features is on gives Alibre's selection nothing: each click logged "0 selected". So sketches can't be picked in the view the way faces and edges are. That's why nothing reached the list.
+>
+> **Smaller problem:** in two of your part sketches (Sketch<3> and Sketch<6>), 4 figures in all failed every read with error 0x8004032F. I can't tell from the log what kind they were. If you know what's in Sketch<3> besides the four points, that would help.
+>
+> **The way forward:** the plan's fallback. A Choose Sketch button on the Features tab would list the assembly's and the parts' sketches by name. Choosing one adds all its lines, arcs and circles, like picked edges. They would follow the sketch when you change its dimensions and generate again.
+>
+> I've added these findings to `CLAUDE.md`'s list of proven Alibre behaviour. Nothing is committed.
+
+### 🧑 Frank · 16:43
+
+> Sketch<3> are "holes"; points marking the location of the holes, feature is the hole parameters.  Sketch<6> is a circle, for a boss cut.
+
+### 🤖 Claude
+
+> That explains them. The figures that couldn't be read are most likely the hidden reference figures Alibre adds when a sketch is constrained to a design axis or the origin point. Alibre doesn't show them as sketch figures, and they have no ID, so asking for the ID fails. That matches the counts: Sketch<6> is your circle plus one of these, and Sketch<3> is your four hole points plus three. Those three would be the points' links to the axes or origin.
+>
+> So nothing you drew was missed. A Choose Sketch list would skip these and take only real figures: lines, arcs, circles and splines. Points, like your hole centres, would also suit Drill and Hole Pocketing.
+
+> I've added this explanation to the sketch notes in `CLAUDE.md`. The Choose Sketch list is still waiting for your go-ahead on the earlier question. Nothing is committed.
+
+### 🧑 Frank · 16:44
+
+> Build the Choose Sketch list on the Features tab
+
+### 🤖 Claude
+
+> I'll build it as a whole-sketch feature. Choose Sketch adds one row per sketch, and Generate reads its lines, arcs and circles like edges. First I'm reading the code each new feature kind passes through.
+
+> I've read enough. Writing the core part: a `Sketch` pick kind, how it's saved, and the filters that allow it.
+
+> Next is reading a sketch's figures into outlines, and listing every sketch.
+
+> The reading code is in. Next, the Choose Sketch dialog and its button.
+
+> It builds cleanly. The probe has done its job, so I'm removing it, so that Select Features doesn't list every sketch each time.
+
+> Next, a core test for saving a sketch feature and the rules for it.
+
+> All 408 tests pass. Next: the help, the docs, and installing.
+
+> Sketches can now be used as cut geometry, and the build is installed. All 408 tests pass, including a new one for saving a sketch feature. None of it is tested in Alibre yet, and nothing is committed.
+>
+> **How it works:** area operations have a new **Sketches...** button on the Features tab, next to Delete.
+> - It opens Choose Sketches, which lists every sketch in the assembly and its visible parts that has lines, arcs or circles, as "Assembly: Sketch<1>" or "4th test<1>: Sketch<2>". You can choose several.
+> - Each chosen sketch becomes one row in the features list, of type Sketch.
+> - Its lines, arcs and circles count as edges: closed loops become areas, and open ones can be profiled. The Boundary settings and typed shapes work with them too.
+> - Generate reads the sketch again each time, so changing its dimensions in Alibre changes the cut.
+> - The sketch is drawn in orange like other features.
+>
+> **Limits:**
+> - A sketch is found again by its name, because an assembly sketch's key doesn't find it again. Renaming a sketch loses it.
+> - Construction lines and points are left out. Splines and ellipses aren't read yet.
+> - Choosing a sketch row doesn't select anything in the view, because Alibre can't select sketches for an add-on.
+> - How an arc's direction is worked out is a guess, since your sketches had no arcs. The first arc read is logged as `[sketch] first arc`, so we can check it.
+>
+> The probe is removed, so Select Features is back to normal.
+>
+> **To test:**
+> 1. Help changed: check Sketches... on the Features tab and the new Choose Sketches section.
+> 2. In `4th test`, open a Facing or Pocketing and click Sketches.... The list should show the assembly's Sketch<1> and the part's sketches that have circles. Hole-point-only sketches like Sketch<3> shouldn't appear.
+> 3. Add the assembly's Sketch<1> (the rectangle) to a Pocketing and generate. It should pocket the rectangle, and draw it in orange.
+> 4. Change a dimension of that sketch in Alibre, generate again, and check that the pocket follows.
+> 5. Draw a sketch with an arc (a slot, say) and pocket it. If the arc is cut the wrong way round, copy the log into the project folder so I can see the `[sketch] first arc` line.
+> 6. Save and reopen the job: the sketch row should still be there and still generate.
+> 7. Drill's Features tab shouldn't have the Sketches... button.
+
+### 🧑 Frank · 16:54
+
+> Tests passed.
+
+### 🤖 Claude
+
+> Good. I've recorded in `CLAUDE.md` that whole sketches, arcs included, are tested by you in Alibre. That confirms the arc direction rule.
+>
+> `CLAUDE.md` still lists the typed shapes and the Boundary settings (bounding rectangle, convex hull, offset) as untested. If you ran that earlier test list too, tell me and I'll mark them tested as well. Nothing is committed.
+
+### 🧑 Frank · 16:55
+
+> Now modify the shapes dialog boxes.  Add spinners to the number edit boxes.  Update the shape on screen when the numbers change.
+
+### 🤖 Claude
+
+> I'll add spinners to every number box in the Shape window: 1 mm or 1 degree a click, 0.1 with Ctrl held. The view will show the shape as you change it. Cancel puts the shape back as it was.
+
+> It builds. Next, the help and installing.
+
+> The Shape window now has spinners on every number box, and the view redraws the shape as the numbers change. The 4:57 pm build is installed. The first install attempt stopped at the administrator prompt; the second went through. None of this is tested in Alibre yet, and nothing is committed.
+>
+> **Spinners:** every number box has one: Centre X, Centre Y, Width, Height, Angle, Diameter and Z.
+> - Each click steps the number by 1 mm or 1 degree, or by 0.1 with Ctrl held.
+> - The Up and Down arrow keys do the same while the box has focus.
+> - Steps snap to the step size, so 12.37 stepped up by 1 becomes 13.
+>
+> **Drawing while editing:**
+> - Each change that makes a usable shape redraws it in orange in the view straight away, whether typed, stepped or a polygon point edited.
+> - While the numbers aren't usable, the note at the bottom of the window says why, and the view keeps the last good shape.
+> - Cancel puts the shape back as it was. For a new shape, Cancel removes it.
+>
+> The help's Shape section and `CLAUDE.md` are updated.
+>
+> **To test:**
+> 1. Help changed: check the Shape section's opening paragraph.
+> 2. Add a Rectangle and click Width's spinner up a few times. The rectangle should grow in the view with each click. Try Ctrl+click for 0.1 steps, and the arrow keys.
+> 3. Turn the Angle with its spinner and watch it rotate.
+> 4. Type a width of 0. The note should say what's wrong, and the view should keep the last good rectangle.
+> 5. Click Cancel. A new shape should disappear, and an edited one should go back to how it was.
+> 6. Edit a polygon's points by typing. The view should follow each complete line.
+
+### 🧑 Frank · 17:06
+
+> tests passed
+
+### 🤖 Claude
+
+> Good. I've noted in `CLAUDE.md` that you tested the spinners and the live drawing in Alibre. Nothing is committed.
+>
+> The typed shapes and Boundary settings are still marked untested. If those passed when you tried them, tell me and I'll mark them tested too.
+
+### 🧑 Frank · 17:07
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+> shapes and boundary settings tested
+
 ---
 
 # Side conversation
