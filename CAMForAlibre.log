@@ -16634,3 +16634,246 @@
 20:03:28.764 [tab] saved on closing: ok
 20:03:28.774 [tab] window destroyed by Alibre
 20:03:29.894 AddOnUnload
+20:13:39.026 ==== CAMForAlibre loaded ====
+20:13:39.027 Alibre version: PRODUCTVERSION 27,0,1,27039
+20:25:28.159 AddOnUnload
+20:26:30.726 ==== CAMForAlibre loaded ====
+20:26:30.727 Alibre version: PRODUCTVERSION 27,0,1,27039
+20:26:48.304 [model] assembly 'New Config' path='D:/Documents/Drawings/Tools/heat set press2/New Config.AD_ASM' guid='71B046FF-DA50-4367-A04C-EE8C903223B5'
+20:26:48.307 [tab] status: Loaded New Config.cam.
+20:26:48.323 [machine] CNC Router: 9 tools. No tool selected.
+20:26:48.341 [tab] status: Loaded New Config.cam.
+20:26:48.388 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:26:48.388 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:26:48.542 [focus] tab gained focus
+20:26:48.543 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:26:48.557 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:26:48.589 [view] OnComplete
+20:26:48.590 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:26:48.601 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:26:50.600 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 157 ms
+20:26:50.617 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+20:26:50.632 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:26:52.061 [operation] editing Profiling 1
+20:26:53.902 [features] selected 1 of 1 features
+20:26:55.155 [features] selected 1 of 1 features
+20:26:55.156 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:26:57.378 [features] 0 selected: 0 features, 0 ignored
+20:26:57.382 [features] selected 0 of 0 features
+20:26:59.995 [pick] planar face, sense reversed=0
+20:26:59.999 [features] 1 selected: 1 features, 0 ignored
+20:27:01.711 [pick] planar face, sense reversed=0
+20:27:01.712 [pick] planar face, sense reversed=0
+20:27:01.722 [features] 2 selected: 2 features, 0 ignored
+20:27:03.884 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 110 ms
+20:27:03.885 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+20:27:03.897 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:27:03.907 [features] selected 0 of 0 features
+20:27:07.417 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:27:07.418 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:27:07.429 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:27:07.549 [config] New Config<1> uses configuration Square, the part shows Rectangle: read from D:/Documents/Drawings/Tools/heat set press2/New Config.AD_PRT opened apart, now Square, in 110 ms
+20:27:07.549 [outline] New Config<1>: 4 edges, 0 of them circles or arcs
+20:27:07.561 [outline] New Config<2>: 4 edges, 0 of them circles or arcs
+20:27:07.567 [generate] 2 areas, at Z 0.000
+20:27:07.577 [generate] arcs: 0 straight moves into 0 arcs; 0 more left out simplifying; 68 moves to 68
+20:27:07.586 [generate] Profiling 1 from its dialog: ok
+20:27:07.596 [tab] status: Unsaved changes.
+20:27:07.661 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:27:09.635 [operation] applied Profiling 1
+20:27:09.636 [tab] status: Unsaved changes.
+20:27:09.711 [model] assembly extents (-0.000, 0.000, 0.000) to (51.928, 40.182, 5.000) mm
+20:27:17.169 [view] OnTerminate: CAM graphics are no longer drawn
+20:27:18.354 [tab] warning about unsaved changes
+20:27:19.816 [tab] saved on closing: ok
+20:27:19.827 [tab] window destroyed by Alibre
+20:27:30.921 [model] assembly 'Lamp Arm staker CAM' path='D:/Documents/Drawings/Tools/heat set press2/Lamp Arm staker CAM.AD_ASM' guid='E27E592E-8CD3-440B-9C94-1DC64338DF79'
+20:27:30.980 [tab] status: Loaded Lamp Arm staker CAM.cam.
+20:27:30.984 [machine] CNC Router: 9 tools. Selected tool: T1 3mm End mill
+20:27:31.006 [tab] status: Loaded Lamp Arm staker CAM.cam.
+20:27:31.034 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:31.035 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:31.159 [focus] tab gained focus
+20:27:31.160 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:31.170 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:31.188 [view] OnComplete
+20:27:31.189 [tab] InvokeNewCommand (tab gained focus) hr=0x00000000
+20:27:31.200 [view] first On3DRender: Begin3DDisplay hr=0x00000000
+20:27:35.681 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:35.686 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:35.818 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:35.819 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:35.954 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 109 ms
+20:27:35.954 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:36.089 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:36.090 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:36.228 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:36.229 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:36.361 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:36.362 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:36.376 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:36.382 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:36.392 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:36.401 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:36.410 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:36.419 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:36.519 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:36.520 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:36.530 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:36.539 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:36.548 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:36.689 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 140 ms
+20:27:36.689 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:36.831 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 141 ms
+20:27:36.832 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:36.988 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 140 ms
+20:27:36.989 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:37.134 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 125 ms
+20:27:37.135 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:37.273 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 125 ms
+20:27:37.274 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:37.490 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 140 ms
+20:27:37.491 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:37.630 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:37.630 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:37.772 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:37.773 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:37.915 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:37.915 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:38.066 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 140 ms
+20:27:38.067 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:38.080 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.091 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.100 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.108 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.124 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.260 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:38.261 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:38.391 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 110 ms
+20:27:38.392 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:38.522 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:38.523 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:38.682 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 141 ms
+20:27:38.683 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:38.697 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:38.705 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:38.714 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:38.724 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:38.733 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.741 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:38.879 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 141 ms
+20:27:38.879 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:39.019 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:39.020 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:39.163 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 125 ms
+20:27:39.164 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:39.297 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 109 ms
+20:27:39.298 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:39.316 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:39.322 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:39.452 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 109 ms
+20:27:39.452 [outline] BaseJoint2<2>: 4 edges, 0 of them circles or arcs
+20:27:39.466 [outline] BaseJoint2<1>: 4 edges, 0 of them circles or arcs
+20:27:39.675 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 203 ms
+20:27:39.676 [outline] clamp2<1>: 4 edges, 0 of them circles or arcs
+20:27:39.689 [outline] clamp2<2>: 4 edges, 0 of them circles or arcs
+20:27:39.697 [outline] clamp2<2>: 6 edges, 2 of them circles or arcs
+20:27:39.829 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 109 ms
+20:27:39.830 [outline] CornerJoint<1>: 6 edges, 3 of them circles or arcs
+20:27:39.844 [outline] CornerJoint<2>: 6 edges, 3 of them circles or arcs
+20:27:39.854 [outline] BaseJoint2<1>: 5 edges, 2 of them circles or arcs
+20:27:39.979 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 125 ms
+20:27:39.980 [outline] BaseJoint2<2>: 5 edges, 2 of them circles or arcs
+20:27:40.119 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:40.120 [outline] clamp2<1>: 6 edges, 2 of them circles or arcs
+20:27:44.779 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:44.780 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:44.791 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:44.801 [generate] arcs: 0 straight moves into 0 arcs; 0 more left out simplifying; 2673 moves to 2673
+20:27:44.811 [generate] Hole Pocketing 1: ok
+20:27:44.821 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:44.947 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 109 ms
+20:27:44.948 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:45.079 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 109 ms
+20:27:45.080 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:45.213 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:45.213 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:45.348 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:45.349 [outline] CornerJoint<1>: 1 edges, 1 of them circles or arcs
+20:27:45.362 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:45.368 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:45.378 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:45.387 [outline] CornerJoint<2>: 1 edges, 1 of them circles or arcs
+20:27:45.397 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:45.406 [outline] clamp2<2>: 1 edges, 1 of them circles or arcs
+20:27:45.539 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:45.540 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:45.679 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:45.680 [outline] clamp2<1>: 1 edges, 1 of them circles or arcs
+20:27:45.814 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 125 ms
+20:27:45.814 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:45.971 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 157 ms
+20:27:45.972 [outline] BaseJoint2<2>: 1 edges, 1 of them circles or arcs
+20:27:45.984 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:45.991 [outline] BaseJoint2<1>: 1 edges, 1 of them circles or arcs
+20:27:46.000 [generate] 16 areas, at Z -2.000
+20:27:46.290 [generate] arcs: 15279 straight moves into 2070 arcs; 294 more left out simplifying; 18157 moves to 4654
+20:27:46.291 [generate] Pocketing 1: ok
+20:27:46.337 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:46.457 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 125 ms
+20:27:46.458 [outline] BaseJoint2<2>: 4 edges, 0 of them circles or arcs
+20:27:46.471 [outline] BaseJoint2<1>: 4 edges, 0 of them circles or arcs
+20:27:46.608 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:46.609 [outline] clamp2<1>: 4 edges, 0 of them circles or arcs
+20:27:46.623 [outline] clamp2<2>: 4 edges, 0 of them circles or arcs
+20:27:46.630 [generate] 4 areas, at Z -1.000
+20:27:47.055 [generate] arcs: 28482 straight moves into 2478 arcs; 112 more left out simplifying; 29402 moves to 3286
+20:27:47.056 [generate] Facing 1: ok
+20:27:47.072 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:27:47.081 [outline] clamp2<2>: 6 edges, 2 of them circles or arcs
+20:27:47.211 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 125 ms
+20:27:47.212 [outline] CornerJoint<1>: 6 edges, 3 of them circles or arcs
+20:27:47.224 [outline] CornerJoint<2>: 6 edges, 3 of them circles or arcs
+20:27:47.231 [outline] BaseJoint2<1>: 5 edges, 2 of them circles or arcs
+20:27:47.377 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 141 ms
+20:27:47.378 [outline] BaseJoint2<2>: 5 edges, 2 of them circles or arcs
+20:27:47.516 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:27:47.517 [outline] clamp2<1>: 6 edges, 2 of them circles or arcs
+20:27:47.529 [generate] 6 areas, at Z -4.000
+20:27:47.536 [generate] arcs: 0 straight moves into 0 arcs; 0 more left out simplifying; 366 moves to 366
+20:27:47.545 [generate] Profiling 1: ok
+20:27:47.570 [tab] status: Unsaved changes.
+20:28:01.068 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:28:01.069 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:28:01.101 [simulate] 4 operations, 36005 moves, 4152 x 3598 x 80 cells of 0.05 mm (divided), 0 mixed bricks, ready in 16 ms
+20:28:01.173 [turn view] off
+20:28:01.238 [model] assembly extents (3.941, 2.444, -0.000) to (171.520, 142.336, 4.000) mm
+20:28:01.346 [draw] 1 renders in 33 ms: preparing meshes 2 ms, Alibre's DrawMesh 13 ms, 60704 triangles in the last
+20:28:10.270 [simulate] timing, run: 5234 ms in all; cutting 3724 ms (36005 pieces), collision checks 14 ms, measuring the load 919 ms, meshing 55 ms, joining 31 ms, comparing 0 ms (1 updates), other 490 ms; 314828 triangles to draw, 4152 x 3598 x 80 cells of 0.05 mm (divided), 39091 mixed bricks
+20:28:10.270 [simulate] load, Hole Pocketing 1: Highest 556% (0.02778 mm/tooth), average 0.01376 mm/tooth, up to 180 degrees and 4.03 mm deep, up to 1.06 cm3/min, 0.0124 kW (1% of 2.4 kW), 4 N (worst at move 66; target 0.005 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:28:10.280 [simulate] load, Pocketing 1: Highest 556% (0.02778 mm/tooth), average 0.02162 mm/tooth, up to 135 degrees and 2.00 mm deep, up to 2.22 cm3/min, 0.0259 kW (1% of 2.4 kW), 9 N (worst at move 18479; target 0.005 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:28:10.290 [simulate] load, Facing 1: Highest 537% (0.02683 mm/tooth), average 0.02379 mm/tooth, up to 180 degrees and 1.00 mm deep, up to 0.67 cm3/min, 0.00781 kW (0% of 2.4 kW), 3 N (worst at move 28094; target 0.005 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:28:10.299 [simulate] load, Profiling 1: Highest 556% (0.02778 mm/tooth), average 0.02608 mm/tooth, up to 180 degrees and 4.00 mm deep, up to 2.28 cm3/min, 0.0266 kW (1% of 2.4 kW), 9 N (worst at move 34405; target 0.005 mm, 18000 rpm, 2 teeth, Kc 700, spindle 2400 W)
+20:28:10.681 [draw] 1 renders in 360 ms: preparing meshes 12 ms, Alibre's DrawMesh 61 ms, 314828 triangles in the last
+20:28:13.999 [draw] 1 renders in 375 ms: preparing meshes 16 ms, Alibre's DrawMesh 56 ms, 314828 triangles in the last
+20:28:15.376 [draw] 2 renders in 729 ms: preparing meshes 27 ms, Alibre's DrawMesh 107 ms, 314828 triangles in the last
+20:28:19.627 [draw] 2 renders in 447 ms: preparing meshes 25 ms, Alibre's DrawMesh 95 ms, 314828 triangles in the last
+20:28:23.092 [config] CornerJoint<1> uses configuration Default, the part shows Mirrored: read from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT opened apart, now Default, in 109 ms
+20:28:23.114 [compare] CornerJoint<1>: 1536 triangles, from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT, transform determinant 1.000, box (5.63, 50.93, -0.00) to (59.18, 127.98, 4.00)
+20:28:23.128 [compare] BaseJoint2<1>: 1972 triangles, from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT, transform determinant 1.000, box (129.31, 101.17, -0.00) to (170.47, 142.33, 4.00)
+20:28:23.146 [compare] CornerJoint<2>: 2608 triangles, from D:/Documents/Drawings/Tools/heat set press2/CornerJoint.AD_PRT, transform determinant 1.000, box (68.49, 52.05, -0.00) to (122.05, 129.15, 4.00)
+20:28:23.282 [config] clamp2<1> uses configuration Default, the part shows Mirror: read from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT opened apart, now Default, in 125 ms
+20:28:23.299 [compare] clamp2<1>: 1080 triangles, from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT, transform determinant 1.000, box (81.14, 2.44, -0.00) to (147.69, 43.61, 4.00)
+20:28:23.314 [compare] clamp2<2>: 1802 triangles, from D:/Documents/Drawings/Tools/heat set press2/clamp2.AD_PRT, transform determinant 1.000, box (6.08, 2.98, -0.00) to (72.64, 44.15, 4.00)
+20:28:23.455 [config] BaseJoint2<2> uses configuration Mirror, the part shows Default: read from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT opened apart, now Mirror, in 141 ms
+20:28:23.468 [compare] BaseJoint2<2>: 1020 triangles, from D:/Documents/Drawings/Tools/heat set press2/BaseJoint2.AD_PRT, transform determinant 1.000, box (130.37, 53.51, -0.00) to (171.52, 94.66, 4.00)
+20:28:23.468 [compare] read 6 of 6 parts, 10018 triangles, in 500 ms
+20:28:24.419 [compare] parts in the grid: 322193254 cells, 216640 triangles to draw, in 937 ms
+20:28:25.300 [compare] compared in 891 ms: not enough 86419.7 mm3, too much 199.6 mm3
+20:28:25.425 [draw] 1 renders in 81 ms: preparing meshes 11 ms, Alibre's DrawMesh 49 ms, 322500 triangles in the last
+20:28:26.770 [draw] 1 renders in 75 ms: preparing meshes 10 ms, Alibre's DrawMesh 46 ms, 322500 triangles in the last
+20:28:32.443 [view] OnTerminate: CAM graphics are no longer drawn
+20:28:33.942 [tab] warning about unsaved changes
+20:28:35.286 [tab] saved on closing: ok
+20:28:35.297 [tab] window destroyed by Alibre
+20:28:36.411 AddOnUnload

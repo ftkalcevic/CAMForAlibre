@@ -84,77 +84,16 @@ namespace
         return static_cast<IUnknown*>(QI<IUnknownPtr>(a)) == static_cast<IUnknown*>(QI<IUnknownPtr>(b));
     }
 
-    // Logs, once per part, what a configuration's own session holds next to the part's
-    // shared one: their facets' boxes, faces, and whether a wanted key is among them.
-    // For finding faces in a configuration Alibre doesn't show, without switching it
-    // (switching made Alibre redraw, fire a selection change and loop: Frank's report).
-    void ProbeConfigurationSession(const std::wstring& name, IADDesignSession* pOwn, IADDesignSession* pShared,
-                                   const camcore::PersistentKey& wanted)
-    {
-        static std::set<std::wstring> probed;
-        if (!probed.insert(name).second)
-            return;
-        const auto describe = [&](const wchar_t* what, IADDesignSession* pSession) {
-            try
-            {
-                IADPartSessionPtr part = QI<IADPartSessionPtr>(pSession);
-                if (part == nullptr)
-                {
-                    Log(L"[config probe] %s, %s: not a part session", name.c_str(), what);
-                    return;
-                }
-                std::vector<Vec3> points;
-                SAFEARRAY* pFacets = part->GetFacetData();
-                ReadFacetArray(pFacets, points);
-                if (pFacets != nullptr)
-                    SafeArrayDestroy(pFacets);
-                Vec3 lo{}, hi{};
-                for (size_t i = 0; i < points.size(); ++i)
-                {
-                    const Vec3& v = points[i];
-                    lo = (i == 0) ? v : Vec3{ (std::min)(lo.x, v.x), (std::min)(lo.y, v.y), (std::min)(lo.z, v.z) };
-                    hi = (i == 0) ? v : Vec3{ (std::max)(hi.x, v.x), (std::max)(hi.y, v.y), (std::max)(hi.z, v.z) };
-                }
-                long faces = 0;
-                int matches = 0;
-                std::wstring firstKey;
-                IADBodiesPtr bodies = part->GetBodies();
-                const long bodyCount = (bodies != nullptr) ? bodies->GetCount() : 0;
-                for (long b = 0; b < bodyCount; ++b)
-                {
-                    IADFacesPtr bodyFaces = bodies->GetItem(b)->GetFaces();
-                    const long count = (bodyFaces != nullptr) ? bodyFaces->GetCount() : 0;
-                    for (long f = 0; f < count; ++f)
-                    {
-                        const camcore::PersistentKey key = TakeKey(bodyFaces->GetItem(f)->GetKey());
-                        if (firstKey.empty())
-                            firstKey = FromUtf8(key.hex.substr(0, 48));
-                        if (key.hex == wanted.hex)
-                            ++matches;
-                        ++faces;
-                    }
-                }
-                Log(L"[config probe] %s, %s: %zu triangles, box (%.3f, %.3f, %.3f) to (%.3f, %.3f, %.3f) model units; "
-                    L"%ld bodies, %ld faces, %d with the wanted key; first face key %s",
-                    name.c_str(), what, points.size() / 3, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, bodyCount, faces,
-                    matches, firstKey.c_str());
-            }
-            catch (const _com_error& error)
-            {
-                Log(L"[config probe] %s, %s: hr=0x%08X", name.c_str(), what, static_cast<unsigned>(error.Error()));
-            }
-        };
-        Log(L"[config probe] %s: wanted key %s (%zu bytes)", name.c_str(), FromUtf8(wanted.hex.substr(0, 48)).c_str(),
-            wanted.hex.size() / 2);
-        describe(L"its configuration's own session", pOwn);
-        describe(L"the part's shared session", pShared);
-    }
-
     // An occurrence read in its own configuration. Occurrences of one part file share
-    // its session, which shows one configuration (its active one). An occurrence using
-    // another has a session of its own for it (IADConfiguration::GetDesignSession); faces
-    // and edges are looked for there first. The part is never switched to another
-    // configuration: that made Alibre redraw, fire a selection change, and loop.
+    // its session, which shows only its active configuration, and Alibre gives no other
+    // way into another configuration's shape (its IADConfiguration::GetDesignSession
+    // isn't a part session: Frank's log). Switching the shared session made Alibre redraw,
+    // fire a selection change and loop, so it's never done. Instead (Frank's choice) the
+    // part's saved file is opened apart, without a window, switched to the occurrence's
+    // configuration, read, and closed unsaved when this ends. Keys are the same in every
+    // configuration, so faces and edges are found there by the keys picked. Unsaved edits
+    // to the part aren't seen. If Alibre hands back the session already open, or the file
+    // can't be opened, the shared session is read as before (the active shape).
     class ConfigurationScope
     {
     public:
@@ -171,21 +110,86 @@ namespace
                 m_name = BstrText(pOccurrence->GetName());
                 IADConfigurationPtr own = pOccurrence->GetConfiguration();
                 IADConfigurationPtr active = m_design->GetActiveConfiguration();
-                if (own == nullptr || active == nullptr || BstrText(own->GetName()) == BstrText(active->GetName()))
+                if (own == nullptr || active == nullptr)
                     return;
-                IADDesignSessionPtr ownSession = own->GetDesignSession();
-                if (ownSession != nullptr && !SameObject(ownSession, m_design))
+                const std::wstring ownName = BstrText(own->GetName());
+                const std::wstring activeName = BstrText(active->GetName());
+                if (ownName == activeName)
+                    return;
+                IADSessionPtr shared = QI<IADSessionPtr>(m_design);
+                const std::wstring path = (shared != nullptr) ? BstrText(shared->GetfilePath()) : std::wstring();
+                if (path.empty() || theApp.m_pRoot == nullptr)
                 {
-                    m_session = ownSession;
-                    m_changed = true;
+                    Log(L"[config] %s uses configuration %s, the part shows %s; the part has no saved file to open, "
+                        L"so it's read as it shows", m_name.c_str(), ownName.c_str(), activeName.c_str());
+                    return;
                 }
-                Log(L"[config] %s: uses configuration %s, the part shows %s; %s", m_name.c_str(),
-                    BstrText(own->GetName()).c_str(), BstrText(active->GetName()).c_str(),
-                    m_changed ? L"read from the configuration's own session" : L"it has no session of its own");
+
+                const ULONGLONG start = GetTickCount64();
+                IADSessionPtr copy = theApp.m_pRoot->OpenFileEx(_bstr_t(path.c_str()), VARIANT_FALSE);
+                if (copy == nullptr)
+                {
+                    Log(L"[config] %s: %s couldn't be opened apart, so it's read as it shows (%s)", m_name.c_str(),
+                        path.c_str(), activeName.c_str());
+                    return;
+                }
+                if (SameObject(copy, m_design))
+                {
+                    // The session already open: switching it is what loops. Not closed either.
+                    Log(L"[config] %s: opening %s gave the session already open, so it's read as it shows (%s)",
+                        m_name.c_str(), path.c_str(), activeName.c_str());
+                    return;
+                }
+                m_copy = copy;
+                IADDesignSessionPtr design = QI<IADDesignSessionPtr>(copy);
+                IADConfigurationsPtr configurations = (design != nullptr) ? design->GetConfigurations() : nullptr;
+                IADConfigurationPtr wanted;
+                const long count = (configurations != nullptr) ? configurations->GetCount() : 0;
+                for (long i = 0; i < count && wanted == nullptr; ++i)
+                {
+                    IADConfigurationPtr item = configurations->GetItem(_variant_t(i));
+                    if (item != nullptr && BstrText(item->GetName()) == ownName)
+                        wanted = item;
+                }
+                if (wanted == nullptr)
+                {
+                    Log(L"[config] %s: the copy of %s has no configuration %s (%ld), so it's read as it shows",
+                        m_name.c_str(), path.c_str(), ownName.c_str(), count);
+                    return;
+                }
+                IADConfigurationPtr copyActive = design->GetActiveConfiguration();
+                if (copyActive == nullptr || BstrText(copyActive->GetName()) != ownName)
+                    design->PutRefActiveConfiguration(wanted);
+                copyActive = design->GetActiveConfiguration();
+                m_session = design;
+                m_changed = true;
+                Log(L"[config] %s uses configuration %s, the part shows %s: read from %s opened apart, now %s, in %llu ms",
+                    m_name.c_str(), ownName.c_str(), activeName.c_str(), path.c_str(),
+                    copyActive != nullptr ? BstrText(copyActive->GetName()).c_str() : L"(none)",
+                    GetTickCount64() - start);
             }
             catch (const _com_error& error)
             {
-                Log(L"[config] its configuration couldn't be read: hr=0x%08X", static_cast<unsigned>(error.Error()));
+                Log(L"[config] %s: its configuration couldn't be read apart, hr=0x%08X; read as it shows",
+                    m_name.c_str(), static_cast<unsigned>(error.Error()));
+                m_session = m_design;
+                m_changed = false;
+            }
+        }
+
+        ~ConfigurationScope()
+        {
+            if (m_copy == nullptr)
+                return;
+            m_session = nullptr;
+            try
+            {
+                m_copy->Close(VARIANT_FALSE);
+            }
+            catch (const _com_error& error)
+            {
+                Log(L"[config] the copy of %s couldn't be closed: hr=0x%08X", m_name.c_str(),
+                    static_cast<unsigned>(error.Error()));
             }
         }
 
@@ -193,12 +197,11 @@ namespace
         ConfigurationScope& operator=(const ConfigurationScope&) = delete;
 
         IADDesignSession* Session() const { return m_session; }
-        IADDesignSession* Shared() const { return m_design; }
         bool Changed() const { return m_changed; }
         const std::wstring& Name() const { return m_name; }
 
-        // A face or edge as it is in this configuration: found again by its key in the
-        // configuration's own session; failing that, the one selected is kept.
+        // A selected face or edge as it is in this configuration, found by its key in
+        // the copy; failing that, the one selected is kept.
         IDispatchPtr Rebind(IDispatch* pTarget) const
         {
             if (!m_changed || pTarget == nullptr)
@@ -210,19 +213,16 @@ namespace
                 pKey = edge->GetKey();
             if (pKey == nullptr)
                 return pTarget;
-            const camcore::PersistentKey key = TakeKey(pKey);
             IADSessionPtr session = QI<IADSessionPtr>(m_session);
-            IDispatchPtr bound = (session != nullptr) ? BindKey(session, key, ADObjectType_AD_TOPOLOGY) : nullptr;
+            IDispatchPtr bound =
+                (session != nullptr) ? BindKey(session, TakeKey(pKey), ADObjectType_AD_TOPOLOGY) : nullptr;
             if (bound == nullptr)
-            {
-                Log(L"[config] %s: the selected item isn't found by its key in the configuration's own session; "
-                    L"kept as selected", m_name.c_str());
-                ProbeConfigurationSession(m_name, m_session, m_design, key);
-            }
+                Log(L"[config] %s: the selected item isn't in the copy; kept as selected", m_name.c_str());
             return (bound != nullptr) ? bound : IDispatchPtr(pTarget);
         }
 
     private:
+        IADSessionPtr m_copy;           // the part's file opened apart, closed unsaved at the end
         IADDesignSessionPtr m_design;
         IADDesignSessionPtr m_session;
         std::wstring m_name;
@@ -798,8 +798,7 @@ namespace
         // Part items come as proxies. The assembly's own design points may not.
         IADTargetProxyPtr proxy = QI<IADTargetProxyPtr>(pItem);
         IADOccurrencePtr occurrence = (proxy != nullptr) ? proxy->GetOccurrence() : nullptr;
-        const ConfigurationScope configuration(occurrence);
-        IDispatchPtr target = configuration.Rebind((proxy != nullptr) ? proxy->GetTarget() : IDispatchPtr(pItem));
+        IDispatchPtr target = (proxy != nullptr) ? proxy->GetTarget() : IDispatchPtr(pItem);
         if (target == nullptr)
             return false;
 
@@ -963,12 +962,10 @@ namespace
         target = (part != nullptr) ? BindKey(part, feature.targetKey, ADObjectType_AD_TOPOLOGY) : nullptr;
         if (target == nullptr && configuration != nullptr && *configuration && (*configuration)->Changed())
         {
-            // Not in the configuration's own session: the part's shared one, as before.
-            ProbeConfigurationSession((*configuration)->Name(), (*configuration)->Session(),
-                                      (*configuration)->Shared(), feature.targetKey);
+            // Not in the copy: the part's shared session, as before.
             part = QI<IADSessionPtr>(occurrence->GetDesignSession());
             target = (part != nullptr) ? BindKey(part, feature.targetKey, ADObjectType_AD_TOPOLOGY) : nullptr;
-            Log(L"[config] %s's feature isn't in its configuration's own session; the part's shared session %s",
+            Log(L"[config] %s's feature isn't in the copy in its configuration; the part as it shows %s",
                 (*configuration)->Name().c_str(), target != nullptr ? L"has it (read from there)" : L"doesn't either");
         }
         if (target == nullptr)
@@ -1690,59 +1687,14 @@ namespace
         };
         try
         {
-            // Occurrences of one part file share its session, which shows one configuration
-            // (its active one); an occurrence may use another (a mirrored one, say). Its own
-            // configuration's session is tried first; if that's the shared session showing
-            // another configuration, the session is switched to the occurrence's for the
-            // read and put straight back.
-            IADConfigurationPtr own;
-            IADConfigurationPtr active;
-            try
-            {
-                own = pOccurrence->GetConfiguration();
-                active = (design != nullptr) ? design->GetActiveConfiguration() : nullptr;
-            }
-            catch (const _com_error& error)
-            {
-                Log(L"%s %s: its configuration can't be read, hr=0x%08X", tag, name.c_str(),
-                    static_cast<unsigned>(error.Error()));
-            }
-            const std::wstring ownName = (own != nullptr) ? BstrText(own->GetName()) : std::wstring();
-            const std::wstring activeName = (active != nullptr) ? BstrText(active->GetName()) : std::wstring();
-            if (own == nullptr || active == nullptr || ownName == activeName)
+            // In the occurrence's own configuration (ConfigurationScope: the file opened apart
+            // when it isn't the part's active one).
+            const ConfigurationScope configuration(pOccurrence);
+            facetsOf(configuration.Session(), points);
+            if (points.empty() && configuration.Changed())
             {
                 facetsOf(design, points);
-                Log(L"%s %s: configuration %s (the part's active one), %zu triangles", tag, name.c_str(),
-                    ownName.c_str(), points.size() / 3);
-            }
-            else
-            {
-                IADDesignSessionPtr ownSession = own->GetDesignSession();
-                const bool shared = ownSession == nullptr ||
-                                    static_cast<IUnknown*>(QI<IUnknownPtr>(ownSession)) ==
-                                        static_cast<IUnknown*>(QI<IUnknownPtr>(design));
-                if (!shared)
-                {
-                    try
-                    {
-                        facetsOf(ownSession, points);
-                    }
-                    catch (const _com_error& error)
-                    {
-                        Log(L"%s %s: facets from configuration %s's own session failed, hr=0x%08X", tag, name.c_str(),
-                            ownName.c_str(), static_cast<unsigned>(error.Error()));
-                        points.clear();
-                    }
-                    Log(L"%s %s: configuration %s (the part's active one is %s), from its own session, %zu "
-                        L"triangles", tag, name.c_str(), ownName.c_str(), activeName.c_str(), points.size() / 3);
-                }
-                if (points.empty())
-                {
-                    // Never switched (that loops in Alibre): the part as it shows.
-                    facetsOf(design, points);
-                    Log(L"%s %s: configuration %s isn't readable on its own; read as the part shows (%s), %zu triangles",
-                        tag, name.c_str(), ownName.c_str(), activeName.c_str(), points.size() / 3);
-                }
+                Log(L"%s %s: no facets in its configuration's copy; read as the part shows", tag, name.c_str());
             }
         }
         catch (const _com_error& error)

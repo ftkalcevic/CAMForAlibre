@@ -15098,6 +15098,110 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > It builds, with no configuration switching left anywhere. Updating the docs so they match what it does now:
 
+> Sorry about the hang. The add-on was switching the part to Square so it could read it. Each switch made Alibre redraw the part, which counted as a selection change, which started another read and another switch, so it never stopped. I've removed all configuration switching from the add-on, and I've noted in `CLAUDE.md` never to add it back. The new build is installed.
+>
+> **What it does now:**
+> - **Generate no longer fails:** it looks for the face in the Square configuration's own session first. When it isn't found there, which is what your log showed, it falls back to the part's shared session, as it did before today.
+> - **What still isn't fixed:** `New Config<1>` will most likely still be read in Rectangle's shape. I haven't found a way to read it as Square without switching yet.
+> - **What the new logging records:** the first time a part hits this, it writes `[config probe]` lines comparing Square's own session with the part's shared session:
+>   - their facet boxes, which show whether Square's session actually holds the square shape
+>   - how many faces each has
+>   - whether the picked face's key is among Square's faces
+>   - a sample of each session's keys
+>
+>   That tells me whether Square's session can be read directly, and how to find the picked face in it.
+>
+> The help now says plainly that this is still being worked on.
+>
+> To test, with Alibre restarted:
+> 1. Open `New Config.ad_asm`, pick the Square part's top face, and Generate Profiling 1. It should no longer hang or say "can't be found". It will probably follow the rectangle's shape for now.
+> 2. Copy the log into the repo so I can read the `[config probe]` lines.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 20:03
+
+> It has now stopped crashing.  I have copied the logs
+
+*(Frank stopped Claude here.)*
+
+### 🧑 Frank · 20:04
+
+> It has now stopped crashing.  I have copied the logs
+
+### 🤖 Claude
+
+> Questions:
+> - Alibre 27.0.1 only gives a part's shape in its active configuration, unless the configuration is switched, and switching inside your open assembly loops. How should CAMForAlibre read parts used in another configuration (Square)?
+>   - Open the part file apart (Recommended): Open the part's saved file in the background (as imported stock is read, about 0.2 s per file, cached), switch that copy to the occurrence's configuration, read the faces there, close it. Nothing in your assembly or view changes. Reads the saved file, so unsaved edits to the part aren't seen. Unproven: Alibre might hand back the session already open in the assembly; if so, it falls back to the active shape rather than switching.
+>   - Switch only at Generate: Switch the part in the assembly only during Generate and Simulate (never while picking), with a guard so our own handlers ignore what the switch sets off. The view may flicker during Generate. Riskier: the loop came from Alibre's own redraw.
+>   - Warn and use the active shape: Leave reading as it is and say clearly (in the operation's note and the log) when a picked part uses a configuration other than its active one, so you can make that configuration active before generating.
+
+### 🧑 Frank · 20:23
+
+> Answers:
+> - Alibre 27.0.1 only gives a part's shape in its active configuration, unless the configuration is switched, and switching inside your open assembly loops. How should CAMForAlibre read parts used in another configuration (Square)?
+>   **Open the part file apart (Recommended)**
+
+### 🤖 Claude
+
+> You chose to open the part file separately. I'll look at how imported stock opens its part file in the background, and reuse that.
+
+> It builds. The only configuration switch left is on the separately opened copy, never on the part in your assembly, and only after checking that Alibre really gave a separate copy. Docs next:
+
+> The file check after the install came back False, so I'll check again in case the elevated install hadn't finished:
+
+> The add-on is now installed. The first attempt didn't take, though the retry worked. You can start Alibre.
+>
+> **How it works now** (as you chose): when a part is used in a configuration other than its active one, the add-on reads that part's saved file in the background:
+> 1. It opens the file with no window.
+> 2. It switches that background copy to the occurrence's configuration (Square).
+> 3. It reads the faces and edges by their picked keys, which your log showed are the same in every configuration.
+> 4. It closes the copy without saving.
+>
+> Your assembly's part is never switched, so the redraw loop can't happen.
+>
+> **Where it's used:** the orange outlines, Generate, Plunge Roughing's face facets, Set Origin picks, the Pick buttons, and the parts for Compare and the 3D operations. Select Features doesn't open the file, because it re-reads the whole selection on every click; the outlines are read with the copy afterwards.
+>
+> **Limits:**
+> - It reads the saved file, so save the part after changing it.
+> - If Alibre returns the session already open in the assembly instead of a separate copy, it won't switch. It reads the part as it shows and logs that.
+> - Each read opens the file once, which took about 0.2 s for imported stock. A Generate pays that per feature on such parts.
+>
+> The help, spec and `CLAUDE.md` are updated. I haven't tried it in Alibre.
+>
+> To test with `New Config.ad_asm`:
+> 1. Pick the Square part's top face and Generate Profiling 1. The outline and toolpath should follow the square.
+> 2. Check that the part in the assembly still shows Rectangle where it did, with no flicker or hang, and isn't marked as changed.
+> 3. Simulate with Show ▸ Part and Too much removed. The Square part should be green in its own shape, with no red over valid cuts. Try `lam Arm staker CAM` too.
+> 4. Copy the log into the repo. The `[config]` lines say whether a separate copy opened, which configuration it ended up in, and how long it took.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 20:28
+
+> Nice work. That has fixed both assemblies.
+
+### 🤖 Claude
+
+> Good to hear. I've marked configuration reading as tested by you in `CLAUDE.md`, on both `New Config.ad_asm` and `lam Arm staker CAM`.
+>
+> Nothing is committed yet. That covers today's work:
+> - tool load, including spindle power and the graph changes
+> - the graph staying on the finished operation after To Op End
+> - overlapping parts filling as solid in Compare
+> - reading parts in their own configuration
+>
+> Two loose ends remain, but neither affects what you tested:
+> - The finishing operations' true-surface reading still reads each part's active configuration.
+> - The background file is opened once per feature, so a Generate with many features on such parts takes about 0.2 s more per feature. A cache would fix that.
+
+### 🧑 Frank · 20:30
+
+> Add the 2 loose ends to the todo with a priority.
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
 ---
 
 # Side conversation
