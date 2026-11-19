@@ -2023,8 +2023,9 @@ void CFacingPage::UpdateFields()
     GetDlgItem(IDC_FACING_ARC_STEPOVER)->EnableWindow(zigzag);
 
     // Adaptive clearing has its own pattern.
-    ShowAdaptive({ IDC_FACING_MIXED, IDC_FACING_CUT_ANGLE, IDC_FACING_ARC_STEPOVER, IDC_FACING_LINEAR, IDC_FACING_SPIRAL,
-                   IDC_FACING_TOP_LEFT, IDC_FACING_TOP_RIGHT, IDC_FACING_BOTTOM_LEFT, IDC_FACING_BOTTOM_RIGHT });
+    ShowAdaptive({ IDC_FACING_MIXED, IDC_FACING_CUT_ANGLE, IDC_FACING_LINEAR, IDC_FACING_SPIRAL, IDC_FACING_TOP_LEFT,
+                   IDC_FACING_TOP_RIGHT, IDC_FACING_BOTTOM_LEFT, IDC_FACING_BOTTOM_RIGHT },
+                 { IDC_FACING_ARC_STEPOVER });
 }
 
 void CFacingPage::OnChoiceChanged()
@@ -2056,14 +2057,19 @@ bool COperationPage::AdaptiveChosen() const
     return IsDlgButtonChecked(IDC_ADAPTIVE_USE) == BST_CHECKED;
 }
 
-bool COperationPage::ShowAdaptive(std::initializer_list<int> patternIds)
+bool COperationPage::ShowAdaptive(std::initializer_list<int> freeIds, std::initializer_list<int> ruledIds)
 {
     const bool adaptive = AdaptiveChosen();
     for (int id : { IDC_ADAPTIVE_HELIX, IDC_ADAPTIVE_HELIX_LABEL, IDC_ADAPTIVE_RAMP, IDC_ADAPTIVE_RAMP_LABEL })
         GetDlgItem(id)->EnableWindow(adaptive);
+    for (int id : freeIds)
+    {
+        if (CWnd* pControl = GetDlgItem(id))
+            pControl->EnableWindow(!adaptive);
+    }
     if (adaptive)
     {
-        for (int id : patternIds)
+        for (int id : ruledIds)
         {
             if (CWnd* pControl = GetDlgItem(id))
                 pControl->EnableWindow(FALSE);
@@ -2519,8 +2525,9 @@ void CWaterlineRoughingPage::UpdateFields()
 
     // Adaptive clearing has its own pattern.
     const bool adaptive =
-        ShowAdaptive({ IDC_WL_PART_OFFSET, IDC_WL_STOCK_OFFSET, IDC_WL_LINEAR, IDC_WL_MIXED, IDC_WL_START,
-                       IDC_WL_START_LABEL, IDC_WL_LINEAR_BOTTOM, IDC_WL_LINEAR_TOP, IDC_WL_ANGLE_LABEL, IDC_WL_ANGLE });
+        ShowAdaptive({ IDC_WL_PART_OFFSET, IDC_WL_STOCK_OFFSET, IDC_WL_LINEAR, IDC_WL_MIXED },
+                     { IDC_WL_START, IDC_WL_START_LABEL, IDC_WL_LINEAR_BOTTOM, IDC_WL_LINEAR_TOP, IDC_WL_ANGLE_LABEL,
+                       IDC_WL_ANGLE });
 
     // The entry: its own choice unless adaptive clearing makes its own; the helix and
     // ramp boxes for whichever uses them.
@@ -3130,8 +3137,9 @@ void CPocketingPage::UpdateFields()
         GetDlgItem(id)->EnableWindow(IsDlgButtonChecked(IDC_WL_REST) == BST_CHECKED);
 
     // Adaptive clearing has its own pattern.
-    ShowAdaptive({ IDC_POCK_OFFSET, IDC_POCK_LINEAR, IDC_POCK_SPIRAL, IDC_POCK_RADIAL, IDC_POCK_MIXED, IDC_POCK_ANGLE,
-                   IDC_POCK_ANGLE_LABEL, IDC_POCK_START_A, IDC_POCK_START_B });
+    ShowAdaptive({ IDC_POCK_OFFSET, IDC_POCK_LINEAR, IDC_POCK_SPIRAL, IDC_POCK_RADIAL, IDC_POCK_START_A,
+                   IDC_POCK_START_B },
+                 { IDC_POCK_MIXED, IDC_POCK_ANGLE, IDC_POCK_ANGLE_LABEL });
 }
 
 void CPocketingPage::OnCutTypeChanged()

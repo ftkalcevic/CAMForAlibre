@@ -15400,6 +15400,71 @@ Decisions are also recorded in the spec (`docs\SPEC.md`) and `CLAUDE.md`.
 
 > The log shows the cache working: one Generate on `Rough 3` opened the part file once and reused it for 5 more reads. I'll mark both fixes as tested in the notes.
 
+> The log you copied confirms the cache works:
+> - One Generate on `Rough 3` opened the part file once (in 172 ms) and served 5 more reads from that copy.
+> - On `New Config`, the Square copy opened once and served 2 more reads.
+>
+> I've marked both fixes as tested in `CLAUDE.md`. Selecting listed faces works on a part used in another configuration, so the last configuration item is gone from `TODO.md`.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 21:04
+
+> <local-command-stdout>Compacted </local-command-stdout>
+
+## 2026-11-19
+
+### 🧑 Frank · 16:16
+
+> On the pocketing dialog, pocketing tab, if Use adaptive clearing is checked, offset cuts, etc are disabled.  If I uncheck use adaptive cuts, offset cuts, etc don't become enabled
+
+### 🤖 Claude
+
+> Let me check how Facing and Waterline handle it, since they may share the bug.
+
+> Built cleanly. The help already says the pattern's controls are greyed while adaptive is ticked, so it doesn't need changing.
+
+> I've fixed it: unticking Use adaptive clearing now turns the pattern controls back on. The Release build is clean, but I haven't installed it or tried it in Alibre.
+>
+> The bug wasn't only on Pocketing. When the box was ticked, the shared function `ShowAdaptive` greyed out the pattern controls, but nothing turned the always-available ones back on afterwards. The cut type and start buttons are like that on Pocketing, and Facing and Waterline Roughing had the same problem with their own controls.
+>
+> `ShowAdaptive` now takes two lists ([OperationDialog.cpp:2059](addon/OperationDialog.cpp:2059)):
+> - **Controls with no other rule:** these are greyed while adaptive is ticked and turned back on when it's unticked.
+>   - **Pocketing:** cut type and start.
+>   - **Facing:** cut type, direction, angle and the corners.
+>   - **Waterline Roughing:** pattern and Mixed.
+> - **Controls the page already turns on and off itself:** these are only greyed while adaptive is ticked, and otherwise the page's own rules still decide. Examples are Pocketing's angle (Linear only) and Mixed (not for Spiral), Facing's arc step-overs, and Waterline's start and linear group.
+>
+> The help already says the pattern's controls are greyed while adaptive is ticked, so it didn't need changing.
+>
+> To test, after installing:
+> 1. **Pocketing tab:**
+>    - Tick Use adaptive clearing, then untick it. The cut types, Inside/Outside (or Bottom/Top) and the directions should all come back.
+>    - The angle should only turn on for Linear, and Mixed should stay off for Spiral.
+> 2. **Facing tab:** do the same. Linear/Spiral, Climb/Conventional/Mixed, the cut angle and the four corners should come back. Arc step-overs should only turn on for Mixed with Linear.
+> 3. **Waterline Roughing tab:** do the same. Part Offset, Stock Offset, Linear and Mixed should come back. Start should be on for the offset patterns, and the linear group only for Linear.
+> 4. Open an operation that was saved with adaptive off. Its pattern controls should be enabled from the start.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 16:19
+
+> Yes, install
+
+### 🤖 Claude
+
+> The fix is installed, and the installed add-on matches the build. Restart Alibre to load it, then run the 4 tests from my last message:
+> 1. Pocketing tab.
+> 2. Facing tab.
+> 3. Waterline Roughing tab.
+> 4. Opening an operation saved with adaptive off.
+>
+> Nothing is committed.
+
+### 🧑 Frank · 16:21
+
+> tests passed
+
 ---
 
 # Side conversation

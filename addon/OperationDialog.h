@@ -94,8 +94,10 @@ protected:
     void SaveAdaptive(bool& adaptive, camcore::RampEntry& ramp, std::wstring& problems);
     bool AdaptiveChosen() const;
     // Greys the helix and ramp boxes unless it's ticked, and the pattern's own
-    // controls (ids) while it is. Returns whether it's ticked.
-    bool ShowAdaptive(std::initializer_list<int> patternIds);
+    // controls while it is. freeIds have no other rule, so they're enabled again when
+    // it isn't ticked; ruledIds are left as the page's own rules set them. Returns
+    // whether it's ticked.
+    bool ShowAdaptive(std::initializer_list<int> freeIds, std::initializer_list<int> ruledIds);
 
     // Reads a number quietly, as the user types. False if the box isn't one.
     bool ReadValue(int id, double& value);
